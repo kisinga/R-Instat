@@ -259,3 +259,286 @@ export function buildInventoryPlot(opts: InventoryPlotOptions): string {
 
   return lines.join('\n');
 }
+
+// ============================================================================
+// Annual Rainfall Builder
+// ============================================================================
+
+export interface AnnualRainfallOptions {
+  dataframe: string;
+  dateColumn: string;
+  rainColumn: string;
+  stationColumn?: string;
+}
+
+export function buildAnnualRainfall(opts: AnnualRainfallOptions): string {
+  const { dataframe, dateColumn, rainColumn, stationColumn } = opts;
+
+  if (!dataframe || !dateColumn || !rainColumn) {
+    return '# Select dataframe, date column, and rain column';
+  }
+
+  const groups = stationColumn ? `${stationColumn}, year` : 'year';
+  
+  return `${rDf(dataframe)} %>%
+  mutate(year = ${rExtractYear(dateColumn)}) %>%
+  group_by(${groups}) %>%
+  summarise(annual_rain = sum(${rainColumn}, na.rm = TRUE), .groups = "drop")`;
+}
+
+// ============================================================================
+// Extremes Builder
+// ============================================================================
+
+export interface ExtremesOptions {
+  dataframe: string;
+  dateColumn: string;
+  elementColumn: string;
+  stationColumn?: string;
+  level: 'annual' | 'monthly';
+  findMax: boolean;
+  findMin: boolean;
+}
+
+export function buildExtremes(opts: ExtremesOptions): string {
+  const { dataframe, dateColumn, elementColumn, stationColumn, level, findMax, findMin } = opts;
+
+  if (!dataframe || !dateColumn || !elementColumn) {
+    return '# Select dataframe, date column, and element column';
+  }
+
+  const groupParts: string[] = [];
+  if (stationColumn) groupParts.push(stationColumn);
+  groupParts.push('year');
+  if (level === 'monthly') groupParts.push('month');
+
+  const mutateExpr = level === 'monthly'
+    ? `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)})`
+    : `mutate(year = ${rExtractYear(dateColumn)})`;
+
+  const summaries: string[] = [];
+  if (findMax) summaries.push(`max_${elementColumn} = max(${elementColumn}, na.rm = TRUE)`);
+  if (findMin) summaries.push(`min_${elementColumn} = min(${elementColumn}, na.rm = TRUE)`);
+  
+  if (summaries.length === 0) {
+    summaries.push(`max_${elementColumn} = max(${elementColumn}, na.rm = TRUE)`);
+  }
+
+  return `${rDf(dataframe)} %>%
+  ${mutateExpr} %>%
+  group_by(${groupParts.join(', ')}) %>%
+  summarise(${summaries.join(', ')}, .groups = "drop")`;
+}
+
+// ============================================================================
+// Day Count Builder
+// ============================================================================
+
+export interface DayCountOptions {
+  dataframe: string;
+  dateColumn: string;
+  elementColumn: string;
+  stationColumn?: string;
+  threshold: number;
+  operator: '>=' | '>' | '<=' | '<';
+}
+
+export function buildDayCount(opts: DayCountOptions): string {
+  const { dataframe, dateColumn, elementColumn, stationColumn, threshold, operator } = opts;
+
+  if (!dataframe || !dateColumn || !elementColumn) {
+    return '# Select dataframe, date column, and element column';
+  }
+
+  const groups = stationColumn ? `${stationColumn}, year` : 'year';
+  const condition = `${elementColumn} ${operator} ${threshold}`;
+
+  return `${rDf(dataframe)} %>%
+  mutate(year = ${rExtractYear(dateColumn)}) %>%
+  group_by(${groups}) %>%
+  summarise(day_count = sum(${condition}, na.rm = TRUE), .groups = "drop")`;
+}
+
+// ============================================================================
+// Spell Lengths Builder
+// ============================================================================
+
+export interface SpellLengthsOptions {
+  dataframe: string;
+  dateColumn: string;
+  elementColumn: string;
+  stationColumn?: string;
+  threshold: number;
+  spellType: 'wet' | 'dry';
+  statistic: 'max' | 'mean' | 'count';
+}
+
+export function buildSpellLengths(opts: SpellLengthsOptions): string {
+  const { dataframe, dateColumn, elementColumn, stationColumn, threshold, spellType, statistic } = opts;
+
+  if (!dataframe || !dateColumn || !elementColumn) {
+    return '# Select dataframe, date column, and element column';
+  }
+
+  const groups = stationColumn ? `${stationColumn}, year` : 'year';
+  const condition = spellType === 'wet' 
+    ? `${elementColumn} >= ${threshold}`
+    : `${elementColumn} < ${threshold}`;
+  
+  const spellLabel = `${spellType}_spell`;
+  
+  let statExpr: string;
+  switch (statistic) {
+    case 'max':
+      statExpr = `max_${spellLabel} = max(spell_lengths, na.rm = TRUE)`;
+      break;
+    case 'mean':
+      statExpr = `mean_${spellLabel} = mean(spell_lengths, na.rm = TRUE)`;
+      break;
+    case 'count':
+      statExpr = `n_${spellLabel}s = length(spell_lengths)`;
+      break;
+    default:
+      statExpr = `max_${spellLabel} = max(spell_lengths, na.rm = TRUE)`;
+  }
+
+  return `${rDf(dataframe)} %>%
+  mutate(
+    year = ${rExtractYear(dateColumn)},
+    is_${spellType} = ${condition}
+  ) %>%
+  group_by(${groups}) %>%
+  summarise(
+    spell_lengths = list(rle(is_${spellType})$lengths[rle(is_${spellType})$values]),
+    .groups = "drop"
+  ) %>%
+  mutate(${statExpr})`;
+}
+
+// ============================================================================
+// Seasonal Summary Builder
+// ============================================================================
+
+export interface SeasonalSummaryOptions {
+  dataframe: string;
+  dateColumn: string;
+  elementColumn: string;
+  stationColumn?: string;
+  summaryFunction: 'sum' | 'mean' | 'max' | 'min';
+}
+
+export function buildSeasonalSummary(opts: SeasonalSummaryOptions): string {
+  const { dataframe, dateColumn, elementColumn, stationColumn, summaryFunction } = opts;
+
+  if (!dataframe || !dateColumn || !elementColumn) {
+    return '# Select dataframe, date column, and element column';
+  }
+
+  const groups = stationColumn ? `${stationColumn}, month` : 'month';
+  const funcMap: Record<string, string> = {
+    sum: 'sum',
+    mean: 'mean',
+    max: 'max',
+    min: 'min',
+  };
+  const func = funcMap[summaryFunction] || 'mean';
+
+  return `${rDf(dataframe)} %>%
+  mutate(month = ${rExtractMonth(dateColumn)}) %>%
+  group_by(${groups}) %>%
+  summarise(${summaryFunction}_${elementColumn} = ${func}(${elementColumn}, na.rm = TRUE), .groups = "drop")`;
+}
+
+// ============================================================================
+// Missing Report Builder
+// ============================================================================
+
+export interface MissingReportOptions {
+  dataframe: string;
+  dateColumn: string;
+  elementColumns: string[];
+  stationColumn?: string;
+  level: 'annual' | 'monthly' | 'overall';
+}
+
+export function buildMissingReport(opts: MissingReportOptions): string {
+  const { dataframe, dateColumn, elementColumns, stationColumn, level } = opts;
+
+  if (!dataframe || !dateColumn || elementColumns.length === 0) {
+    return '# Select dataframe, date column, and at least one element column';
+  }
+
+  let groupParts: string[] = [];
+  if (stationColumn) groupParts.push(stationColumn);
+  if (level === 'annual') groupParts.push('year');
+  if (level === 'monthly') groupParts.push('year', 'month');
+
+  let mutateExpr = '';
+  if (level === 'annual') {
+    mutateExpr = `mutate(year = ${rExtractYear(dateColumn)}) %>%\n  `;
+  } else if (level === 'monthly') {
+    mutateExpr = `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)}) %>%\n  `;
+  }
+
+  const missingExprs = elementColumns.map(col => 
+    `${col}_missing = sum(is.na(${col})), ${col}_total = n(), ${col}_pct = round(100 * sum(is.na(${col})) / n(), 1)`
+  ).join(',\n    ');
+
+  const groupExpr = groupParts.length > 0 
+    ? `group_by(${groupParts.join(', ')}) %>%\n  `
+    : '';
+
+  return `${rDf(dataframe)} %>%
+  ${mutateExpr}${groupExpr}summarise(
+    ${missingExprs},
+    .groups = "drop"
+  )`;
+}
+
+// ============================================================================
+// Temperature Summary Builder
+// ============================================================================
+
+export interface TemperatureSummaryOptions {
+  dataframe: string;
+  dateColumn: string;
+  tmaxColumn?: string;
+  tminColumn?: string;
+  stationColumn?: string;
+  level: 'annual' | 'monthly';
+}
+
+export function buildTemperatureSummary(opts: TemperatureSummaryOptions): string {
+  const { dataframe, dateColumn, tmaxColumn, tminColumn, stationColumn, level } = opts;
+
+  if (!dataframe || !dateColumn || (!tmaxColumn && !tminColumn)) {
+    return '# Select dataframe, date column, and at least one temperature column';
+  }
+
+  const groupParts: string[] = [];
+  if (stationColumn) groupParts.push(stationColumn);
+  groupParts.push('year');
+  if (level === 'monthly') groupParts.push('month');
+
+  const mutateExpr = level === 'monthly'
+    ? `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)})`
+    : `mutate(year = ${rExtractYear(dateColumn)})`;
+
+  const summaries: string[] = [];
+  if (tmaxColumn) {
+    summaries.push(`mean_tmax = mean(${tmaxColumn}, na.rm = TRUE)`);
+    summaries.push(`max_tmax = max(${tmaxColumn}, na.rm = TRUE)`);
+  }
+  if (tminColumn) {
+    summaries.push(`mean_tmin = mean(${tminColumn}, na.rm = TRUE)`);
+    summaries.push(`min_tmin = min(${tminColumn}, na.rm = TRUE)`);
+  }
+
+  return `${rDf(dataframe)} %>%
+  ${mutateExpr} %>%
+  group_by(${groupParts.join(', ')}) %>%
+  summarise(
+    ${summaries.join(',\n    ')},
+    .groups = "drop"
+  )`;
+}

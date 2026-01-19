@@ -11,6 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { RService } from '../../../../core/services/r.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LanguageService } from '../../../../core/services/language.service';
+import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
 import {
@@ -220,6 +221,7 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
   private readonly languageService = inject(LanguageService);
+  private readonly climaticService = inject(ClimaticDataService);
 
   // Data
   dataframes = signal<string[]>([]);
@@ -292,9 +294,28 @@ export class ClimaticSummaryDialogComponent implements OnInit {
     try {
       const columnInfo = await this.rService.getColumnInfo(df);
       this.columns.set(columnInfo);
+      
+      // Auto-fill from saved climatic roles
+      this.autoFillFromRoles();
     } catch (error) {
       console.error('Failed to load columns:', error);
       this.columns.set([]);
+    }
+  }
+
+  private autoFillFromRoles(): void {
+    const df = this.selectedDataframe();
+    if (!df) return;
+
+    const roles = this.climaticService.getRoles(df);
+    if (roles.date && !this.dateColumn) {
+      this.dateColumn = roles.date;
+    }
+    if (roles.rain && !this.elementColumn) {
+      this.elementColumn = roles.rain;
+    }
+    if (roles.station && !this.stationColumn) {
+      this.stationColumn = roles.station;
     }
   }
 
@@ -307,9 +328,10 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   }
 
   getDateColumns(): ColumnInfo[] {
+    // Include both Date types and character (for date strings from CSV)
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
-      return t.includes('date') || t.includes('posix');
+      return t.includes('date') || t.includes('posix') || t.includes('character');
     });
   }
 

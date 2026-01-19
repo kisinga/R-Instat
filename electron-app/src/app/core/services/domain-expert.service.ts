@@ -34,8 +34,16 @@ export class DomainExpertService {
       icon: '🌦️',
       descriptionKey: 'DOMAIN.CLIMATIC_DESC',
       dialogs: [
+        { labelKey: 'CLIMATIC.DEFINE_DATA', action: 'define-climatic-data' },
         { labelKey: 'CLIMATIC.SUMMARY', action: 'climatic-summary' },
         { labelKey: 'CLIMATIC.INVENTORY_PLOT', action: 'inventory-plot' },
+        { labelKey: 'CLIMATIC.ANNUAL_RAINFALL', action: 'annual-rainfall' },
+        { labelKey: 'CLIMATIC.EXTREMES', action: 'extremes' },
+        { labelKey: 'CLIMATIC.DAY_COUNT', action: 'day-count' },
+        { labelKey: 'CLIMATIC.SPELL_LENGTHS', action: 'spell-lengths' },
+        { labelKey: 'CLIMATIC.SEASONAL_SUMMARY', action: 'seasonal-summary' },
+        { labelKey: 'CLIMATIC.MISSING_REPORT', action: 'missing-report' },
+        { labelKey: 'CLIMATIC.TEMPERATURE_SUMMARY', action: 'temperature-summary' },
       ]
     },
     // Future domains can be added here:

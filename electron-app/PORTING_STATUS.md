@@ -3,8 +3,8 @@
 ## Executive Summary
 
 **Original R-Instat**: ~318 dialogs across 10+ menus (VB.NET + R backend)  
-**Electron POC**: 15 dialogs across 5 menus (Angular + Electron + R backend)  
-**Port Coverage**: ~5% of dialogs, but covers core POC functionality
+**Electron POC**: 26 dialogs across 6 menus (Angular + Electron + R backend)  
+**Port Coverage**: ~8% of dialogs, covers core POC functionality + Climatic POC (10 dialogs)
 
 ---
 
@@ -28,10 +28,11 @@
 | **Data** | Filter, Sort, Calculate, Recode, Rename | ✅ Complete |
 | **Describe** | Describe (unified), Quick Summary, Quick Graph, Histogram, Boxplot, Scatter, Bar Chart | ✅ Core |
 | **Model** | Correlation, t-Test, Regression | ✅ Core |
+| **Domain Expert** | Define Climatic Data, Climatic Summary, Inventory Plot, Annual Rainfall, Extremes, Day Count, Spell Lengths, Seasonal Summary, Missing Report, Temperature Summary | ✅ Climatic Complete |
 | **View** | Native Electron | ✅ |
 | **Help** | About, Documentation link | ✅ Basic |
 
-### Dialogs Implemented (15 total)
+### Dialogs Implemented (26 total)
 
 | Dialog | Features | Complexity |
 |--------|----------|------------|
@@ -50,6 +51,17 @@
 | **Correlation** | Pairwise correlation matrix | Basic |
 | **t-Test** | One-sample, two-sample, paired | Full |
 | **Regression** | Simple linear regression | Basic |
+| **Domain Selector** | Domain-specific workflow selection (Climatic, future: Structured, Survey) | Basic |
+| **Define Climatic Data** | Column role assignment with auto-detection and date conversion | Medium |
+| **Climatic Summary** | Annual/monthly/daily summaries by station with dplyr aggregation | Medium |
+| **Inventory Plot** | Data availability heatmap (year × day-of-year) with ggplot2 | Medium |
+| **Annual Rainfall** | Sum rainfall by year/station | Basic |
+| **Extremes** | Max/min values by period (annual/monthly) | Basic |
+| **Day Count** | Count days meeting threshold condition | Basic |
+| **Spell Lengths** | Wet/dry spell analysis using run-length encoding | Medium |
+| **Seasonal Summary** | Monthly aggregations with configurable function | Basic |
+| **Missing Report** | Missing values report by period with percentage | Basic |
+| **Temperature Summary** | Temperature statistics (tmax, tmin) by period | Basic |
 
 ### Core Services
 - `RService` - R process communication, dataframe management
@@ -57,6 +69,9 @@
 - `LanguageService` - i18n with ngx-translate
 - `ToastService` - User notifications
 - `KeyboardService` - Global shortcuts
+- `DomainExpertService` - Domain-specific workflow registry and state
+- `ClimaticDataService` - Column role management for climatic analysis
+- `DateConversionService` - On-demand character-to-Date conversion
 
 ### Shared Components
 - `ColumnPicker` - Reusable column selection with type icons
@@ -110,15 +125,21 @@
 | Advanced | PCA, Cluster analysis, Survival, Time series |
 | Model Management | Compare, Use, View models |
 
-### 5. Climatic Menu (~80 dialogs) - **Not Started**
-| Category | Examples |
-|----------|----------|
-| Define | Climate object, Station definitions |
-| Prepare | Tidy daily data, Infill, Quality checks |
-| Describe | Inventory, Summaries, Extremes |
-| PICSA | Rainfall, Crops, Temperature |
-| Analysis | SPI, Evapotranspiration, Start/End of rains |
-| Graphs | Climograph, Windrose, Inventory plot |
+### 5. Climatic Menu (~80 dialogs) - **POC Complete (10 dialogs)**
+| Category | Examples | Status |
+|----------|----------|--------|
+| Define | Climate object, Station definitions | ✅ Define Climatic Data |
+| Prepare | Tidy daily data, Infill, Quality checks | ❌ |
+| Describe | Inventory, Summaries, Extremes | ✅ Inventory Plot, ✅ Climatic Summary, ✅ Extremes, ✅ Missing Report |
+| PICSA | Rainfall, Crops, Temperature | ✅ Annual Rainfall, ✅ Day Count, ✅ Temperature Summary |
+| Analysis | SPI, Evapotranspiration, Start/End of rains | ✅ Spell Lengths (partial) |
+| Graphs | Climograph, Windrose, Inventory plot | ✅ Inventory Plot |
+
+**Implemented Dialogs**: Define Climatic Data, Climatic Summary, Inventory Plot, Annual Rainfall, Extremes, Day Count, Spell Lengths, Seasonal Summary, Missing Report, Temperature Summary
+
+**Infrastructure**: ClimaticDataService (column role management), DateConversionService (on-demand date conversion)
+
+**Sample Data**: `dodoma_rainfall.csv` - 3 years of daily Tanzania climate data (1096 rows)
 
 ### 6. Structured Menu - **Not Started**
 Survey analysis, Corruption indices, Tricot data
@@ -168,7 +189,7 @@ R packages management, Themes customization, Calculator
 4. **Frequencies dialog** - Standalone from Describe
 
 ### Lower Priority (Domain-Specific)
-1. **Climatic menu** - Large scope, domain-specific
+1. **Climatic menu** - POC complete (10 dialogs), expand with Start/End of Rains, SPI as needed
 2. **Structured menu** - Specialized use cases
 3. **Advanced modeling** - PCA, clustering, survival
 
@@ -178,11 +199,12 @@ R packages management, Themes customization, Calculator
 
 | Area | Original | Electron POC |
 |------|----------|--------------|
-| Dialog files | 318 .vb | 15 components |
+| Dialog files | 318 .vb | 26 components |
 | R scripts | 86 .R | 1 bridge.R |
 | Forms/UI | 814 .resx | Angular templates |
 | Total VB files | 1051 | N/A |
 
 ---
 
-*Last updated: January 2026*
+*Last updated: January 2026*  
+*Recent: Expanded Climatic menu to 10 dialogs with ClimaticDataService and DateConversionService*

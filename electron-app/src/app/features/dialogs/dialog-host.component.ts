@@ -22,8 +22,16 @@ import { DescribeDialogComponent } from './describe/describe-dialog.component';
 
 // Domain Expert dialogs
 import { DomainSelectorComponent } from '../domain-expert/domain-selector.component';
+import { DefineClimaticDataDialogComponent } from './climatic/define-climatic-data/define-climatic-data-dialog.component';
 import { ClimaticSummaryDialogComponent } from './climatic/climatic-summary/climatic-summary-dialog.component';
 import { InventoryPlotDialogComponent } from './climatic/inventory-plot/inventory-plot-dialog.component';
+import { AnnualRainfallDialogComponent } from './climatic/annual-rainfall/annual-rainfall-dialog.component';
+import { ExtremesDialogComponent } from './climatic/extremes/extremes-dialog.component';
+import { DayCountDialogComponent } from './climatic/day-count/day-count-dialog.component';
+import { SpellLengthsDialogComponent } from './climatic/spell-lengths/spell-lengths-dialog.component';
+import { SeasonalSummaryDialogComponent } from './climatic/seasonal-summary/seasonal-summary-dialog.component';
+import { MissingReportDialogComponent } from './climatic/missing-report/missing-report-dialog.component';
+import { TemperatureSummaryDialogComponent } from './climatic/temperature-summary/temperature-summary-dialog.component';
 
 // Dialog registry
 const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
@@ -46,8 +54,16 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   'describe:graph': DescribeDialogComponent,
   // Domain Expert dialogs
   'domain-selector': DomainSelectorComponent,
+  'define-climatic-data': DefineClimaticDataDialogComponent,
   'climatic-summary': ClimaticSummaryDialogComponent,
   'inventory-plot': InventoryPlotDialogComponent,
+  'annual-rainfall': AnnualRainfallDialogComponent,
+  'extremes': ExtremesDialogComponent,
+  'day-count': DayCountDialogComponent,
+  'spell-lengths': SpellLengthsDialogComponent,
+  'seasonal-summary': SeasonalSummaryDialogComponent,
+  'missing-report': MissingReportDialogComponent,
+  'temperature-summary': TemperatureSummaryDialogComponent,
 };
 
 @Component({
@@ -72,8 +88,16 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
     DescribeDialogComponent,
     // Domain Expert dialogs
     DomainSelectorComponent,
+    DefineClimaticDataDialogComponent,
     ClimaticSummaryDialogComponent,
     InventoryPlotDialogComponent,
+    AnnualRainfallDialogComponent,
+    ExtremesDialogComponent,
+    DayCountDialogComponent,
+    SpellLengthsDialogComponent,
+    SeasonalSummaryDialogComponent,
+    MissingReportDialogComponent,
+    TemperatureSummaryDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -138,6 +162,30 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
           }
           @case ('inventory-plot') {
             <app-inventory-plot-dialog (close)="closeDialog()" />
+          }
+          @case ('define-climatic-data') {
+            <app-define-climatic-data-dialog (close)="closeDialog()" />
+          }
+          @case ('annual-rainfall') {
+            <app-annual-rainfall-dialog (close)="closeDialog()" />
+          }
+          @case ('extremes') {
+            <app-extremes-dialog (close)="closeDialog()" />
+          }
+          @case ('day-count') {
+            <app-day-count-dialog (close)="closeDialog()" />
+          }
+          @case ('spell-lengths') {
+            <app-spell-lengths-dialog (close)="closeDialog()" />
+          }
+          @case ('seasonal-summary') {
+            <app-seasonal-summary-dialog (close)="closeDialog()" />
+          }
+          @case ('missing-report') {
+            <app-missing-report-dialog (close)="closeDialog()" />
+          }
+          @case ('temperature-summary') {
+            <app-temperature-summary-dialog (close)="closeDialog()" />
           }
         }
       </div>
