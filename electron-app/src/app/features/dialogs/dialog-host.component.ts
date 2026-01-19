@@ -20,6 +20,11 @@ import { TTestDialogComponent } from './t-test/t-test-dialog.component';
 import { RegressionDialogComponent } from './regression/regression-dialog.component';
 import { DescribeDialogComponent } from './describe/describe-dialog.component';
 
+// Domain Expert dialogs
+import { DomainSelectorComponent } from '../domain-expert/domain-selector.component';
+import { ClimaticSummaryDialogComponent } from './climatic/climatic-summary/climatic-summary-dialog.component';
+import { InventoryPlotDialogComponent } from './climatic/inventory-plot/inventory-plot-dialog.component';
+
 // Dialog registry
 const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   'import': ImportDialogComponent,
@@ -39,6 +44,10 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   'describe': DescribeDialogComponent,
   'describe:summary': DescribeDialogComponent,
   'describe:graph': DescribeDialogComponent,
+  // Domain Expert dialogs
+  'domain-selector': DomainSelectorComponent,
+  'climatic-summary': ClimaticSummaryDialogComponent,
+  'inventory-plot': InventoryPlotDialogComponent,
 };
 
 @Component({
@@ -61,6 +70,10 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
     TTestDialogComponent,
     RegressionDialogComponent,
     DescribeDialogComponent,
+    // Domain Expert dialogs
+    DomainSelectorComponent,
+    ClimaticSummaryDialogComponent,
+    InventoryPlotDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -116,6 +129,15 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
           }
           @case ('describe:graph') {
             <app-describe-dialog [initialMode]="'describe:graph'" (close)="closeDialog()" />
+          }
+          @case ('domain-selector') {
+            <app-domain-selector (close)="closeDialog()" />
+          }
+          @case ('climatic-summary') {
+            <app-climatic-summary-dialog (close)="closeDialog()" />
+          }
+          @case ('inventory-plot') {
+            <app-inventory-plot-dialog (close)="closeDialog()" />
           }
         }
       </div>

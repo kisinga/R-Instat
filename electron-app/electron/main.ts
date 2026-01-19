@@ -134,117 +134,15 @@ function createWindow(): void {
 }
 
 function buildMenu(): Menu {
+  // Minimal menu - all feature dialogs are accessed via Angular toolbar
   const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: t('ELECTRON_MENU.FILE'),
-      submenu: [
-        {
-          label: t('ELECTRON_MENU.IMPORT_DATA'),
-          accelerator: 'CmdOrCtrl+I',
-          click: () => mainWindow?.webContents.send('menu:dialog', 'import'),
-        },
-        { type: 'separator' },
-        {
-          label: t('ELECTRON_MENU.SAVE'),
-          accelerator: 'CmdOrCtrl+S',
-          click: () => mainWindow?.webContents.send('menu:save'),
-        },
-        { type: 'separator' },
-        { role: 'quit', label: t('ELECTRON_MENU.QUIT') },
-      ],
-    },
-    // Edit menu - use native roles (auto-translated by OS)
-    {
-      role: 'editMenu',
-    },
-    {
-      label: t('ELECTRON_MENU.DATA'),
-      submenu: [
-        {
-          label: t('ELECTRON_MENU.FILTER'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'filter'),
-        },
-        {
-          label: t('ELECTRON_MENU.SORT'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'sort'),
-        },
-        { type: 'separator' },
-        {
-          label: t('ELECTRON_MENU.CALCULATE'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'calculate'),
-        },
-        {
-          label: t('ELECTRON_MENU.RECODE'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'recode'),
-        },
-        {
-          label: t('ELECTRON_MENU.RENAME_COLUMN'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'rename'),
-        },
-      ],
-    },
-    {
-      label: t('ELECTRON_MENU.DESCRIBE'),
-      submenu: [
-        {
-          label: t('ELECTRON_MENU.DESCRIBE_DATA'),
-          accelerator: 'CmdOrCtrl+D',
-          click: () => mainWindow?.webContents.send('menu:dialog', 'describe'),
-        },
-        { type: 'separator' },
-        {
-          label: t('ELECTRON_MENU.QUICK_SUMMARY'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'describe:summary'),
-        },
-        {
-          label: t('ELECTRON_MENU.QUICK_GRAPH'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'describe:graph'),
-        },
-        { type: 'separator' },
-        {
-          label: t('ELECTRON_MENU.SPECIFIC_GRAPHS'),
-          submenu: [
-            {
-              label: t('ELECTRON_MENU.HISTOGRAM'),
-              click: () => mainWindow?.webContents.send('menu:dialog', 'histogram'),
-            },
-            {
-              label: t('ELECTRON_MENU.BOX_PLOT'),
-              click: () => mainWindow?.webContents.send('menu:dialog', 'boxplot'),
-            },
-            {
-              label: t('ELECTRON_MENU.SCATTER_PLOT'),
-              click: () => mainWindow?.webContents.send('menu:dialog', 'scatter'),
-            },
-            {
-              label: t('ELECTRON_MENU.BAR_CHART'),
-              click: () => mainWindow?.webContents.send('menu:dialog', 'bar-chart'),
-            },
-          ],
-        },
-      ],
-    },
-    {
-      label: t('ELECTRON_MENU.MODEL'),
-      submenu: [
-        {
-          label: t('ELECTRON_MENU.CORRELATION'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'correlation'),
-        },
-        {
-          label: t('ELECTRON_MENU.T_TEST'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 't-test'),
-        },
-        {
-          label: t('ELECTRON_MENU.LINEAR_REGRESSION'),
-          click: () => mainWindow?.webContents.send('menu:dialog', 'regression'),
-        },
-      ],
-    },
-    // View menu - use native roles (auto-translated by OS)
-    {
-      role: 'viewMenu',
-    },
+    // File menu - only Quit (OS-level)
+    { role: 'fileMenu' },
+    // Edit menu - native OS roles (Undo, Redo, Cut, Copy, Paste)
+    { role: 'editMenu' },
+    // View menu - native OS roles (Reload, Zoom, DevTools, Fullscreen)
+    { role: 'viewMenu' },
+    // Help menu
     {
       label: t('ELECTRON_MENU.HELP'),
       submenu: [

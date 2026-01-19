@@ -46,6 +46,10 @@ export class KeyboardService {
           event.preventDefault();
           // Save functionality
           break;
+        case 'd':
+          event.preventDefault();
+          this.rService.openDialog('describe');
+          break;
         case 'f':
           event.preventDefault();
           this.rService.openDialog('filter');
