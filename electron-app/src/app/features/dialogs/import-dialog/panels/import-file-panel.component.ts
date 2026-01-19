@@ -1,39 +1,41 @@
 import { Component, Output, EventEmitter, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { RService } from '../../../../core/services/r.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { LanguageService } from '../../../../core/services/language.service';
 
 @Component({
   selector: 'app-import-file-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   template: `
     <div class="panel-content">
       <!-- File Selection -->
       <div class="form-group">
-        <label class="form-label">File Path</label>
+        <label class="form-label">{{ 'IMPORT.FILE_PATH' | translate }}</label>
         <div class="flex gap-2">
           <input
             type="text"
             class="input input-bordered flex-1"
-            placeholder="Enter file path or use file picker..."
+            [placeholder]="'IMPORT.FILE_PLACEHOLDER' | translate"
             [(ngModel)]="filePath"
           />
           <button class="btn btn-outline" (click)="selectFile()">
-            Browse...
+            {{ 'IMPORT.BROWSE' | translate }}
           </button>
         </div>
-        <p class="form-hint">Supported formats: CSV, TSV, Excel (.xlsx, .xls)</p>
+        <p class="form-hint">{{ 'IMPORT.SUPPORTED_FORMATS' | translate }}</p>
       </div>
 
       <!-- Data Name -->
       <div class="form-group">
-        <label class="form-label">Data Name</label>
+        <label class="form-label">{{ 'IMPORT.DATA_NAME' | translate }}</label>
         <input
           type="text"
           class="input input-bordered w-full"
-          placeholder="Enter name for the imported data..."
+          [placeholder]="'IMPORT.DATA_NAME_PLACEHOLDER' | translate"
           [(ngModel)]="dataName"
         />
       </div>
@@ -42,32 +44,32 @@ import { ToastService } from '../../../../core/services/toast.service';
       <div class="collapse collapse-arrow bg-base-200/60 rounded-lg border border-base-300">
         <input type="checkbox" />
         <div class="collapse-title font-medium text-sm py-3">
-          Advanced Options
+          {{ 'IMPORT.ADVANCED_OPTIONS' | translate }}
         </div>
         <div class="collapse-content">
           <div class="grid grid-cols-2 gap-4 pt-2">
             <div class="form-group">
-              <label class="form-label text-sm">Separator</label>
+              <label class="form-label text-sm">{{ 'IMPORT.SEPARATOR' | translate }}</label>
               <select class="select select-bordered select-sm w-full" [(ngModel)]="separator">
-                <option value=",">Comma (,)</option>
-                <option value=";">Semicolon (;)</option>
-                <option value="\t">Tab</option>
-                <option value=" ">Space</option>
+                <option value=",">{{ 'IMPORT.SEPARATOR_COMMA' | translate }}</option>
+                <option value=";">{{ 'IMPORT.SEPARATOR_SEMICOLON' | translate }}</option>
+                <option value="\t">{{ 'IMPORT.SEPARATOR_TAB' | translate }}</option>
+                <option value=" ">{{ 'IMPORT.SEPARATOR_SPACE' | translate }}</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label class="form-label text-sm">Decimal</label>
+              <label class="form-label text-sm">{{ 'IMPORT.DECIMAL' | translate }}</label>
               <select class="select select-bordered select-sm w-full" [(ngModel)]="decimal">
-                <option value=".">Period (.)</option>
-                <option value=",">Comma (,)</option>
+                <option value=".">{{ 'IMPORT.DECIMAL_PERIOD' | translate }}</option>
+                <option value=",">{{ 'IMPORT.DECIMAL_COMMA' | translate }}</option>
               </select>
             </div>
 
             <div class="form-group col-span-2">
               <label class="label cursor-pointer justify-start gap-2 py-0">
                 <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" [(ngModel)]="hasHeader" />
-                <span class="text-sm">First row contains column names</span>
+                <span class="text-sm">{{ 'IMPORT.HEADER_ROW' | translate }}</span>
               </label>
             </div>
           </div>
@@ -81,7 +83,7 @@ import { ToastService } from '../../../../core/services/toast.service';
       >
         @if (showCodePreview()) {
           <div class="form-group animate-fade-in">
-            <label class="form-label text-sm">R Code Preview</label>
+            <label class="form-label text-sm">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
             <pre class="code-block text-xs">{{ buildRCode() }}</pre>
           </div>
         }
@@ -96,7 +98,7 @@ import { ToastService } from '../../../../core/services/toast.service';
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
-          {{ showCodePreview() ? 'Hide' : 'Show' }} Code
+          {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
         </button>
         <button 
           class="btn btn-primary" 
@@ -106,7 +108,7 @@ import { ToastService } from '../../../../core/services/toast.service';
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
           }
-          Import
+          {{ 'IMPORT.IMPORT_BUTTON' | translate }}
         </button>
       </div>
     </div>
@@ -156,6 +158,7 @@ export class ImportFilePanelComponent {
 
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
+  private readonly languageService = inject(LanguageService);
 
   filePath = '';
   dataName = '';
@@ -168,13 +171,13 @@ export class ImportFilePanelComponent {
 
   async selectFile(): Promise<void> {
     if (!window.electronAPI?.dialog) {
-      this.toastService.error('File browser not available');
+      this.toastService.error(this.languageService.instant('TOAST.FILE_BROWSER_NA'));
       return;
     }
 
     try {
       const result = await window.electronAPI.dialog.openFile({
-        title: 'Select Data File to Import',
+        title: this.languageService.instant('IMPORT.SELECT_FILE_TITLE'),
       });
 
       if (!result.canceled && result.filePaths.length > 0) {
@@ -190,7 +193,7 @@ export class ImportFilePanelComponent {
       }
     } catch (error) {
       console.error('Failed to open file dialog:', error);
-      this.toastService.error('Failed to open file browser');
+      this.toastService.error(this.languageService.instant('TOAST.FILE_BROWSER_FAILED'));
     }
   }
 
@@ -220,7 +223,7 @@ add_dataframe("${name}", ${name})`;
 
   async importFile(): Promise<void> {
     if (!this.isValid()) {
-      this.toastService.warning('Please enter a file path');
+      this.toastService.warning(this.languageService.instant('TOAST.ENTER_FILE_PATH'));
       return;
     }
 
@@ -237,15 +240,15 @@ add_dataframe("${name}", ${name})`;
       const result = await this.rService.execute(code);
       
       if (!result.success) {
-        this.toastService.error(result.error || 'Import failed');
+        this.toastService.error(result.error || this.languageService.instant('TOAST.IMPORT_FAILED'));
         return;
       }
       
-      this.toastService.success('Data imported successfully');
+      this.toastService.success(this.languageService.instant('TOAST.DATA_IMPORTED'));
       this.imported.emit();
     } catch (error) {
       this.toastService.error(
-        error instanceof Error ? error.message : 'Failed to import data'
+        error instanceof Error ? error.message : this.languageService.instant('TOAST.IMPORT_FAILED')
       );
     } finally {
       this.isLoading.set(false);

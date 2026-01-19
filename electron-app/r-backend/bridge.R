@@ -4,20 +4,115 @@
 # This script runs as a child process of Electron and handles
 # all R operations via JSON messages.
 
-# Load required packages with error handling
-required_packages <- c("jsonlite", "dplyr", "tidyr", "ggplot2")
+# ============================================================================
+# Package Check and Healthcheck System
+# ============================================================================
+
+required_packages <- c("jsonlite", "dplyr", "tidyr", "ggplot2", "sjPlot", "sjmisc", "skimr")
+
+# Check for missing packages BEFORE loading
 missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
 
+# Track if we're in install mode (waiting for install command)
+install_mode <- FALSE
+
 if (length(missing_packages) > 0) {
-  message("Missing required packages: ", paste(missing_packages, collapse = ", "))
-  message("Please install them with: install.packages(c('", paste(missing_packages, collapse = "', '"), "'))")
+  # jsonlite is required for JSON communication - if missing, this is fatal
+  if ("jsonlite" %in% missing_packages) {
+    # Can't send JSON without jsonlite - output plain text error and exit
+    cat("FATAL: jsonlite package is required but not installed.\n")
+    cat("Please run: install.packages('jsonlite')\n")
+    quit(status = 1)
+  }
+  
+  # Load jsonlite to send structured response
+  suppressPackageStartupMessages(library(jsonlite))
+  
+  # Send missing packages status
+  cat(toJSON(list(
+    ready = FALSE, 
+    missing_packages = I(missing_packages)
+  ), auto_unbox = TRUE), "\n")
+  flush(stdout())
+  
+  # Enter install mode - wait for install_packages command
+  install_mode <- TRUE
+  stdin_con <- file("stdin", "r", blocking = TRUE)
+  
+  while (install_mode) {
+    line <- tryCatch({
+      readLines(con = stdin_con, n = 1, warn = FALSE)
+    }, error = function(e) { character(0) })
+    
+    if (length(line) == 0 || line == "") {
+      Sys.sleep(0.1)
+      next
+    }
+    
+    cmd <- tryCatch(fromJSON(line), error = function(e) NULL)
+    if (is.null(cmd)) next
+    
+    if (!is.null(cmd$type) && cmd$type == "install_packages") {
+      # Install missing packages
+      packages_to_install <- if (!is.null(cmd$packages)) cmd$packages else missing_packages
+      total <- length(packages_to_install)
+      
+      for (i in seq_along(packages_to_install)) {
+        pkg <- packages_to_install[i]
+        
+        # Send progress update
+        cat(toJSON(list(
+          type = "install_progress",
+          package = pkg,
+          current = i,
+          total = total
+        ), auto_unbox = TRUE), "\n")
+        flush(stdout())
+        
+        # Install package
+        tryCatch({
+          install.packages(pkg, repos = "https://cloud.r-project.org", quiet = TRUE)
+        }, error = function(e) {
+          message(paste("Failed to install", pkg, ":", e$message))
+        })
+      }
+      
+      # Re-check for missing packages
+      still_missing <- packages_to_install[!sapply(packages_to_install, requireNamespace, quietly = TRUE)]
+      
+      if (length(still_missing) > 0) {
+        # Some packages still missing
+        cat(toJSON(list(
+          id = cmd$id,
+          success = FALSE,
+          error = paste("Failed to install:", paste(still_missing, collapse = ", ")),
+          still_missing = I(still_missing)
+        ), auto_unbox = TRUE), "\n")
+        flush(stdout())
+      } else {
+        # All installed successfully - exit install mode
+        cat(toJSON(list(
+          id = cmd$id,
+          success = TRUE
+        ), auto_unbox = TRUE), "\n")
+        flush(stdout())
+        install_mode <- FALSE
+      }
+    }
+  }
+  
+  close(stdin_con)
 }
 
+# Load all required packages
 suppressPackageStartupMessages({
   library(jsonlite)
   library(dplyr)
   library(tidyr)
   library(ggplot2)
+  library(sjPlot)
+  library(sjmisc)
+  library(skimr)
 })
 
 # Global data storage (simple for MVP - no databook dependency initially)
@@ -89,16 +184,21 @@ capture_output <- function(expr) {
 }
 
 #' Handle execute command
+#' Captures ALL stdout during evaluation to prevent non-JSON leakage
 handle_execute <- function(cmd) {
   tryCatch({
-    # Parse and evaluate the code
-    result <- eval(parse(text = cmd$code))
+    # Capture ALL output during evaluation (prevents stdout leakage)
+    result <- NULL
+    all_output <- capture.output({
+      result <<- eval(parse(text = cmd$code))
+    })
     
     # Determine result type and format response
     if (inherits(result, "ggplot") || inherits(result, "gg")) {
       # Save plot to temp file and encode as base64
       tmp_file <- tempfile(fileext = ".png")
-      ggplot2::ggsave(tmp_file, result, width = 10, height = 7, dpi = 150)
+      # Suppress ggsave message output as well
+      suppressMessages(ggplot2::ggsave(tmp_file, result, width = 10, height = 7, dpi = 150))
       
       # Read file as raw bytes and encode as base64 data URL
       raw_data <- readBin(tmp_file, "raw", file.info(tmp_file)$size)
@@ -129,14 +229,17 @@ handle_execute <- function(cmd) {
         )
       )
     } else {
-      # Return as text
-      output <- capture_output(print(result))
+      # Combine intermediate output with final result print
+      final_output <- capture_output(print(result))
+      combined <- paste(c(all_output, final_output), collapse = "\n")
+      combined <- trimws(combined)
+      
       list(
         id = cmd$id,
         success = TRUE,
         result = list(
           type = "text",
-          value = output
+          value = if (nchar(combined) > 0) combined else "NULL"
         )
       )
     }

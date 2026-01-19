@@ -12,6 +12,7 @@
 
 import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { RBridge } from './r-bridge';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
@@ -26,11 +27,56 @@ try {
 
 let mainWindow: BrowserWindow | null = null;
 let rBridge: RBridge | null = null;
+let currentLanguage = 'en';
+let translations: Record<string, unknown> = {};
 
 // Determine if we're in development mode
 const isDev = process.env['NODE_ENV'] === 'development' || !app.isPackaged;
 
+/**
+ * Load translations for the given language
+ */
+function loadTranslations(lang: string): Record<string, unknown> {
+  try {
+    // In dev mode, load from src/assets; in production from dist/browser/assets
+    const basePath = isDev 
+      ? path.join(__dirname, '../src/assets/i18n')
+      : path.join(__dirname, '../dist/browser/assets/i18n');
+    
+    const filePath = path.join(basePath, `${lang}.json`);
+    
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch (error) {
+    console.error(`Failed to load translations for ${lang}:`, error);
+  }
+  return {};
+}
+
+/**
+ * Get a translation by key path (e.g., 'MENU.FILE')
+ */
+function t(key: string): string {
+  const parts = key.split('.');
+  let value: unknown = translations;
+  
+  for (const part of parts) {
+    if (value && typeof value === 'object' && part in value) {
+      value = (value as Record<string, unknown>)[part];
+    } else {
+      return key; // Return key if translation not found
+    }
+  }
+  
+  return typeof value === 'string' ? value : key;
+}
+
 function createWindow(): void {
+  // Load default translations
+  translations = loadTranslations(currentLanguage);
+
   // Create the browser window with security-first configuration
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -55,7 +101,7 @@ function createWindow(): void {
     },
   });
 
-  // Build the application menu
+  // Build the application menu with translations
   const menu = buildMenu();
   Menu.setApplicationMenu(menu);
 
@@ -90,95 +136,88 @@ function createWindow(): void {
 function buildMenu(): Menu {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: 'File',
+      label: t('ELECTRON_MENU.FILE'),
       submenu: [
         {
-          label: 'Import Data...',
+          label: t('ELECTRON_MENU.IMPORT_DATA'),
           accelerator: 'CmdOrCtrl+I',
           click: () => mainWindow?.webContents.send('menu:dialog', 'import'),
         },
         { type: 'separator' },
         {
-          label: 'Save',
+          label: t('ELECTRON_MENU.SAVE'),
           accelerator: 'CmdOrCtrl+S',
           click: () => mainWindow?.webContents.send('menu:save'),
         },
         { type: 'separator' },
-        { role: 'quit' },
+        { role: 'quit', label: t('ELECTRON_MENU.QUIT') },
       ],
     },
+    // Edit menu - use native roles (auto-translated by OS)
     {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-      ],
+      role: 'editMenu',
     },
     {
-      label: 'Data',
+      label: t('ELECTRON_MENU.DATA'),
       submenu: [
         {
-          label: 'Filter...',
+          label: t('ELECTRON_MENU.FILTER'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'filter'),
         },
         {
-          label: 'Sort...',
+          label: t('ELECTRON_MENU.SORT'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'sort'),
         },
         { type: 'separator' },
         {
-          label: 'Calculate...',
+          label: t('ELECTRON_MENU.CALCULATE'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'calculate'),
         },
         {
-          label: 'Recode...',
+          label: t('ELECTRON_MENU.RECODE'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'recode'),
         },
         {
-          label: 'Rename Column...',
+          label: t('ELECTRON_MENU.RENAME_COLUMN'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'rename'),
         },
       ],
     },
     {
-      label: 'Describe',
+      label: t('ELECTRON_MENU.DESCRIBE'),
       submenu: [
         {
-          label: 'Describe Data...',
+          label: t('ELECTRON_MENU.DESCRIBE_DATA'),
           accelerator: 'CmdOrCtrl+D',
           click: () => mainWindow?.webContents.send('menu:dialog', 'describe'),
         },
         { type: 'separator' },
         {
-          label: 'Quick Summary...',
+          label: t('ELECTRON_MENU.QUICK_SUMMARY'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'describe:summary'),
         },
         {
-          label: 'Quick Graph...',
+          label: t('ELECTRON_MENU.QUICK_GRAPH'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'describe:graph'),
         },
         { type: 'separator' },
         {
-          label: 'Specific Graphs',
+          label: t('ELECTRON_MENU.SPECIFIC_GRAPHS'),
           submenu: [
             {
-              label: 'Histogram...',
+              label: t('ELECTRON_MENU.HISTOGRAM'),
               click: () => mainWindow?.webContents.send('menu:dialog', 'histogram'),
             },
             {
-              label: 'Box Plot...',
+              label: t('ELECTRON_MENU.BOX_PLOT'),
               click: () => mainWindow?.webContents.send('menu:dialog', 'boxplot'),
             },
             {
-              label: 'Scatter Plot...',
+              label: t('ELECTRON_MENU.SCATTER_PLOT'),
               click: () => mainWindow?.webContents.send('menu:dialog', 'scatter'),
             },
             {
-              label: 'Bar Chart...',
+              label: t('ELECTRON_MENU.BAR_CHART'),
               click: () => mainWindow?.webContents.send('menu:dialog', 'bar-chart'),
             },
           ],
@@ -186,45 +225,35 @@ function buildMenu(): Menu {
       ],
     },
     {
-      label: 'Model',
+      label: t('ELECTRON_MENU.MODEL'),
       submenu: [
         {
-          label: 'Correlation...',
+          label: t('ELECTRON_MENU.CORRELATION'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'correlation'),
         },
         {
-          label: 't-Test...',
+          label: t('ELECTRON_MENU.T_TEST'),
           click: () => mainWindow?.webContents.send('menu:dialog', 't-test'),
         },
         {
-          label: 'Linear Regression...',
+          label: t('ELECTRON_MENU.LINEAR_REGRESSION'),
           click: () => mainWindow?.webContents.send('menu:dialog', 'regression'),
         },
       ],
     },
+    // View menu - use native roles (auto-translated by OS)
     {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
+      role: 'viewMenu',
     },
     {
-      label: 'Help',
+      label: t('ELECTRON_MENU.HELP'),
       submenu: [
         {
-          label: 'About R-Instat',
+          label: t('ELECTRON_MENU.ABOUT'),
           click: () => mainWindow?.webContents.send('menu:about'),
         },
         {
-          label: 'Documentation',
+          label: t('ELECTRON_MENU.DOCUMENTATION'),
           click: () => shell.openExternal('https://r-instat.org/docs'),
         },
       ],
@@ -232,6 +261,16 @@ function buildMenu(): Menu {
   ];
 
   return Menu.buildFromTemplate(template);
+}
+
+/**
+ * Set the application language and rebuild the menu
+ */
+function setLanguage(lang: string): void {
+  currentLanguage = lang;
+  translations = loadTranslations(lang);
+  const menu = buildMenu();
+  Menu.setApplicationMenu(menu);
 }
 
 // Initialize R Bridge and set up IPC handlers
@@ -290,8 +329,24 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('r:status', async () => {
-    if (!rBridge) return { connected: false };
-    return { connected: rBridge.isConnected() };
+    if (!rBridge) return { status: 'error', error: 'R Bridge not initialized' };
+    return rBridge.healthStatus;
+  });
+
+  ipcMain.handle('r:installPackages', async (_event, packages?: string[]) => {
+    if (!rBridge) throw new Error('R Bridge not initialized');
+    return rBridge.installPackages(packages);
+  });
+
+  ipcMain.handle('r:restart', async () => {
+    if (!rBridge) throw new Error('R Bridge not initialized');
+    return rBridge.restart();
+  });
+
+  // Language change handler
+  ipcMain.handle('app:setLanguage', async (_event, lang: string) => {
+    setLanguage(lang);
+    return { success: true };
   });
 
   // File dialog handlers

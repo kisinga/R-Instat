@@ -25,9 +25,9 @@ Unified dialog for exploring data through summaries, graphs, and frequencies.
 
 ## Output Modes
 
-**Summary**: R's `summary()`, `dplyr::summarise()`, or `skimr::skim()`  
+**Summary**: R's `summary()`, `dplyr::summarise()`, or `skimr::skim_without_charts()`  
 **Graph**: ggplot2-based, type adapts to variable combination  
-**Frequency**: `dplyr::count()` (1-way) or `janitor::tabyl()` (2-way)
+**Frequency**: `sjmisc::frq()` (1-way) or `sjPlot::sjtab()` (2-way)
 
 ## Keyboard Shortcuts
 

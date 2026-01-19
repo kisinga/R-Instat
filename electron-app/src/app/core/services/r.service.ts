@@ -1,6 +1,6 @@
-import { Injectable, NgZone, signal, computed } from '@angular/core';
+import { Injectable, NgZone, signal, computed, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subject, Observable } from 'rxjs';
-import { RResult, DataPreview, ColumnInfo, OutputEntry } from '../models/r.model';
+import { RResult, DataPreview, ColumnInfo, OutputEntry, RHealthStatus } from '../models/r.model';
 
 /**
  * R Service - Central service for all R backend communication
@@ -10,20 +10,28 @@ import { RResult, DataPreview, ColumnInfo, OutputEntry } from '../models/r.model
  * - Manages dataframe state
  * - Tracks command history for output panel
  * - Provides dialog open/close coordination
+ * - Tracks R health status for package installation
  */
 @Injectable({ providedIn: 'root' })
-export class RService {
+export class RService implements OnDestroy {
   // State signals
   private readonly _dataframes = signal<string[]>([]);
   private readonly _activeDataframe = signal<string | null>(null);
   private readonly _isConnected = signal(false);
   private readonly _isLoading = signal(false);
+  
+  // Health status for R backend
+  private readonly _healthStatus = signal<RHealthStatus>({ status: 'starting' });
 
   // Public readonly signals
   readonly dataframes = this._dataframes.asReadonly();
   readonly activeDataframe = this._activeDataframe.asReadonly();
   readonly isConnected = this._isConnected.asReadonly();
   readonly isLoading = this._isLoading.asReadonly();
+  readonly healthStatus = this._healthStatus.asReadonly();
+  
+  // Computed: is R ready for use?
+  readonly isReady = computed(() => this._healthStatus().status === 'ready');
 
   // Output history
   private readonly outputHistory$ = new BehaviorSubject<OutputEntry[]>([]);
@@ -37,9 +45,46 @@ export class RService {
   private readonly dataRefresh$ = new Subject<void>();
   readonly onDataRefresh$ = this.dataRefresh$.asObservable();
 
+  // Status change listener cleanup
+  private cleanupStatusListener?: () => void;
+
   constructor(private ngZone: NgZone) {
-    // Initial connection check
-    this.checkConnection();
+    // Initial health check
+    this.initializeHealthCheck();
+  }
+
+  ngOnDestroy(): void {
+    this.cleanupStatusListener?.();
+  }
+
+  /**
+   * Initialize health status tracking
+   */
+  private async initializeHealthCheck(): Promise<void> {
+    if (!window.electronAPI) {
+      this._healthStatus.set({ status: 'error', error: 'Electron API not available' });
+      return;
+    }
+
+    // Listen for status changes from main process
+    this.cleanupStatusListener = window.electronAPI.r.onStatusChange((status) => {
+      this.ngZone.run(() => {
+        this._healthStatus.set(status);
+        this._isConnected.set(status.status === 'ready');
+      });
+    });
+
+    // Get initial status
+    try {
+      const status = await window.electronAPI.r.status();
+      this.ngZone.run(() => {
+        this._healthStatus.set(status);
+        this._isConnected.set(status.status === 'ready');
+      });
+    } catch {
+      this._healthStatus.set({ status: 'error', error: 'Failed to get R status' });
+      this._isConnected.set(false);
+    }
   }
 
   /**
@@ -50,22 +95,44 @@ export class RService {
       if (window.electronAPI) {
         const status = await window.electronAPI.r.status();
         this.ngZone.run(() => {
-          this._isConnected.set(status.connected);
+          this._healthStatus.set(status);
+          this._isConnected.set(status.status === 'ready');
         });
       }
     } catch {
       this._isConnected.set(false);
+      this._healthStatus.set({ status: 'error', error: 'Failed to connect to R' });
     }
   }
 
   /**
-   * Get R connection status
+   * Get R health status
    */
-  async getStatus(): Promise<{ connected: boolean }> {
+  async getStatus(): Promise<RHealthStatus> {
     if (!window.electronAPI) {
-      return { connected: false };
+      return { status: 'error', error: 'Electron API not available' };
     }
     return window.electronAPI.r.status();
+  }
+
+  /**
+   * Install missing R packages
+   */
+  async installPackages(packages?: string[]): Promise<RResult> {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return window.electronAPI.r.installPackages(packages);
+  }
+
+  /**
+   * Restart R process
+   */
+  async restartR(): Promise<void> {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return window.electronAPI.r.restart();
   }
 
   /**

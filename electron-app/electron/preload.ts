@@ -44,8 +44,22 @@ const electronAPI = {
     loadInstatCollectionDataset: (name: string, filePath: string): Promise<RResult> => 
       ipcRenderer.invoke('r:loadInstatCollectionDataset', name, filePath),
     
-    status: (): Promise<{ connected: boolean }> => 
+    status: (): Promise<RHealthStatus> => 
       ipcRenderer.invoke('r:status'),
+    
+    installPackages: (packages?: string[]): Promise<RResult> =>
+      ipcRenderer.invoke('r:installPackages', packages),
+    
+    restart: (): Promise<void> =>
+      ipcRenderer.invoke('r:restart'),
+    
+    onStatusChange: (callback: (status: RHealthStatus) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, status: RHealthStatus) => callback(status);
+      ipcRenderer.on('r:statusChanged', handler);
+      return () => {
+        ipcRenderer.removeListener('r:statusChanged', handler);
+      };
+    },
   },
 
   // Menu event listeners
@@ -82,6 +96,12 @@ const electronAPI = {
       defaultPath?: string;
     }): Promise<{ canceled: boolean; filePaths: string[] }> =>
       ipcRenderer.invoke('dialog:openFile', options),
+  },
+
+  // App APIs
+  app: {
+    setLanguage: (lang: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('app:setLanguage', lang),
   },
 };
 
@@ -122,12 +142,21 @@ interface InstatCollectionDataset {
   format: string;
 }
 
+type RHealthStatusType = 'starting' | 'missing_packages' | 'installing' | 'ready' | 'error';
+
+interface RHealthStatus {
+  status: RHealthStatusType;
+  missingPackages?: string[];
+  installProgress?: {
+    current: number;
+    total: number;
+    package: string;
+  };
+  error?: string;
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
-// TypeScript declaration for window.electronAPI
-declare global {
-  interface Window {
-    electronAPI: typeof electronAPI;
-  }
-}
+// Note: TypeScript declaration for window.electronAPI is in src/app/electron.d.ts
+// The preload script's declaration is internal to Electron's context

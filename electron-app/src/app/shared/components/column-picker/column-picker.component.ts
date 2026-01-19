@@ -1,12 +1,14 @@
-import { Component, Input, Output, EventEmitter, signal, computed, effect } from '@angular/core';
+import { Component, Input, Output, EventEmitter, signal, computed, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
+import { LanguageService } from '../../../core/services/language.service';
 import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core/models/r.model';
 
 @Component({
   selector: 'app-column-picker',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   template: `
     <div class="column-picker">
       <!-- Search -->
@@ -14,7 +16,7 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
         <input
           type="text"
           class="input input-sm input-bordered w-full mb-2"
-          placeholder="Search columns..."
+          [placeholder]="'COLUMN_PICKER.SEARCH' | translate"
           [(ngModel)]="searchQuery"
         />
       }
@@ -53,9 +55,9 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
         @if (filteredColumns().length === 0) {
           <div class="text-center text-base-content/50 py-4 text-sm">
             @if (searchQuery) {
-              No columns match "{{ searchQuery }}"
+              {{ 'COLUMN_PICKER.NO_MATCH' | translate: {query: searchQuery} }}
             } @else {
-              No columns available
+              {{ 'COLUMN_PICKER.NO_COLUMNS' | translate }}
             }
           </div>
         }
@@ -64,7 +66,7 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
       <!-- Selected count for multi-select -->
       @if (multiple && selectedColumns.length > 0) {
         <div class="text-xs text-base-content/60 mt-2">
-          {{ selectedColumns.length }} column{{ selectedColumns.length > 1 ? 's' : '' }} selected
+          {{ 'COLUMN_PICKER.SELECTED_COUNT' | translate: {count: selectedColumns.length} }}
         </div>
       }
     </div>

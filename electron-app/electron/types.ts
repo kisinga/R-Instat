@@ -53,6 +53,33 @@ export interface RResponse {
  */
 export interface RReadySignal {
   ready: boolean;
+  missing_packages?: string[];
+}
+
+/**
+ * Install progress update from R
+ */
+export interface RInstallProgress {
+  type: 'install_progress';
+  package: string;
+  current: number;
+  total: number;
+}
+
+/**
+ * R health status - used across Electron and Angular
+ */
+export type RHealthStatusType = 'starting' | 'missing_packages' | 'installing' | 'ready' | 'error';
+
+export interface RHealthStatus {
+  status: RHealthStatusType;
+  missingPackages?: string[];
+  installProgress?: {
+    current: number;
+    total: number;
+    package: string;
+  };
+  error?: string;
 }
 
 /**

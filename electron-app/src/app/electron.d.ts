@@ -38,6 +38,19 @@ interface InstatCollectionDataset {
   format: string;
 }
 
+type RHealthStatusType = 'starting' | 'missing_packages' | 'installing' | 'ready' | 'error';
+
+interface RHealthStatus {
+  status: RHealthStatusType;
+  missingPackages?: string[];
+  installProgress?: {
+    current: number;
+    total: number;
+    package: string;
+  };
+  error?: string;
+}
+
 interface FileDialogOptions {
   title?: string;
   filters?: { name: string; extensions: string[] }[];
@@ -61,10 +74,16 @@ interface ElectronAPI {
     loadPackageDataset: (packageName: string, dataset: string) => Promise<RResult>;
     listInstatCollection: () => Promise<InstatCollectionDataset[]>;
     loadInstatCollectionDataset: (name: string, filePath: string) => Promise<RResult>;
-    status: () => Promise<{ connected: boolean }>;
+    status: () => Promise<RHealthStatus>;
+    installPackages: (packages?: string[]) => Promise<RResult>;
+    restart: () => Promise<void>;
+    onStatusChange: (callback: (status: RHealthStatus) => void) => () => void;
   };
   dialog: {
     openFile: (options?: FileDialogOptions) => Promise<FileDialogResult>;
+  };
+  app: {
+    setLanguage: (lang: string) => Promise<{ success: boolean }>;
   };
   onMenuCommand: (callback: (command: string, data?: unknown) => void) => () => void;
   platform: string;

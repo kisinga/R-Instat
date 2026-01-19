@@ -1,3 +1,13 @@
-Install R systemwide
+# Development Notes
 
-mkdir -p ~/R/x86_64-pc-linux-gnu-library/4.5 && Rscript -e "install.packages(c('jsonlite', 'dplyr', 'ggplot2', 'tidyr'), repos='https://cloud.r-project.org', lib='~/R/x86_64-pc-linux-gnu-library/4.5')"
+## R Setup
+
+Install R systemwide (the app will auto-install required packages on first launch).
+
+For manual package installation (if needed):
+
+```bash
+Rscript -e "install.packages(c('jsonlite', 'dplyr', 'tidyr', 'ggplot2', 'sjPlot', 'sjmisc', 'skimr'), repos='https://cloud.r-project.org')"
+```
+
+> **Note**: The app automatically detects missing packages and prompts for installation with a progress UI.

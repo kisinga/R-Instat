@@ -1,5 +1,6 @@
 import { Component, Output, EventEmitter, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { ImportFilePanelComponent } from './panels/import-file-panel.component';
 import { ImportLibraryPanelComponent } from './panels/import-library-panel.component';
 
@@ -8,11 +9,11 @@ type ImportTab = 'file' | 'library';
 @Component({
   selector: 'app-import-dialog',
   standalone: true,
-  imports: [CommonModule, ImportFilePanelComponent, ImportLibraryPanelComponent],
+  imports: [CommonModule, TranslateModule, ImportFilePanelComponent, ImportLibraryPanelComponent],
   template: `
     <div class="dialog-content w-[720px]" (click)="$event.stopPropagation()">
       <div class="dialog-header">
-        <h2 class="text-lg font-semibold">Import Data</h2>
+        <h2 class="text-lg font-semibold">{{ 'IMPORT.TITLE' | translate }}</h2>
         <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
       </div>
 
@@ -28,7 +29,7 @@ type ImportTab = 'file' | 'library';
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            From File
+            {{ 'IMPORT.FROM_FILE' | translate }}
           </button>
           <button 
             role="tab" 
@@ -39,7 +40,7 @@ type ImportTab = 'file' | 'library';
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
             </svg>
-            From Library
+            {{ 'IMPORT.FROM_LIBRARY' | translate }}
           </button>
         </div>
       </div>

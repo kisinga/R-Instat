@@ -1,5 +1,6 @@
 import { Component, Output, EventEmitter, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { RPackagesPanelComponent } from './r-packages-panel.component';
 import { InstatCollectionPanelComponent } from './instat-collection-panel.component';
 
@@ -8,7 +9,7 @@ type LibraryOption = 'r-packages' | 'instat-collection';
 @Component({
   selector: 'app-import-library-panel',
   standalone: true,
-  imports: [CommonModule, RPackagesPanelComponent, InstatCollectionPanelComponent],
+  imports: [CommonModule, TranslateModule, RPackagesPanelComponent, InstatCollectionPanelComponent],
   template: `
     <div class="panel-content">
       <!-- Sub-option Toggle -->
@@ -22,7 +23,7 @@ type LibraryOption = 'r-packages' | 'instat-collection';
             <svg xmlns="http://www.w3.org/2000/svg" class="toggle-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <span>R Packages</span>
+            <span>{{ 'IMPORT.R_PACKAGES' | translate }}</span>
           </button>
           <button 
             class="toggle-btn"
@@ -32,7 +33,7 @@ type LibraryOption = 'r-packages' | 'instat-collection';
             <svg xmlns="http://www.w3.org/2000/svg" class="toggle-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <span>Instat Collection</span>
+            <span>{{ 'IMPORT.INSTAT_COLLECTION' | translate }}</span>
           </button>
         </div>
       </div>

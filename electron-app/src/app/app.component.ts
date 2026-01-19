@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { ShellComponent } from './layout/shell/shell.component';
 import { RService } from './core/services/r.service';
 import { ThemeService } from './core/services/theme.service';
-import { ToastService } from './core/services/toast.service';
 import { KeyboardService } from './core/services/keyboard.service';
+import { LanguageService } from './core/services/language.service';
 import { ToastContainerComponent } from './shared/components/toast-container/toast-container.component';
+import { RHealthOverlayComponent } from './shared/components/r-health-overlay/r-health-overlay.component';
 
 @Component({
   selector: 'app-root',
@@ -14,22 +15,27 @@ import { ToastContainerComponent } from './shared/components/toast-container/toa
     CommonModule,
     ShellComponent,
     ToastContainerComponent,
+    RHealthOverlayComponent,
   ],
   template: `
     <app-shell />
     <app-toast-container />
+    <app-r-health-overlay />
   `,
 })
 export class AppComponent implements OnInit, OnDestroy {
   private readonly rService = inject(RService);
   private readonly themeService = inject(ThemeService);
-  private readonly toastService = inject(ToastService);
   private readonly keyboardService = inject(KeyboardService);
+  private readonly languageService = inject(LanguageService);
   private cleanupMenuListener?: () => void;
 
   ngOnInit(): void {
     // Initialize theme
     this.themeService.initTheme();
+
+    // Initialize language
+    this.languageService.initLanguage();
 
     // Initialize keyboard shortcuts
     this.keyboardService.init();
@@ -41,23 +47,11 @@ export class AppComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Check R connection status
-    this.checkRConnection();
+    // R health is now managed by RHealthOverlayComponent
   }
 
   ngOnDestroy(): void {
     this.cleanupMenuListener?.();
-  }
-
-  private async checkRConnection(): Promise<void> {
-    try {
-      const status = await this.rService.getStatus();
-      if (!status.connected) {
-        this.toastService.warning('R is not connected. Some features may not work.');
-      }
-    } catch {
-      this.toastService.error('Failed to connect to R backend');
-    }
   }
 
   private handleMenuCommand(command: string, data?: unknown): void {

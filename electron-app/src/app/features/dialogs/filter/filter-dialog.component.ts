@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 
 interface FilterCondition {
@@ -12,18 +13,18 @@ interface FilterCondition {
 @Component({
   selector: 'app-filter-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
-        <h2 class="text-lg font-semibold">{{ dialogTitle }}</h2>
+        <h2 class="text-lg font-semibold">{{ 'FILTER.TITLE' | translate }}</h2>
         <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
         <!-- Dataframe Selection -->
         <div class="form-group">
-          <label class="form-label">Data Frame</label>
+          <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
           <select 
             class="select select-bordered w-full"
             [ngModel]="selectedDataframe()"
@@ -37,7 +38,7 @@ interface FilterCondition {
 
         <!-- Filter Conditions -->
         <div class="form-group">
-          <label class="form-label">Filter Conditions</label>
+          <label class="form-label">{{ 'FILTER.CONDITIONS' | translate }}</label>
           
           @for (condition of conditions; track $index; let i = $index) {
             <div class="flex gap-2 mb-2 items-end">
@@ -45,7 +46,7 @@ interface FilterCondition {
                 class="select select-bordered select-sm flex-1"
                 [(ngModel)]="condition.column"
               >
-                <option value="">Select column...</option>
+                <option value="">{{ 'DIALOG.SELECT_COLUMN' | translate }}</option>
                 @for (col of columns(); track col.name) {
                   <option [value]="col.name">{{ col.name }}</option>
                 }
@@ -55,22 +56,22 @@ interface FilterCondition {
                 class="select select-bordered select-sm w-24"
                 [(ngModel)]="condition.operator"
               >
-                <option value="==">equals</option>
-                <option value="!=">not equals</option>
-                <option value=">">greater than</option>
-                <option value=">=">greater or equal</option>
-                <option value="<">less than</option>
-                <option value="<=">less or equal</option>
-                <option value="%in%">in</option>
-                <option value="is.na">is NA</option>
-                <option value="!is.na">is not NA</option>
+                <option value="==">{{ 'FILTER.EQUALS' | translate }}</option>
+                <option value="!=">{{ 'FILTER.NOT_EQUALS' | translate }}</option>
+                <option value=">">{{ 'FILTER.GREATER_THAN' | translate }}</option>
+                <option value=">=">{{ 'FILTER.GREATER_OR_EQUAL' | translate }}</option>
+                <option value="<">{{ 'FILTER.LESS_THAN' | translate }}</option>
+                <option value="<=">{{ 'FILTER.LESS_OR_EQUAL' | translate }}</option>
+                <option value="%in%">{{ 'FILTER.IN' | translate }}</option>
+                <option value="is.na">{{ 'FILTER.IS_NA' | translate }}</option>
+                <option value="!is.na">{{ 'FILTER.IS_NOT_NA' | translate }}</option>
               </select>
 
               @if (condition.operator !== 'is.na' && condition.operator !== '!is.na') {
                 <input
                   type="text"
                   class="input input-bordered input-sm flex-1"
-                  placeholder="Value..."
+                  [placeholder]="'DIALOG.VALUE' | translate"
                   [(ngModel)]="condition.value"
                 />
               }
@@ -86,21 +87,21 @@ interface FilterCondition {
           }
 
           <button class="btn btn-ghost btn-sm" (click)="addCondition()">
-            + Add Condition
+            {{ 'FILTER.ADD_CONDITION' | translate }}
           </button>
         </div>
 
         <!-- Logic -->
         <div class="form-group">
-          <label class="form-label">Combine conditions with</label>
+          <label class="form-label">{{ 'FILTER.COMBINE_WITH' | translate }}</label>
           <div class="flex gap-4">
             <label class="label cursor-pointer gap-2">
               <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="&" />
-              <span>AND (all must match)</span>
+              <span>{{ 'FILTER.AND' | translate }}</span>
             </label>
             <label class="label cursor-pointer gap-2">
               <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="|" />
-              <span>OR (any can match)</span>
+              <span>{{ 'FILTER.OR' | translate }}</span>
             </label>
           </div>
         </div>
@@ -108,7 +109,7 @@ interface FilterCondition {
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">R Code Preview</label>
+            <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
             <pre class="code-block">{{ buildRCode() }}</pre>
           </div>
         }
@@ -116,10 +117,10 @@ interface FilterCondition {
 
       <div class="dialog-footer">
         <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
-          {{ showCodePreview() ? 'Hide' : 'Show' }} Code
+          {{ (showCodePreview() ? 'DIALOG.HIDE_CODE' : 'DIALOG.SHOW_CODE') | translate }}
         </button>
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="cancel()">Cancel</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
@@ -128,7 +129,7 @@ interface FilterCondition {
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
           }
-          OK
+          {{ 'DIALOG.OK' | translate }}
         </button>
       </div>
     </div>

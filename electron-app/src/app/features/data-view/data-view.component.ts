@@ -1,17 +1,19 @@
 import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridReadyEvent, GridApi } from 'ag-grid-community';
 import { RService } from '../../core/services/r.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model';
+import { ColumnHeaderComponent } from './column-header.component';
 
 @Component({
   selector: 'app-data-view',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular],
+  imports: [CommonModule, FormsModule, AgGridAngular, TranslateModule],
   template: `
     <div class="h-full flex flex-col bg-base-100 overflow-hidden">
       <!-- Dataframe Tabs -->
@@ -29,7 +31,7 @@ import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model
         </div>
         
         @if (rService.dataframes().length === 0) {
-          <span class="text-sm text-base-content/50 py-2">No data loaded</span>
+          <span class="text-sm text-base-content/50 py-2">{{ 'DATA_VIEW.NO_DATA_LOADED' | translate }}</span>
         }
       </div>
 
@@ -54,11 +56,11 @@ import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model
           />
         } @else if (rService.activeDataframe()) {
           <div class="h-full flex items-center justify-center text-base-content/50">
-            <p>No data to display</p>
+            <p>{{ 'DATA_VIEW.NO_DATA_DISPLAY' | translate }}</p>
           </div>
         } @else {
           <div class="h-full flex items-center justify-center text-base-content/50">
-            <p>Select a dataframe or import data to begin</p>
+            <p>{{ 'DATA_VIEW.SELECT_OR_IMPORT' | translate }}</p>
           </div>
         }
       </div>
@@ -68,7 +70,7 @@ import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model
         <div class="px-3 py-1.5 bg-base-200 border-t border-base-300 text-xs flex items-center justify-between gap-4">
           <!-- Row count -->
           <span class="text-base-content/70">
-            {{ totalRows() | number }} rows × {{ columnDefs().length }} columns
+            {{ 'DATA_VIEW.ROWS_COLUMNS' | translate: {rows: (totalRows() | number), cols: columnDefs().length} }}
           </span>
 
           <!-- Pagination controls -->
@@ -83,7 +85,7 @@ import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model
                 <option [value]="size">{{ size }}</option>
               }
             </select>
-            <span class="text-base-content/50">per page</span>
+            <span class="text-base-content/50">{{ 'DATA_VIEW.PER_PAGE' | translate }}</span>
 
             <!-- Page navigation -->
             <div class="join">
@@ -91,28 +93,28 @@ import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model
                 class="join-item btn btn-xs"
                 [disabled]="!canGoPrev()"
                 (click)="firstPage()"
-                title="First page"
+                [title]="'DATA_VIEW.FIRST_PAGE' | translate"
               >«</button>
               <button 
                 class="join-item btn btn-xs"
                 [disabled]="!canGoPrev()"
                 (click)="prevPage()"
-                title="Previous page"
+                [title]="'DATA_VIEW.PREV_PAGE' | translate"
               >‹</button>
               <span class="join-item btn btn-xs btn-disabled no-animation">
-                {{ startRow() | number }}-{{ endRow() | number }} of {{ totalRows() | number }}
+                {{ startRow() | number }}-{{ endRow() | number }} {{ 'DATA_VIEW.OF' | translate }} {{ totalRows() | number }}
               </span>
               <button 
                 class="join-item btn btn-xs"
                 [disabled]="!canGoNext()"
                 (click)="nextPage()"
-                title="Next page"
+                [title]="'DATA_VIEW.NEXT_PAGE' | translate"
               >›</button>
               <button 
                 class="join-item btn btn-xs"
                 [disabled]="!canGoNext()"
                 (click)="lastPage()"
-                title="Last page"
+                [title]="'DATA_VIEW.LAST_PAGE' | translate"
               >»</button>
             </div>
           </div>
@@ -210,7 +212,7 @@ export class DataViewComponent implements OnInit, OnDestroy {
       const offset = (this.currentPage() - 1) * this.pageSize();
       const preview = await this.rService.getDataPreview(dfName, this.pageSize(), offset);
       
-      // Build column definitions with type indicators
+      // Build column definitions with custom header component
       const colDefs: ColDef[] = preview.columns.map(col => {
         const rType = preview.columnTypes[col] || 'unknown';
         const category = mapRTypeToCategory(rType);
@@ -218,8 +220,13 @@ export class DataViewComponent implements OnInit, OnDestroy {
         
         return {
           field: col,
-          headerName: `${icon} ${col}`,
-          headerTooltip: `${col} (${rType})`,
+          headerName: col,
+          headerComponent: ColumnHeaderComponent,
+          headerComponentParams: {
+            typeIcon: icon,
+            typeCategory: category,
+            tooltip: `${col} (${rType})`,
+          },
           cellClass: `col-type-${category}`,
         };
       });

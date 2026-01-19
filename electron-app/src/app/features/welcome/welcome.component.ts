@@ -1,11 +1,12 @@
 import { Component, Output, EventEmitter, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { RService } from '../../core/services/r.service';
 
 @Component({
   selector: 'app-welcome',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   template: `
     <div class="h-full flex items-center justify-center welcome-hero p-8">
       <div class="max-w-2xl text-center">
@@ -14,9 +15,9 @@ import { RService } from '../../core/services/r.service';
           <div class="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-primary/20 mb-4">
             <span class="text-5xl font-bold text-primary">R</span>
           </div>
-          <h1 class="text-4xl font-bold mb-2">R-Instat</h1>
+          <h1 class="text-4xl font-bold mb-2">{{ 'APP.TITLE' | translate }}</h1>
           <p class="text-lg text-base-content/70">
-            Cross-platform statistical analysis powered by R
+            {{ 'APP.SUBTITLE' | translate }}
           </p>
         </div>
 
@@ -35,10 +36,10 @@ import { RService } from '../../core/services/r.service';
               </div>
               <div>
                 <h3 class="font-semibold mb-1">
-                  {{ isLoading() ? 'Loading Demo Data...' : 'Load Demo Data' }}
+                  {{ isLoading() ? ('WELCOME.LOADING_DEMO' | translate) : ('WELCOME.LOAD_DEMO' | translate) }}
                 </h3>
                 <p class="text-sm text-base-content/60">
-                  {{ isLoading() ? 'Please wait while we load the dataset' : 'Explore with World Bank Tanzania dataset' }}
+                  {{ isLoading() ? ('WELCOME.DEMO_LOADING_DESCRIPTION' | translate) : ('WELCOME.DEMO_DESCRIPTION' | translate) }}
                 </p>
               </div>
             </div>
@@ -55,9 +56,9 @@ import { RService } from '../../core/services/r.service';
                 </svg>
               </div>
               <div>
-                <h3 class="font-semibold mb-1">Import Data</h3>
+                <h3 class="font-semibold mb-1">{{ 'WELCOME.IMPORT_DATA' | translate }}</h3>
                 <p class="text-sm text-base-content/60">
-                  Load CSV, Excel, or other data files
+                  {{ 'WELCOME.IMPORT_DESCRIPTION' | translate }}
                 </p>
               </div>
             </div>
@@ -68,24 +69,24 @@ import { RService } from '../../core/services/r.service';
         <div class="grid grid-cols-3 gap-6 text-center text-sm">
           <div>
             <div class="text-2xl mb-2">📊</div>
-            <div class="font-medium">Data Analysis</div>
-            <div class="text-base-content/60">Summary statistics & exploration</div>
+            <div class="font-medium">{{ 'WELCOME.FEATURE_ANALYSIS' | translate }}</div>
+            <div class="text-base-content/60">{{ 'WELCOME.FEATURE_ANALYSIS_DESC' | translate }}</div>
           </div>
           <div>
             <div class="text-2xl mb-2">📈</div>
-            <div class="font-medium">Visualization</div>
-            <div class="text-base-content/60">Charts, plots & graphs</div>
+            <div class="font-medium">{{ 'WELCOME.FEATURE_VISUALIZATION' | translate }}</div>
+            <div class="text-base-content/60">{{ 'WELCOME.FEATURE_VISUALIZATION_DESC' | translate }}</div>
           </div>
           <div>
             <div class="text-2xl mb-2">🔬</div>
-            <div class="font-medium">Statistical Models</div>
-            <div class="text-base-content/60">Regression, tests & more</div>
+            <div class="font-medium">{{ 'WELCOME.FEATURE_MODELS' | translate }}</div>
+            <div class="text-base-content/60">{{ 'WELCOME.FEATURE_MODELS_DESC' | translate }}</div>
           </div>
         </div>
 
         <!-- Version -->
         <div class="mt-12 text-xs text-base-content/40">
-          Version 0.1.0 (MVP) • Powered by R
+          {{ 'APP.VERSION' | translate: {version: '0.1.0'} }}
         </div>
       </div>
     </div>

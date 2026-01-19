@@ -8,8 +8,10 @@
 import { Component, signal, computed, inject, OnInit, OnDestroy, Output, EventEmitter, Input, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { RService } from '../../../core/services/r.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { LanguageService } from '../../../core/services/language.service';
 import { ColumnInfo } from '../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { DescribeDialogService, OutputMode } from './describe-dialog.service';
@@ -23,6 +25,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
   imports: [
     CommonModule,
     FormsModule,
+    TranslateModule,
     ColumnPickerComponent,
     SummaryPanelComponent,
     GraphPanelComponent,
@@ -33,7 +36,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
     <div class="dialog-content describe-dialog" (click)="$event.stopPropagation()">
       <!-- Header -->
       <div class="dialog-header">
-        <h2 class="text-lg font-semibold">Describe Data</h2>
+        <h2 class="text-lg font-semibold">{{ 'DESCRIBE.TITLE' | translate }}</h2>
         <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
       </div>
 
@@ -43,10 +46,10 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
         <div class="data-selection">
           <!-- Dataframe Selection -->
           <div class="form-group">
-            <label class="form-label">Data Frame</label>
+            <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
             @if (dataframes().length === 0) {
               <div class="text-sm text-base-content/60 bg-base-200 rounded-lg p-3">
-                No data loaded. Import data first.
+                {{ 'DIALOG.NO_DATA' | translate }}
               </div>
             } @else {
               <select 
@@ -65,7 +68,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
           <div class="form-group flex-1">
             <div class="flex items-center justify-between">
               <label class="form-label">
-                Variables 
+                {{ 'DIALOG.VARIABLES' | translate }}
                 <span class="text-xs text-base-content/60">({{ selectedColumns().length }}/{{ columns().length }})</span>
               </label>
               <div class="flex gap-1">
@@ -73,12 +76,12 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
                   class="btn btn-ghost btn-xs"
                   (click)="selectAllColumns()"
                   [disabled]="columns().length === 0"
-                >All</button>
+                >{{ 'DIALOG.ALL' | translate }}</button>
                 <button 
                   class="btn btn-ghost btn-xs"
                   (click)="clearColumns()"
                   [disabled]="selectedColumns().length === 0"
-                >None</button>
+                >{{ 'DIALOG.NONE' | translate }}</button>
               </div>
             </div>
             <app-column-picker
@@ -93,7 +96,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
           @if (service.analysis().combination !== 'none') {
             <div class="type-indicator">
               <span class="badge badge-sm" [class]="getTypeBadgeClass()">
-                {{ getTypeLabel() }}
+                {{ getTypeLabelKey() | translate }}
               </span>
             </div>
           }
@@ -109,14 +112,14 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
               [disabled]="selectedColumns().length === 0"
               (click)="setOutputMode('summary')"
             >
-              Summary
+              {{ 'DESCRIBE.SUMMARY' | translate }}
             </button>
             <button 
               class="tab tab-sm"
               [class.tab-active]="service.outputMode() === 'graph'"
               (click)="setOutputMode('graph')"
             >
-              Graph
+              {{ 'DESCRIBE.GRAPH' | translate }}
             </button>
             <button 
               class="tab tab-sm"
@@ -124,7 +127,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
               [disabled]="selectedColumns().length === 0"
               (click)="setOutputMode('frequency')"
             >
-              Frequency
+              {{ 'DESCRIBE.FREQUENCY' | translate }}
             </button>
           </div>
 
@@ -161,7 +164,7 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
-              {{ showCodePreview() ? 'Hide' : 'Show' }} R Code
+              {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
             </button>
             
             @if (showCodePreview()) {
@@ -173,22 +176,22 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
 
       <!-- Footer -->
       <div class="dialog-footer">
-        <button class="btn btn-ghost btn-sm" (click)="service.reset()">Reset</button>
+        <button class="btn btn-ghost btn-sm" (click)="service.reset()">{{ 'DIALOG.RESET' | translate }}</button>
         <div class="flex-1"></div>
         <span class="text-xs text-base-content/50 hidden sm:inline">
-          Ctrl+Enter to run
+          {{ 'DIALOG.CTRL_ENTER' | translate }}
         </span>
-        <button class="btn btn-ghost" (click)="close.emit()">Cancel</button>
+        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
           [disabled]="!service.isValid() || isLoading()"
-          title="Execute (Ctrl+Enter)"
+          [title]="'DIALOG.EXECUTE' | translate"
         >
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
           }
-          OK
+          {{ 'DIALOG.OK' | translate }}
         </button>
       </div>
     </div>
@@ -259,6 +262,7 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   readonly service = inject(DescribeDialogService);
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
+  private readonly languageService = inject(LanguageService);
 
   /**
    * Keyboard shortcuts:
@@ -407,24 +411,24 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  getTypeLabel(): string {
+  getTypeLabelKey(): string {
     const combo = this.service.analysis().combination;
     switch (combo) {
-      case 'single-numeric': return 'Numeric';
-      case 'single-categorical': return 'Categorical';
-      case 'multi-numeric': return 'Multiple Numeric';
-      case 'multi-categorical': return 'Multiple Categorical';
-      case 'numeric-by-categorical': return 'Numeric by Categorical';
-      case 'categorical-by-numeric': return 'Categorical by Numeric';
-      case 'categorical-by-categorical': return 'Categorical by Categorical';
-      case 'mixed': return 'Mixed Types';
+      case 'single-numeric': return 'DESCRIBE.TYPE_NUMERIC';
+      case 'single-categorical': return 'DESCRIBE.TYPE_CATEGORICAL';
+      case 'multi-numeric': return 'DESCRIBE.TYPE_MULTI_NUMERIC';
+      case 'multi-categorical': return 'DESCRIBE.TYPE_MULTI_CATEGORICAL';
+      case 'numeric-by-categorical': return 'DESCRIBE.TYPE_NUMERIC_BY_CATEGORICAL';
+      case 'categorical-by-numeric': return 'DESCRIBE.TYPE_CATEGORICAL_BY_NUMERIC';
+      case 'categorical-by-categorical': return 'DESCRIBE.TYPE_CATEGORICAL_BY_CATEGORICAL';
+      case 'mixed': return 'DESCRIBE.TYPE_MIXED';
       default: return '';
     }
   }
 
   async execute(): Promise<void> {
     if (!this.service.isValid()) {
-      this.toastService.warning('Please complete the form');
+      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
       return;
     }
 
@@ -434,14 +438,14 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
       const result = await this.service.execute();
       
       if (result.success) {
-        this.toastService.success('Command executed successfully');
+        this.toastService.success(this.languageService.instant('TOAST.COMMAND_SUCCESS'));
         this.close.emit();
       } else {
-        this.toastService.error(result.error || 'Command failed');
+        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
       }
     } catch (error) {
       this.toastService.error(
-        error instanceof Error ? error.message : 'Failed to execute command'
+        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
       );
     } finally {
       this.isLoading.set(false);

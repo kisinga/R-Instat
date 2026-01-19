@@ -6,7 +6,8 @@ Cross-platform statistical analysis application powered by R, built with Electro
 
 - **Node.js** 18+ (LTS recommended)
 - **R** 4.0+ installed and accessible in PATH
-- Required R packages: `jsonlite`, `dplyr`, `ggplot2`, `tidyr`
+
+> **Note**: Required R packages (`jsonlite`, `dplyr`, `tidyr`, `ggplot2`, `sjPlot`, `sjmisc`, `skimr`) are automatically installed on first launch if missing. The app will display a progress dialog during installation.
 
 ## Quick Start
 
@@ -44,7 +45,7 @@ npm run electron:build
 │                    R Process                                 │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │  bridge.R (JSON interface)                              ││
-│  │  + dplyr, ggplot2, tidyr                                ││
+│  │  + dplyr, ggplot2, tidyr, sjPlot, sjmisc, skimr         ││
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```

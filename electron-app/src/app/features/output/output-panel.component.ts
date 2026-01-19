@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
 import { OutputEntry } from '../../core/models/r.model';
@@ -7,13 +8,13 @@ import { OutputEntry } from '../../core/models/r.model';
 @Component({
   selector: 'app-output-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   template: `
     <div class="output-panel-container flex flex-col bg-base-100">
       <!-- Header -->
       <div class="flex-shrink-0 panel-header bg-base-200 border-b border-base-300">
         <div class="flex items-center gap-2">
-          <span class="font-medium">Output</span>
+          <span class="font-medium">{{ 'OUTPUT.TITLE' | translate }}</span>
           <span class="badge badge-sm badge-ghost">{{ entries().length }}</span>
         </div>
         <div class="flex items-center gap-1">
@@ -21,14 +22,14 @@ import { OutputEntry } from '../../core/models/r.model';
             class="btn btn-ghost btn-xs"
             (click)="toggleCodeDisplay()"
             [class.btn-active]="showCode()"
-            title="Toggle R code"
+            [title]="'OUTPUT.TOGGLE_CODE' | translate"
           >
             <span class="text-xs font-mono">&lt;/&gt;</span>
           </button>
           <button 
             class="btn btn-ghost btn-xs"
             (click)="clearOutput()"
-            title="Clear output"
+            [title]="'OUTPUT.CLEAR' | translate"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -42,8 +43,8 @@ import { OutputEntry } from '../../core/models/r.model';
         @if (entries().length === 0) {
           <div class="text-center text-base-content/50 py-12">
             <div class="text-4xl mb-2">📋</div>
-            <p>Output will appear here</p>
-            <p class="text-sm">Run analyses to see results</p>
+            <p>{{ 'OUTPUT.EMPTY_MESSAGE' | translate }}</p>
+            <p class="text-sm">{{ 'OUTPUT.EMPTY_HINT' | translate }}</p>
           </div>
         } @else {
           @for (entry of entries(); track entry.id) {
@@ -71,7 +72,7 @@ import { OutputEntry } from '../../core/models/r.model';
                     <div class="output-plot">
                       <img 
                         [src]="entry.result.result?.dataUrl || entry.result.result?.path" 
-                        alt="R Plot"
+                        [alt]="'OUTPUT.PLOT_ALT' | translate"
                         class="max-w-full rounded-lg shadow-lg"
                         loading="lazy"
                       />
@@ -80,7 +81,7 @@ import { OutputEntry } from '../../core/models/r.model';
                   @case ('dataframe') {
                     <div class="overflow-x-auto">
                       <div class="text-xs text-base-content/60 mb-1">
-                        Showing {{ entry.result.result?.data?.length || 0 }} of {{ entry.result.result?.totalRows || 0 }} rows
+                        {{ 'OUTPUT.SHOWING_ROWS' | translate: {shown: entry.result.result?.data?.length || 0, total: entry.result.result?.totalRows || 0} }}
                       </div>
                       <table class="table table-xs table-zebra">
                         <thead>
@@ -104,13 +105,13 @@ import { OutputEntry } from '../../core/models/r.model';
                   }
                   @default {
                     <div class="text-base-content/70 text-sm">
-                      Command executed successfully
+                      {{ 'OUTPUT.SUCCESS_DEFAULT' | translate }}
                     </div>
                   }
                 }
               } @else {
                 <div class="output-error">
-                  <div class="font-medium mb-1">Error</div>
+                  <div class="font-medium mb-1">{{ 'OUTPUT.ERROR' | translate }}</div>
                   <div>{{ entry.result.error }}</div>
                 </div>
               }

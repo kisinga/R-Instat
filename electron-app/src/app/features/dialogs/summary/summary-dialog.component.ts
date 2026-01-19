@@ -1,24 +1,26 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { LanguageService } from '../../../core/services/language.service';
 
 @Component({
   selector: 'app-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
-        <h2 class="text-lg font-semibold">{{ dialogTitle }}</h2>
+        <h2 class="text-lg font-semibold">{{ 'SUMMARY.TITLE' | translate }}</h2>
         <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
         <!-- Dataframe Selection -->
         <div class="form-group">
-          <label class="form-label">Data Frame</label>
+          <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
           <select 
             class="select select-bordered w-full"
             [ngModel]="selectedDataframe()"
@@ -32,7 +34,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
         <!-- Column Selection -->
         <div class="form-group">
-          <label class="form-label">Columns (leave empty for all)</label>
+          <label class="form-label">{{ 'SUMMARY.COLUMNS_HINT' | translate }}</label>
           <app-column-picker
             [columns]="columns()"
             [multiple]="true"
@@ -42,7 +44,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
         <!-- Summary Type -->
         <div class="form-group">
-          <label class="form-label">Summary Type</label>
+          <label class="form-label">{{ 'SUMMARY.TYPE' | translate }}</label>
           <div class="flex flex-wrap gap-2">
             @for (type of summaryTypes; track type.value) {
               <label class="label cursor-pointer gap-2 bg-base-200 rounded-lg px-3 py-2">
@@ -52,7 +54,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
                   [checked]="selectedTypes.includes(type.value)"
                   (change)="toggleType(type.value)"
                 />
-                <span class="text-sm">{{ type.label }}</span>
+                <span class="text-sm">{{ type.labelKey | translate }}</span>
               </label>
             }
           </div>
@@ -61,7 +63,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">R Code Preview</label>
+            <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
             <pre class="code-block">{{ buildRCode() }}</pre>
           </div>
         }
@@ -69,10 +71,10 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
       <div class="dialog-footer">
         <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
-          {{ showCodePreview() ? 'Hide' : 'Show' }} Code
+          {{ (showCodePreview() ? 'DIALOG.HIDE_CODE' : 'DIALOG.SHOW_CODE') | translate }}
         </button>
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="cancel()">Cancel</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
@@ -81,7 +83,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
           }
-          OK
+          {{ 'DIALOG.OK' | translate }}
         </button>
       </div>
     </div>
@@ -89,18 +91,19 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 })
 export class SummaryDialogComponent extends DialogBase {
   readonly dialogTitle = 'Summary Statistics';
+  private readonly languageService = inject(LanguageService);
 
   selectedCols: string[] = [];
   selectedTypes: string[] = ['mean', 'sd', 'min', 'max'];
 
   summaryTypes = [
-    { value: 'n', label: 'Count' },
-    { value: 'mean', label: 'Mean' },
-    { value: 'sd', label: 'Std Dev' },
-    { value: 'min', label: 'Min' },
-    { value: 'max', label: 'Max' },
-    { value: 'median', label: 'Median' },
-    { value: 'sum', label: 'Sum' },
+    { value: 'n', labelKey: 'SUMMARY.COUNT' },
+    { value: 'mean', labelKey: 'SUMMARY.MEAN' },
+    { value: 'sd', labelKey: 'SUMMARY.STD_DEV' },
+    { value: 'min', labelKey: 'SUMMARY.MIN' },
+    { value: 'max', labelKey: 'SUMMARY.MAX' },
+    { value: 'median', labelKey: 'SUMMARY.MEDIAN' },
+    { value: 'sum', labelKey: 'SUMMARY.SUM' },
   ];
 
   toggleType(type: string): void {

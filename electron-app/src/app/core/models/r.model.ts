@@ -53,6 +53,25 @@ export interface OutputEntry {
 }
 
 /**
+ * R health status types
+ */
+export type RHealthStatusType = 'starting' | 'missing_packages' | 'installing' | 'ready' | 'error';
+
+/**
+ * R health status - tracks package availability and R process state
+ */
+export interface RHealthStatus {
+  status: RHealthStatusType;
+  missingPackages?: string[];
+  installProgress?: {
+    current: number;
+    total: number;
+    package: string;
+  };
+  error?: string;
+}
+
+/**
  * R column types mapped to display categories
  */
 export type ColumnType = 'numeric' | 'character' | 'factor' | 'ordered_factor' | 'date' | 'logical' | 'unknown';

@@ -1,22 +1,31 @@
 /**
  * R Code Builders
- * 
- * Composable functions for generating R code for describe operations.
- * Follows patterns from VB dialogs but with cleaner, functional approach.
+ *
+ * Generates R code for describe operations: graphs, summaries, and frequencies.
+ *
+ * Architecture:
+ * - R Primitives: Low-level R string formatting (rStr, rVec, rBool, rParams)
+ * - ggplot2 Layers: Composable ggplot components (ggAes, ggFacet, ggLabs, etc.)
+ * - Graph Builders: One pure function per graph type, returns complete ggplot code
+ * - Pipe Builders: dplyr/tidyr chain construction for tabular outputs
+ *
+ * All functions are pure. Invalid inputs return R comment strings (e.g., "# Select...").
+ *
+ * @example
+ * buildGraphCode({ dataframe: 'df', columns: ['x'], graphType: 'histogram' }, analysis)
+ * // => 'ggplot(get_dataframe("df"), aes(x = x)) + geom_histogram(...) + ...'
  */
 
-import { GraphType, VariableAnalysis, VariableCombination } from './variable-type-analyzer';
+import { GraphType, VariableAnalysis } from './variable-type-analyzer';
 
-/** Summary statistic types */
+// ============================================================================
+// Public Types
+// ============================================================================
+
 export type SummaryStatistic = 'n' | 'mean' | 'sd' | 'min' | 'max' | 'median' | 'sum' | 'var' | 'iqr';
-
-/** Summary mode options */
 export type SummaryMode = 'default' | 'customised' | 'skim';
-
-/** Frequency display options */
 export type FrequencyDisplay = 'count' | 'row' | 'column' | 'cell';
 
-/** Graph options */
 export interface GraphOptions {
   graphType: GraphType;
   flipCoords?: boolean;
@@ -32,7 +41,6 @@ export interface GraphOptions {
   yLabel?: string;
 }
 
-/** Summary options */
 export interface SummaryOptions {
   mode: SummaryMode;
   statistics?: SummaryStatistic[];
@@ -40,7 +48,6 @@ export interface SummaryOptions {
   groupBy?: string;
 }
 
-/** Frequency options */
 export interface FrequencyOptions {
   display: FrequencyDisplay;
   showCount?: boolean;
@@ -50,525 +57,480 @@ export interface FrequencyOptions {
   weights?: string;
 }
 
-/** Base describe options */
 export interface DescribeOptions {
   dataframe: string;
   columns: string[];
 }
 
 // ============================================================================
-// Helper Functions
+// R Primitives
 // ============================================================================
 
-/**
- * Quote a string for R
- */
-function rQuote(s: string): string {
-  return `"${s.replace(/"/g, '\\"')}"`;
+/** R string literal with escaped quotes */
+const rStr = (s: string): string => `"${s.replace(/"/g, '\\"')}"`;
+
+/** R boolean literal */
+const rBool = (b: boolean): string => (b ? 'TRUE' : 'FALSE');
+
+/** R vector: c("a", "b") or single value if length 1 */
+function rVec(items: string[], quote = true): string {
+  if (items.length === 0) return '';
+  const formatted = items.map(item => (quote ? rStr(item) : item));
+  return items.length === 1 ? formatted[0] : `c(${formatted.join(', ')})`;
 }
 
-/**
- * Format column names for R
- */
-function formatColumns(columns: string[], quote = true): string {
-  if (columns.length === 0) return '';
-  if (columns.length === 1) {
-    return quote ? rQuote(columns[0]) : columns[0];
-  }
-  const formatted = columns.map(c => (quote ? rQuote(c) : c)).join(', ');
-  return `c(${formatted})`;
+/** Named R parameters: key = value, key2 = value2 */
+function rParams(obj: Record<string, string | number | boolean | undefined>): string {
+  return Object.entries(obj)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => {
+      if (typeof v === 'boolean') return `${k} = ${rBool(v)}`;
+      if (typeof v === 'number') return `${k} = ${v}`;
+      return `${k} = ${v}`;
+    })
+    .join(', ');
 }
 
-/**
- * Get dataframe accessor
- */
-function getDataframe(name: string): string {
-  return `get_dataframe(${rQuote(name)})`;
-}
+/** Dataframe accessor via bridge function */
+const rDf = (name: string): string => `get_dataframe(${rStr(name)})`;
+
+/** Column accessor: df$col */
+const rCol = (df: string, col: string): string => `${rDf(df)}$${col}`;
 
 // ============================================================================
-// Graph Code Builders
+// ggplot2 Layer Builders
 // ============================================================================
 
-/**
- * Build ggplot base
- */
-function buildGgplotBase(dataframe: string): string {
-  return `ggplot(${getDataframe(dataframe)}`;
+/** Join ggplot layers with + operator, filtering undefined/empty */
+function ggLayers(...layers: (string | undefined | null)[]): string {
+  return layers.filter(Boolean).join(' +\n  ');
 }
 
-/**
- * Build aes() string
- */
-function buildAes(params: Record<string, string | undefined>): string {
-  const parts = Object.entries(params)
-    .filter(([_, v]) => v !== undefined)
+/** Build aes() string from mappings */
+function ggAes(mappings: Record<string, string | undefined>): string {
+  const parts = Object.entries(mappings)
+    .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k} = ${v}`);
   return `aes(${parts.join(', ')})`;
 }
 
-/**
- * Build histogram R code
- */
-function buildHistogram(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, bins = 30, alpha = 0.8, fillBy, facetBy, title, xLabel } = options;
-  const col = columns[0];
-  
-  let aes = buildAes({ x: col, fill: fillBy });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_histogram(bins = ${bins}, alpha = ${alpha}, color = "white")`;
-
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `Histogram of ${col}`)}, x = ${rQuote(xLabel || col)}, y = "Count")`;
-
-  return code;
+/** ggplot base: ggplot(data, aes(...)) */
+function ggBase(df: string, aes: string): string {
+  return `ggplot(${rDf(df)}, ${aes})`;
 }
 
-/**
- * Build density plot R code
- */
-function buildDensity(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, alpha = 0.6, colorBy, fillBy, facetBy, title, xLabel } = options;
-  const col = columns[0];
-  
-  let aes = buildAes({ x: col, color: colorBy, fill: fillBy });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_density(alpha = ${alpha})`;
+/** facet_wrap layer (returns undefined if no facet) */
+const ggFacet = (by?: string): string | undefined =>
+  by ? `facet_wrap(~ ${by})` : undefined;
 
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
+/** coord_flip layer (returns undefined if not flipping) */
+const ggFlip = (flip?: boolean): string | undefined =>
+  flip ? 'coord_flip()' : undefined;
 
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `Density Plot of ${col}`)}, x = ${rQuote(xLabel || col)}, y = "Density")`;
+/** theme layer */
+const ggTheme = (name = 'minimal'): string => `theme_${name}()`;
 
-  return code;
+/** labs() layer for titles and axis labels */
+function ggLabs(opts: { title?: string; x?: string; y?: string; fill?: string }): string {
+  const params = Object.entries(opts)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k} = ${rStr(v as string)}`);
+  return `labs(${params.join(', ')})`;
 }
 
-/**
- * Build boxplot R code
- */
-function buildBoxplot(options: DescribeOptions & GraphOptions, analysis: VariableAnalysis): string {
-  const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title } = options;
-  
-  let xVar: string | undefined;
-  let yVar: string;
-  
+// ============================================================================
+// Axis Resolution Helpers
+// ============================================================================
+
+interface AxisMapping {
+  x: string | undefined;
+  y: string;
+}
+
+/** Resolve x/y axes for numeric-by-categorical patterns */
+function resolveNumCatAxes(columns: string[], analysis: VariableAnalysis): AxisMapping {
   if (analysis.combination === 'single-numeric') {
-    // Single numeric - no x axis grouping
-    xVar = undefined;
-    yVar = columns[0];
-  } else if (analysis.combination === 'numeric-by-categorical' || analysis.combination === 'categorical-by-numeric') {
-    // Find numeric and categorical
-    const numericCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'numeric');
-    const catCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'categorical');
-    xVar = catCol?.name;
-    yVar = numericCol?.name || columns[0];
-  } else {
-    yVar = columns[0];
-    xVar = columns.length > 1 ? columns[1] : undefined;
+    return { x: undefined, y: columns[0] };
   }
 
-  let aes = buildAes({ x: xVar, y: yVar, fill: fillBy || xVar });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_boxplot(alpha = ${alpha})`;
+  const numericCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'numeric');
+  const catCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'categorical');
 
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  if (flipCoords) {
-    code += ` +
-  coord_flip()`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `Boxplot of ${yVar}`)})`;
-
-  return code;
+  return {
+    x: catCol?.name,
+    y: numericCol?.name ?? columns[0],
+  };
 }
 
-/**
- * Build violin plot R code
- */
-function buildViolin(options: DescribeOptions & GraphOptions, analysis: VariableAnalysis): string {
-  const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title } = options;
-  
-  let xVar: string | undefined;
-  let yVar: string;
-  
-  if (analysis.combination === 'single-numeric') {
+// ============================================================================
+// dplyr Pipe Builder
+// ============================================================================
+
+/** Join dplyr pipe steps with %>%, filtering undefined/empty */
+function dplyrPipe(...steps: (string | undefined | null | false)[]): string {
+  return steps.filter(Boolean).join(' %>%\n  ');
+}
+
+// ============================================================================
+// Graph Builders
+// ============================================================================
+
+type GraphBuildContext = DescribeOptions & GraphOptions & { analysis: VariableAnalysis };
+
+function buildHistogram(ctx: GraphBuildContext): string {
+  const { dataframe, columns, bins = 30, alpha = 0.8, fillBy, facetBy, title, xLabel } = ctx;
+  const col = columns[0];
+
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: col, fill: fillBy })),
+    `geom_histogram(bins = ${bins}, alpha = ${alpha}, color = "white")`,
+    ggFacet(facetBy),
+    ggTheme(),
+    ggLabs({ title: title ?? `Histogram of ${col}`, x: xLabel ?? col, y: 'Count' })
+  );
+}
+
+function buildDensity(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.6, colorBy, fillBy, facetBy, title, xLabel } = ctx;
+  const col = columns[0];
+
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: col, color: colorBy, fill: fillBy })),
+    `geom_density(alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggTheme(),
+    ggLabs({ title: title ?? `Density Plot of ${col}`, x: xLabel ?? col, y: 'Density' })
+  );
+}
+
+function buildBoxplot(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title, analysis } = ctx;
+  const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
+
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
+    `geom_boxplot(alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `Boxplot of ${yVar}` })
+  );
+}
+
+function buildViolin(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title, analysis } = ctx;
+  let { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
+
+  // Violin needs an x grouping; use placeholder if single numeric
+  if (!xVar && analysis.combination === 'single-numeric') {
     xVar = '"all"';
-    yVar = columns[0];
-  } else {
-    const numericCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'numeric');
-    const catCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'categorical');
-    xVar = catCol?.name;
-    yVar = numericCol?.name || columns[0];
   }
 
-  let aes = buildAes({ x: xVar, y: yVar, fill: fillBy || xVar });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_violin(alpha = ${alpha})`;
-
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  if (flipCoords) {
-    code += ` +
-  coord_flip()`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `Violin Plot of ${yVar}`)})`;
-
-  return code;
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
+    `geom_violin(alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `Violin Plot of ${yVar}` })
+  );
 }
 
-/**
- * Build bar chart R code
- */
-function buildBarChart(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, position = 'stack', fillBy, facetBy, flipCoords, showLabels, title, xLabel } = options;
+function buildBarChart(ctx: GraphBuildContext): string {
+  const { dataframe, columns, position = 'stack', fillBy, facetBy, flipCoords, showLabels, title, xLabel } = ctx;
   const col = columns[0];
-  
-  let aes = buildAes({ x: col, fill: fillBy || col });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_bar(position = ${rQuote(position)}, alpha = 0.8)`;
 
-  if (showLabels) {
-    code += ` +
-  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)`;
-  }
-
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  if (flipCoords) {
-    code += ` +
-  coord_flip()`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `Bar Chart of ${col}`)}, x = ${rQuote(xLabel || col)}, y = "Count")`;
-
-  return code;
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: col, fill: fillBy ?? col })),
+    `geom_bar(position = ${rStr(position)}, alpha = 0.8)`,
+    showLabels ? 'geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)' : undefined,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `Bar Chart of ${col}`, x: xLabel ?? col, y: 'Count' })
+  );
 }
 
-/**
- * Build pie chart R code
- */
-function buildPieChart(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, title } = options;
+function buildPieChart(ctx: GraphBuildContext): string {
+  const { dataframe, columns, title } = ctx;
   const col = columns[0];
-  
-  // Pie charts in ggplot2 are bar charts with polar coordinates
-  let code = `${getDataframe(dataframe)} %>%
-  dplyr::count(${col}) %>%
+
+  // Pie = bar with polar coords; requires count transformation
+  return dplyrPipe(
+    rDf(dataframe),
+    `dplyr::count(${col})`
+  ) + ` %>%
   ggplot(aes(x = "", y = n, fill = ${col})) +
   geom_bar(stat = "identity", width = 1) +
   coord_polar("y", start = 0) +
   theme_void() +
-  labs(title = ${rQuote(title || `Distribution of ${col}`)}, fill = ${rQuote(col)})`;
-
-  return code;
+  labs(title = ${rStr(title ?? `Distribution of ${col}`)}, fill = ${rStr(col)})`;
 }
 
-/**
- * Build scatter plot R code
- */
-function buildScatter(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, alpha = 0.6, colorBy, facetBy, title, xLabel, yLabel } = options;
-  
+function buildScatter(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.6, colorBy, facetBy, title, xLabel, yLabel } = ctx;
+
   if (columns.length < 2) {
     return '# Select two numeric variables for scatter plot';
   }
 
-  const xVar = columns[0];
-  const yVar = columns[1];
-  
-  let aes = buildAes({ x: xVar, y: yVar, color: colorBy });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_point(alpha = ${alpha})`;
+  const [xVar, yVar] = columns;
 
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `${yVar} vs ${xVar}`)}, x = ${rQuote(xLabel || xVar)}, y = ${rQuote(yLabel || yVar)})`;
-
-  return code;
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy })),
+    `geom_point(alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} vs ${xVar}`, x: xLabel ?? xVar, y: yLabel ?? yVar })
+  );
 }
 
-/**
- * Build scatter matrix R code (ggpairs)
- */
-function buildScatterMatrix(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, colorBy, title } = options;
-  
-  const colsStr = formatColumns(columns, true);
-  let code = `GGally::ggpairs(${getDataframe(dataframe)}, columns = ${colsStr}`;
-  
+function buildScatterMatrix(ctx: GraphBuildContext): string {
+  const { dataframe, columns, colorBy, title } = ctx;
+  const colsStr = rVec(columns, true);
+
+  let code = `GGally::ggpairs(${rDf(dataframe)}, columns = ${colsStr}`;
   if (colorBy) {
     code += `, mapping = aes(color = ${colorBy})`;
   }
-  
-  code += `, title = ${rQuote(title || 'Scatter Matrix')})`;
+  code += `, title = ${rStr(title ?? 'Scatter Matrix')})`;
 
   return code;
 }
 
-/**
- * Build jitter plot R code
- */
-function buildJitter(options: DescribeOptions & GraphOptions, analysis: VariableAnalysis): string {
-  const { dataframe, columns, alpha = 0.5, colorBy, facetBy, flipCoords, title } = options;
-  
-  const numericCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'numeric');
-  const catCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'categorical');
-  
-  const xVar = catCol?.name || columns[1];
-  const yVar = numericCol?.name || columns[0];
+function buildJitter(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.5, colorBy, facetBy, flipCoords, title, analysis } = ctx;
+  const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
 
-  let aes = buildAes({ x: xVar, y: yVar, color: colorBy || xVar });
-  let code = `${buildGgplotBase(dataframe)}, ${aes}) +
-  geom_jitter(width = 0.2, alpha = ${alpha})`;
-
-  if (facetBy) {
-    code += ` +
-  facet_wrap(~ ${facetBy})`;
-  }
-
-  if (flipCoords) {
-    code += ` +
-  coord_flip()`;
-  }
-
-  code += ` +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `${yVar} by ${xVar}`)})`;
-
-  return code;
+  return ggLayers(
+    ggBase(dataframe, ggAes({ x: xVar ?? columns[1], y: yVar, color: colorBy ?? xVar })),
+    `geom_jitter(width = 0.2, alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} by ${xVar ?? columns[1]}` })
+  );
 }
 
-/**
- * Build mosaic plot R code
- */
-function buildMosaic(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, title } = options;
-  
+function buildMosaic(ctx: GraphBuildContext): string {
+  const { dataframe, columns, title } = ctx;
+
   if (columns.length < 2) {
     return '# Select two categorical variables for mosaic plot';
   }
 
-  const var1 = columns[0];
-  const var2 = columns[1];
+  const [var1, var2] = columns;
 
-  let code = `ggplot(${getDataframe(dataframe)}) +
-  ggmosaic::geom_mosaic(aes(x = ggmosaic::product(${var2}, ${var1}), fill = ${var2})) +
-  theme_minimal() +
-  labs(title = ${rQuote(title || `${var1} by ${var2}`)})`;
-
-  return code;
+  return ggLayers(
+    `ggplot(${rDf(dataframe)})`,
+    `ggmosaic::geom_mosaic(aes(x = ggmosaic::product(${var2}, ${var1}), fill = ${var2}))`,
+    ggTheme(),
+    ggLabs({ title: title ?? `${var1} by ${var2}` })
+  );
 }
 
-/**
- * Main graph code builder
- */
-export function buildGraphCode(options: DescribeOptions & GraphOptions, analysis: VariableAnalysis): string {
-  switch (options.graphType) {
-    case 'histogram':
-      return buildHistogram(options);
-    case 'density':
-      return buildDensity(options);
-    case 'boxplot':
-      return buildBoxplot(options, analysis);
-    case 'violin':
-      return buildViolin(options, analysis);
-    case 'bar-chart':
-    case 'stacked-bar':
-      return buildBarChart({ ...options, position: 'stack' });
-    case 'grouped-bar':
-      return buildBarChart({ ...options, position: 'dodge' });
-    case 'pie-chart':
-      return buildPieChart(options);
-    case 'scatter':
-    case 'line':
-      return buildScatter(options);
-    case 'scatter-matrix':
-      return buildScatterMatrix(options);
-    case 'jitter':
-      return buildJitter(options, analysis);
-    case 'mosaic':
-      return buildMosaic(options);
-    case 'summary-plot':
-      // Summary plot is boxplot + mean crossbar
-      return buildBoxplot(options, analysis);
-    case 'correlation-heatmap':
-      return buildCorrelationHeatmap(options);
-    default:
-      return '# Unsupported graph type';
-  }
-}
+function buildCorrelationHeatmap(ctx: GraphBuildContext): string {
+  const { dataframe, columns, title } = ctx;
+  const colsStr = rVec(columns, true);
 
-/**
- * Build correlation heatmap
- */
-function buildCorrelationHeatmap(options: DescribeOptions & GraphOptions): string {
-  const { dataframe, columns, title } = options;
-  
-  const colsStr = formatColumns(columns, true);
-  
-  return `${getDataframe(dataframe)} %>%
-  dplyr::select(${colsStr}) %>%
-  cor(use = "pairwise.complete.obs") %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("var1") %>%
-  tidyr::pivot_longer(-var1, names_to = "var2", values_to = "correlation") %>%
+  return dplyrPipe(
+    rDf(dataframe),
+    `dplyr::select(${colsStr})`,
+    'cor(use = "pairwise.complete.obs")',
+    'as.data.frame()',
+    'tibble::rownames_to_column("var1")',
+    'tidyr::pivot_longer(-var1, names_to = "var2", values_to = "correlation")'
+  ) + ` %>%
   ggplot(aes(x = var1, y = var2, fill = correlation)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
   theme_minimal() +
-  labs(title = ${rQuote(title || 'Correlation Heatmap')})`;
+  labs(title = ${rStr(title ?? 'Correlation Heatmap')})`;
 }
 
 // ============================================================================
-// Summary Code Builders
+// Graph Builder Registry
 // ============================================================================
 
-/**
- * Build summary R code
- */
-export function buildSummaryCode(options: DescribeOptions & SummaryOptions): string {
-  const { dataframe, columns, mode, statistics = ['n', 'mean', 'sd', 'min', 'max'], omitMissing = true, groupBy } = options;
+type GraphBuilder = (ctx: GraphBuildContext) => string;
 
-  if (mode === 'skim') {
-    return buildSkimCode(options);
-  }
+const GRAPH_BUILDERS: Record<GraphType, GraphBuilder> = {
+  histogram: buildHistogram,
+  density: buildDensity,
+  boxplot: buildBoxplot,
+  violin: buildViolin,
+  'bar-chart': buildBarChart,
+  'pie-chart': buildPieChart,
+  scatter: buildScatter,
+  line: buildScatter, // Line uses same logic as scatter
+  'scatter-matrix': buildScatterMatrix,
+  jitter: buildJitter,
+  mosaic: buildMosaic,
+  'stacked-bar': ctx => buildBarChart({ ...ctx, position: 'stack' }),
+  'grouped-bar': ctx => buildBarChart({ ...ctx, position: 'dodge' }),
+  'summary-plot': buildBoxplot, // Summary plot extends boxplot
+  'correlation-heatmap': buildCorrelationHeatmap,
+};
 
-  if (mode === 'default') {
-    return buildDefaultSummary(options);
-  }
+// ============================================================================
+// Summary Builders
+// ============================================================================
 
-  // Customised mode
-  return buildCustomSummary(options, statistics, omitMissing, groupBy);
-}
+function buildDefaultSummary(opts: DescribeOptions): string {
+  const { dataframe, columns } = opts;
 
-/**
- * Build default summary (R's summary function)
- */
-function buildDefaultSummary(options: DescribeOptions): string {
-  const { dataframe, columns } = options;
-  
   if (columns.length === 0) {
-    return `summary(${getDataframe(dataframe)})`;
+    return `summary(${rDf(dataframe)})`;
   }
 
-  const colsStr = formatColumns(columns, true);
-  return `${getDataframe(dataframe)} %>%
-  dplyr::select(${colsStr}) %>%
-  summary()`;
+  return dplyrPipe(
+    rDf(dataframe),
+    `dplyr::select(${rVec(columns)})`,
+    'summary()'
+  );
 }
 
-/**
- * Build skimr summary
- */
-function buildSkimCode(options: DescribeOptions): string {
-  const { dataframe, columns } = options;
-  
+function buildSkimSummary(opts: DescribeOptions): string {
+  const { dataframe, columns } = opts;
+
   if (columns.length === 0) {
-    return `skimr::skim(${getDataframe(dataframe)})`;
+    return `skimr::skim_without_charts(${rDf(dataframe)})`;
   }
 
-  const colsStr = columns.join(', ');
-  return `${getDataframe(dataframe)} %>%
-  skimr::skim(${colsStr})`;
+  return dplyrPipe(
+    rDf(dataframe),
+    `skimr::skim_without_charts(${columns.join(', ')})`
+  );
 }
 
-/**
- * Build customised summary with dplyr
- */
+/** Map statistic name to dplyr across formula */
+function statToFormula(stat: SummaryStatistic, naRm: string): string {
+  const formulas: Record<SummaryStatistic, string> = {
+    n: 'n = ~dplyr::n()',
+    mean: `mean = ~mean(.x, na.rm = ${naRm})`,
+    sd: `sd = ~sd(.x, na.rm = ${naRm})`,
+    min: `min = ~min(.x, na.rm = ${naRm})`,
+    max: `max = ~max(.x, na.rm = ${naRm})`,
+    median: `median = ~median(.x, na.rm = ${naRm})`,
+    sum: `sum = ~sum(.x, na.rm = ${naRm})`,
+    var: `var = ~var(.x, na.rm = ${naRm})`,
+    iqr: `iqr = ~IQR(.x, na.rm = ${naRm})`,
+  };
+  return formulas[stat];
+}
+
 function buildCustomSummary(
-  options: DescribeOptions,
+  opts: DescribeOptions,
   statistics: SummaryStatistic[],
   omitMissing: boolean,
   groupBy?: string
 ): string {
-  const { dataframe, columns } = options;
-  const naRm = omitMissing ? 'TRUE' : 'FALSE';
+  const { dataframe, columns } = opts;
+  const naRm = rBool(omitMissing);
 
-  const statFunctions = statistics.map(stat => {
-    switch (stat) {
-      case 'n': return `n = ~dplyr::n()`;
-      case 'mean': return `mean = ~mean(.x, na.rm = ${naRm})`;
-      case 'sd': return `sd = ~sd(.x, na.rm = ${naRm})`;
-      case 'min': return `min = ~min(.x, na.rm = ${naRm})`;
-      case 'max': return `max = ~max(.x, na.rm = ${naRm})`;
-      case 'median': return `median = ~median(.x, na.rm = ${naRm})`;
-      case 'sum': return `sum = ~sum(.x, na.rm = ${naRm})`;
-      case 'var': return `var = ~var(.x, na.rm = ${naRm})`;
-      case 'iqr': return `iqr = ~IQR(.x, na.rm = ${naRm})`;
-      default: return '';
-    }
-  }).filter(Boolean);
-
-  if (statFunctions.length === 0) {
+  const statFns = statistics.map(s => statToFormula(s, naRm)).filter(Boolean);
+  if (statFns.length === 0) {
     return '# Select at least one statistic';
   }
 
-  const colsStr = columns.length > 0 ? formatColumns(columns, true) : 'where(is.numeric)';
-  
-  let code = `${getDataframe(dataframe)}`;
-  
-  if (groupBy) {
-    code += ` %>%
-  dplyr::group_by(${groupBy})`;
-  }
+  const colSelector = columns.length > 0 ? 'everything()' : 'where(is.numeric)';
 
-  if (columns.length > 0) {
-    code += ` %>%
-  dplyr::select(${colsStr})`;
-  }
-
-  code += ` %>%
-  dplyr::summarise(
+  return dplyrPipe(
+    rDf(dataframe),
+    groupBy && `dplyr::group_by(${groupBy})`,
+    columns.length > 0 && `dplyr::select(${rVec(columns)})`,
+    `dplyr::summarise(
     dplyr::across(
-      ${columns.length > 0 ? 'everything()' : 'where(is.numeric)'},
-      list(${statFunctions.join(', ')})
+      ${colSelector},
+      list(${statFns.join(', ')})
     )
-  )`;
+  )`
+  );
+}
+
+// ============================================================================
+// Frequency Builders
+// ============================================================================
+
+function buildOneWayFrequency(opts: DescribeOptions & FrequencyOptions): string {
+  const { dataframe, columns, weights } = opts;
+  const col = columns[0];
+
+  let code = `sjmisc::frq(${rCol(dataframe, col)}`;
+  if (weights) {
+    code += `, weights = ${rCol(dataframe, weights)}`;
+  }
+  code += ')';
 
   return code;
 }
 
+function buildTwoWayFrequency(opts: DescribeOptions & FrequencyOptions): string {
+  const { dataframe, columns, showCount = true, showRowPercent = false, showColPercent = false, weights } = opts;
+  const [rowVar, colVar] = columns;
+
+  const params = rParams({
+    'show.obs': showCount,
+    'show.row.prc': showRowPercent,
+    'show.col.prc': showColPercent,
+  });
+
+  let code = `sjPlot::sjtab(${rCol(dataframe, rowVar)}, ${rCol(dataframe, colVar)},
+    ${params}`;
+
+  if (weights) {
+    code += `,
+    weight.by = ${rCol(dataframe, weights)}`;
+  }
+
+  code += ')';
+  return code;
+}
+
 // ============================================================================
-// Frequency Code Builders
+// Public API
 // ============================================================================
 
-/**
- * Build frequency table R code
- */
+/** Build ggplot2 graph code based on options and variable analysis */
+export function buildGraphCode(
+  options: DescribeOptions & GraphOptions,
+  analysis: VariableAnalysis
+): string {
+  const builder = GRAPH_BUILDERS[options.graphType];
+  if (!builder) {
+    return `# Unsupported graph type: ${options.graphType}`;
+  }
+
+  const ctx: GraphBuildContext = { ...options, analysis };
+  return builder(ctx);
+}
+
+/** Build summary statistics code (R summary, skimr, or custom dplyr) */
+export function buildSummaryCode(options: DescribeOptions & SummaryOptions): string {
+  const {
+    dataframe,
+    columns,
+    mode,
+    statistics = ['n', 'mean', 'sd', 'min', 'max'],
+    omitMissing = true,
+    groupBy,
+  } = options;
+
+  switch (mode) {
+    case 'skim':
+      return buildSkimSummary({ dataframe, columns });
+    case 'default':
+      return buildDefaultSummary({ dataframe, columns });
+    case 'customised':
+      return buildCustomSummary({ dataframe, columns }, statistics, omitMissing, groupBy);
+    default:
+      return '# Unknown summary mode';
+  }
+}
+
+/** Build frequency table code (sjmisc::frq for 1-way, sjPlot::sjtab for 2-way) */
 export function buildFrequencyCode(options: DescribeOptions & FrequencyOptions): string {
-  const { dataframe, columns, display, showCount = true, showRowPercent = false, showColPercent = false, showCellPercent = false, weights } = options;
+  const { columns } = options;
 
   if (columns.length === 0) {
     return '# Select at least one variable';
@@ -579,69 +541,4 @@ export function buildFrequencyCode(options: DescribeOptions & FrequencyOptions):
   }
 
   return buildTwoWayFrequency(options);
-}
-
-/**
- * Build one-way frequency table
- */
-function buildOneWayFrequency(options: DescribeOptions & FrequencyOptions): string {
-  const { dataframe, columns, weights } = options;
-  const col = columns[0];
-
-  let code = `${getDataframe(dataframe)} %>%
-  dplyr::count(${col}`;
-  
-  if (weights) {
-    code += `, wt = ${weights}`;
-  }
-
-  code += `) %>%
-  dplyr::mutate(
-    percent = n / sum(n) * 100,
-    cumulative = cumsum(percent)
-  )`;
-
-  return code;
-}
-
-/**
- * Build two-way frequency table using dplyr/tidyr (no janitor dependency)
- */
-function buildTwoWayFrequency(options: DescribeOptions & FrequencyOptions): string {
-  const { dataframe, columns, showCount, showRowPercent, showColPercent, weights } = options;
-  const rowVar = columns[0];
-  const colVar = columns[1];
-
-  // Base cross-tabulation with dplyr
-  let code = `${getDataframe(dataframe)} %>%
-  dplyr::count(${rowVar}, ${colVar}`;
-
-  if (weights) {
-    code += `, wt = ${weights}`;
-  }
-
-  code += `)`;
-
-  // Add percentages if requested
-  if (showRowPercent) {
-    code += ` %>%
-  dplyr::group_by(${rowVar}) %>%
-  dplyr::mutate(row_pct = n / sum(n) * 100) %>%
-  dplyr::ungroup()`;
-  }
-
-  if (showColPercent) {
-    code += ` %>%
-  dplyr::group_by(${colVar}) %>%
-  dplyr::mutate(col_pct = n / sum(n) * 100) %>%
-  dplyr::ungroup()`;
-  }
-
-  // Pivot to wide format for traditional crosstab view
-  if (showCount && !showRowPercent && !showColPercent) {
-    code += ` %>%
-  tidyr::pivot_wider(names_from = ${colVar}, values_from = n, values_fill = 0)`;
-  }
-
-  return code;
 }

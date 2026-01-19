@@ -8,8 +8,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { app } from 'electron';
-import { RCommand, RCommandBase, RResponse, RReadySignal, PendingCommand, DataPreview } from './types';
+import { app, BrowserWindow } from 'electron';
+import { RCommand, RCommandBase, RResponse, RReadySignal, PendingCommand, DataPreview, RHealthStatus, RInstallProgress } from './types';
 import { extractStringArray } from './utils/response-utils';
 
 export class RBridge {
@@ -19,6 +19,48 @@ export class RBridge {
   private connected = false;
   private commandId = 0;
   private readonly TIMEOUT_MS = 30000; // 30 seconds
+  
+  // Health status tracking
+  private _healthStatus: RHealthStatus = { status: 'starting' };
+  private statusListeners: ((status: RHealthStatus) => void)[] = [];
+
+  /**
+   * Get current health status
+   */
+  get healthStatus(): RHealthStatus {
+    return this._healthStatus;
+  }
+
+  /**
+   * Update health status and notify listeners
+   */
+  private setHealthStatus(status: RHealthStatus): void {
+    this._healthStatus = status;
+    this.notifyStatusChange();
+  }
+
+  /**
+   * Add status change listener
+   */
+  onStatusChange(listener: (status: RHealthStatus) => void): () => void {
+    this.statusListeners.push(listener);
+    return () => {
+      this.statusListeners = this.statusListeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Notify all status listeners
+   */
+  private notifyStatusChange(): void {
+    for (const listener of this.statusListeners) {
+      listener(this._healthStatus);
+    }
+    // Also send to all renderer windows
+    BrowserWindow.getAllWindows().forEach(win => {
+      win.webContents.send('r:statusChanged', this._healthStatus);
+    });
+  }
 
   /**
    * Find R executable path based on platform
@@ -157,36 +199,96 @@ export class RBridge {
   }
 
   /**
-   * Wait for R process to signal it's ready
+   * Wait for R process to signal it's ready or report missing packages
    */
   private waitForReady(): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        this.setHealthStatus({ status: 'error', error: 'R process failed to start within timeout' });
         reject(new Error('R process failed to start within timeout'));
-      }, 10000);
+      }, 15000);
 
-      const checkReady = () => {
-        if (this.connected) {
-          clearTimeout(timeout);
-          resolve();
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-
-      // R bridge sends a ready signal on startup
-      const readyHandler = (data: Buffer) => {
+      // Handler for initial startup message
+      const startupHandler = (data: Buffer) => {
         const text = data.toString();
-        if (text.includes('"ready":true')) {
-          this.connected = true;
-          clearTimeout(timeout);
-          resolve();
+        
+        try {
+          // Parse the JSON response
+          const lines = text.split('\n').filter(l => l.trim());
+          for (const line of lines) {
+            const parsed = JSON.parse(line) as RReadySignal;
+            
+            if ('ready' in parsed) {
+              clearTimeout(timeout);
+              
+              if (parsed.ready) {
+                // All good - R is ready
+                this.connected = true;
+                this.setHealthStatus({ status: 'ready' });
+                resolve();
+              } else if (parsed.missing_packages && parsed.missing_packages.length > 0) {
+                // Missing packages - stay in startup mode but update status
+                this.setHealthStatus({
+                  status: 'missing_packages',
+                  missingPackages: parsed.missing_packages,
+                });
+                // Resolve but don't set connected - we need to wait for package install
+                resolve();
+              }
+              return;
+            }
+          }
+        } catch {
+          // Not valid JSON yet, keep waiting
         }
       };
 
-      this.process?.stdout?.once('data', readyHandler);
-      checkReady();
+      this.process?.stdout?.on('data', startupHandler);
     });
+  }
+
+  /**
+   * Install missing packages
+   */
+  async installPackages(packages?: string[]): Promise<RResponse> {
+    if (!this.process) {
+      throw new Error('R process not running');
+    }
+
+    const packagesToInstall = packages || this._healthStatus.missingPackages || [];
+    if (packagesToInstall.length === 0) {
+      return { id: 'install', success: true };
+    }
+
+    this.setHealthStatus({
+      status: 'installing',
+      missingPackages: packagesToInstall,
+      installProgress: { current: 0, total: packagesToInstall.length, package: packagesToInstall[0] },
+    });
+
+    const id = `cmd_${++this.commandId}`;
+    const command = { type: 'install_packages', id, packages: packagesToInstall };
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        this.setHealthStatus({ status: 'error', error: 'Package installation timed out' });
+        reject(new Error('Package installation timed out'));
+      }, 300000); // 5 minute timeout for installation
+
+      this.pending.set(id, { resolve, reject, timeout });
+
+      const json = JSON.stringify(command) + '\n';
+      this.process?.stdin?.write(json);
+    });
+  }
+
+  /**
+   * Restart R process after successful package installation
+   */
+  async restart(): Promise<void> {
+    this.stop();
+    await this.start();
   }
 
   /**
@@ -200,11 +302,35 @@ export class RBridge {
       if (!line.trim()) continue;
       
       try {
-        const parsed = JSON.parse(line) as RResponse | RReadySignal;
+        const parsed = JSON.parse(line) as RResponse | RReadySignal | RInstallProgress;
         
         // Check for ready signal (startup message)
         if ('ready' in parsed) {
-          this.connected = true;
+          const signal = parsed as RReadySignal;
+          if (signal.ready) {
+            this.connected = true;
+            this.setHealthStatus({ status: 'ready' });
+          } else if (signal.missing_packages) {
+            this.setHealthStatus({
+              status: 'missing_packages',
+              missingPackages: signal.missing_packages,
+            });
+          }
+          continue;
+        }
+
+        // Check for install progress update
+        if ('type' in parsed && (parsed as RInstallProgress).type === 'install_progress') {
+          const progress = parsed as RInstallProgress;
+          this.setHealthStatus({
+            status: 'installing',
+            missingPackages: this._healthStatus.missingPackages,
+            installProgress: {
+              current: progress.current,
+              total: progress.total,
+              package: progress.package,
+            },
+          });
           continue;
         }
 
@@ -213,6 +339,24 @@ export class RBridge {
         if (!response.id) {
           console.warn('[RBridge] Response missing id:', line);
           continue;
+        }
+
+        // Handle install response specially
+        if (response.id.startsWith('cmd_') && this._healthStatus.status === 'installing') {
+          if (response.success) {
+            // Installation succeeded - we need to restart R to load packages
+            this.setHealthStatus({ status: 'ready' });
+            // Restart to load the new packages
+            this.restart().catch(err => {
+              console.error('Failed to restart R after package install:', err);
+              this.setHealthStatus({ status: 'error', error: 'Failed to restart R after package installation' });
+            });
+          } else {
+            this.setHealthStatus({
+              status: 'error',
+              error: response.error || 'Package installation failed',
+            });
+          }
         }
 
         const pending = this.pending.get(response.id);
