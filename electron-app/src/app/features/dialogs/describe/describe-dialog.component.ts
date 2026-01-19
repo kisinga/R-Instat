@@ -16,7 +16,6 @@ import { ColumnInfo } from '../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { DescribeDialogService, OutputMode } from './describe-dialog.service';
 import { GraphMode } from './utils/variable-type-analyzer';
-import { SummaryPanelComponent } from './panels/summary-panel.component';
 import { GraphPanelComponent } from './panels/graph-panel.component';
 import { FrequencyPanelComponent } from './panels/frequency-panel.component';
 
@@ -28,7 +27,6 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
     FormsModule,
     TranslateModule,
     ColumnPickerComponent,
-    SummaryPanelComponent,
     GraphPanelComponent,
     FrequencyPanelComponent,
   ],
@@ -188,14 +186,6 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
           <div class="tabs tabs-boxed mb-4">
             <button 
               class="tab tab-sm"
-              [class.tab-active]="service.outputMode() === 'summary'"
-              [disabled]="selectedColumns().length === 0"
-              (click)="setOutputMode('summary')"
-            >
-              {{ 'DESCRIBE.SUMMARY' | translate }}
-            </button>
-            <button 
-              class="tab tab-sm"
               [class.tab-active]="service.outputMode() === 'graph'"
               (click)="setOutputMode('graph')"
             >
@@ -214,12 +204,6 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
           <!-- Dynamic Panel Based on Output Mode -->
           <div class="panel-container">
             @switch (service.outputMode()) {
-              @case ('summary') {
-                <app-summary-panel 
-                  [columns]="columns()"
-                  [factorColumns]="factorColumns()"
-                />
-              }
               @case ('graph') {
                 <app-graph-panel 
                   [columns]="columns()"

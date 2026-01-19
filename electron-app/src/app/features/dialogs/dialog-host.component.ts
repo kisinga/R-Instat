@@ -58,7 +58,7 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   't-test': TTestDialogComponent,
   'regression': RegressionDialogComponent,
   'describe': DescribeDialogComponent,
-  'describe:summary': DescribeDialogComponent,
+  'describe:summary': SummaryDialogComponent,
   'describe:graph': DescribeDialogComponent,
   // Domain Expert dialogs
   'domain-selector': DomainSelectorComponent,
@@ -171,7 +171,7 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
             <app-describe-dialog [initialMode]="'describe'" (close)="closeDialog()" />
           }
           @case ('describe:summary') {
-            <app-describe-dialog [initialMode]="'describe:summary'" (close)="closeDialog()" />
+            <app-summary-dialog (close)="closeDialog()" />
           }
           @case ('describe:graph') {
             <app-describe-dialog [initialMode]="'describe:graph'" (close)="closeDialog()" />

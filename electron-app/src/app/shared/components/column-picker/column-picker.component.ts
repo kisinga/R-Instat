@@ -125,13 +125,20 @@ export class ColumnPickerComponent {
   @Input() filterTypes: string[] = []; // Empty means all types
   @Input() radioGroup = 'column-picker-' + Math.random().toString(36).slice(2);
 
-  // For single select
-  @Input() selectedColumn = '';
-  @Output() selectedColumnChange = new EventEmitter<string>();
-
-  // For multi select
+  // Primary API: array-based (works for both single and multi-select)
   @Input() selectedColumns: string[] = [];
   @Output() selectedColumnsChange = new EventEmitter<string[]>();
+
+  // Legacy API: single-select convenience (syncs with selectedColumns)
+  @Input() 
+  set selectedColumn(value: string) {
+    // Sync singular to array
+    this.selectedColumns = value ? [value] : [];
+  }
+  get selectedColumn(): string {
+    return this.selectedColumns[0] ?? '';
+  }
+  @Output() selectedColumnChange = new EventEmitter<string>();
 
   // Internal signal for reactivity
   columnsSignal = signal<ColumnInfo[]>([]);
@@ -166,17 +173,17 @@ export class ColumnPickerComponent {
   });
 
   isSelected(name: string): boolean {
-    if (this.multiple) {
-      return this.selectedColumns.includes(name);
-    }
-    return this.selectedColumn === name;
+    return this.selectedColumns.includes(name);
   }
 
+  /** Single-select: replace selection with this column */
   selectColumn(name: string): void {
-    this.selectedColumn = name;
-    this.selectedColumnChange.emit(name);
+    this.selectedColumns = [name];
+    this.selectedColumnsChange.emit([name]);
+    this.selectedColumnChange.emit(name); // Also emit singular for legacy consumers
   }
 
+  /** Multi-select: toggle column in/out of selection */
   toggleColumn(name: string): void {
     const current = [...this.selectedColumns];
     const index = current.indexOf(name);
