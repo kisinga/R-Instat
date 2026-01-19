@@ -80,6 +80,13 @@ interface ElectronAPI {
     loadPackageDataset: (packageName: string, dataset: string) => Promise<RResult>;
     listInstatCollection: () => Promise<InstatCollectionDataset[]>;
     loadInstatCollectionDataset: (name: string, filePath: string) => Promise<RResult>;
+    importFile: (options: {
+      path: string;
+      name: string;
+      separator?: string;
+      decimal?: string;
+      hasHeader?: boolean;
+    }) => Promise<RResult>;
     status: () => Promise<RHealthStatus>;
     installPackages: (packages?: string[]) => Promise<RResult>;
     restart: () => Promise<void>;

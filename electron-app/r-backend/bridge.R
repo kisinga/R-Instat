@@ -527,6 +527,68 @@ handle_load_instat_collection_dataset <- function(cmd) {
   })
 }
 
+#' Handle import_file command
+#' Imports a file from user-specified path with configurable options
+handle_import_file <- function(cmd) {
+  with_error_handling(cmd, function() {
+    file_path <- cmd$path
+    dataset_name <- cmd$name
+    
+    if (is.null(file_path) || !file.exists(file_path)) {
+      stop(paste("File not found:", file_path))
+    }
+    
+    if (is.null(dataset_name) || dataset_name == "") {
+      dataset_name <- tools::file_path_sans_ext(basename(file_path))
+      # Sanitize name for R variable
+      dataset_name <- gsub("[^a-zA-Z0-9_]", "_", dataset_name)
+    }
+    
+    # Get import options with defaults
+    separator <- if (!is.null(cmd$separator)) cmd$separator else ","
+    decimal <- if (!is.null(cmd$decimal)) cmd$decimal else "."
+    has_header <- if (!is.null(cmd$hasHeader)) cmd$hasHeader else TRUE
+    
+    # Determine file type and load accordingly
+    ext <- tolower(tools::file_ext(file_path))
+    
+    data <- switch(ext,
+      "csv" = read.csv(file_path, sep = separator, dec = decimal, header = has_header, stringsAsFactors = FALSE),
+      "tsv" = read.csv(file_path, sep = "\t", dec = decimal, header = has_header, stringsAsFactors = FALSE),
+      "txt" = read.csv(file_path, sep = separator, dec = decimal, header = has_header, stringsAsFactors = FALSE),
+      "xlsx" = {
+        if (requireNamespace("readxl", quietly = TRUE)) {
+          as.data.frame(readxl::read_excel(file_path))
+        } else {
+          stop("readxl package required for Excel files. Install with: install.packages('readxl')")
+        }
+      },
+      "xls" = {
+        if (requireNamespace("readxl", quietly = TRUE)) {
+          as.data.frame(readxl::read_excel(file_path))
+        } else {
+          stop("readxl package required for Excel files. Install with: install.packages('readxl')")
+        }
+      },
+      "rds" = readRDS(file_path),
+      stop(paste("Unsupported file format:", ext, ". Supported formats: csv, tsv, txt, xlsx, xls, rds"))
+    )
+    
+    # Convert to data.frame if needed (for tibbles etc.)
+    if (!is.data.frame(data)) {
+      data <- as.data.frame(data)
+    }
+    
+    # Store in data_store
+    assign(dataset_name, data, envir = data_store)
+    
+    make_success(cmd$id, list(
+      type = "text",
+      value = paste("Imported", dataset_name, "(", nrow(data), "rows,", ncol(data), "columns)")
+    ))
+  })
+}
+
 #' Handle list_package_datasets command
 #' Lists all datasets available from installed R packages
 handle_list_package_datasets <- function(cmd) {
@@ -600,6 +662,7 @@ handle_command <- function(cmd) {
     "load_package_dataset" = handle_load_package_dataset(cmd),
     "list_instat_collection" = handle_list_instat_collection(cmd),
     "load_instat_collection_dataset" = handle_load_instat_collection_dataset(cmd),
+    "import_file" = handle_import_file(cmd),
     list(
       id = cmd$id,
       success = FALSE,

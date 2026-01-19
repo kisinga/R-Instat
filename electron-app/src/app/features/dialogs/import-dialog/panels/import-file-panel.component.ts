@@ -227,17 +227,28 @@ add_dataframe("${name}", ${name})`;
       return;
     }
 
-    // Auto-generate data name from file if not provided
-    if (!this.dataName && this.filePath) {
-      const fileName = this.filePath.split(/[/\\]/).pop() || 'data';
-      this.dataName = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+    if (!window.electronAPI?.r?.importFile) {
+      this.toastService.error('Import API not available');
+      return;
     }
 
-    const code = this.buildRCode();
+    // Auto-generate data name from file if not provided
+    let name = this.dataName;
+    if (!name && this.filePath) {
+      const fileName = this.filePath.split(/[/\\]/).pop() || 'data';
+      name = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+    }
+
     this.isLoading.set(true);
 
     try {
-      const result = await this.rService.execute(code);
+      const result = await window.electronAPI.r.importFile({
+        path: this.filePath,
+        name: name || 'imported_data',
+        separator: this.separator,
+        decimal: this.decimal,
+        hasHeader: this.hasHeader,
+      });
       
       if (!result.success) {
         this.toastService.error(result.error || this.languageService.instant('TOAST.IMPORT_FAILED'));
@@ -245,6 +256,7 @@ add_dataframe("${name}", ${name})`;
       }
       
       this.toastService.success(this.languageService.instant('TOAST.DATA_IMPORTED'));
+      await this.rService.refreshDataframes();
       this.imported.emit();
     } catch (error) {
       this.toastService.error(

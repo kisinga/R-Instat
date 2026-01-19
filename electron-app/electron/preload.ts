@@ -44,6 +44,15 @@ const electronAPI = {
     loadInstatCollectionDataset: (name: string, filePath: string): Promise<RResult> => 
       ipcRenderer.invoke('r:loadInstatCollectionDataset', name, filePath),
     
+    importFile: (options: {
+      path: string;
+      name: string;
+      separator?: string;
+      decimal?: string;
+      hasHeader?: boolean;
+    }): Promise<RResult> =>
+      ipcRenderer.invoke('r:importFile', options),
+    
     status: (): Promise<RHealthStatus> => 
       ipcRenderer.invoke('r:status'),
     

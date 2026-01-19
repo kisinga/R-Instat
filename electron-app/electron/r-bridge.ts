@@ -526,6 +526,26 @@ export class RBridge {
   }
 
   /**
+   * Import a file from user-specified path with configurable options
+   */
+  async importFile(options: {
+    path: string;
+    name: string;
+    separator?: string;
+    decimal?: string;
+    hasHeader?: boolean;
+  }): Promise<RResponse> {
+    return this.sendCommand({ 
+      type: 'import_file',
+      path: options.path,
+      name: options.name,
+      separator: options.separator,
+      decimal: options.decimal,
+      hasHeader: options.hasHeader
+    });
+  }
+
+  /**
    * Check if R is connected
    */
   isConnected(): boolean {

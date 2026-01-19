@@ -226,6 +226,17 @@ function setupIPC(): void {
     return rBridge.loadInstatCollectionDataset(name, filePath);
   });
 
+  ipcMain.handle('r:importFile', async (_event, options: {
+    path: string;
+    name: string;
+    separator?: string;
+    decimal?: string;
+    hasHeader?: boolean;
+  }) => {
+    if (!rBridge) throw new Error('R Bridge not initialized');
+    return rBridge.importFile(options);
+  });
+
   ipcMain.handle('r:status', async () => {
     if (!rBridge) return { status: 'error', error: 'R Bridge not initialized' };
     return rBridge.healthStatus;
