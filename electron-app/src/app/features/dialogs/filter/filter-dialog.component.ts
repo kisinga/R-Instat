@@ -1,0 +1,196 @@
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { DialogBase } from '../dialog-base';
+
+interface FilterCondition {
+  column: string;
+  operator: string;
+  value: string;
+}
+
+@Component({
+  selector: 'app-filter-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
+    <div class="dialog-content" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <h2 class="text-lg font-semibold">{{ dialogTitle }}</h2>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
+      </div>
+
+      <div class="dialog-body">
+        <!-- Dataframe Selection -->
+        <div class="form-group">
+          <label class="form-label">Data Frame</label>
+          <select 
+            class="select select-bordered w-full"
+            [ngModel]="selectedDataframe()"
+            (ngModelChange)="onDataframeChange($event)"
+          >
+            @for (df of dataframes(); track df) {
+              <option [value]="df">{{ df }}</option>
+            }
+          </select>
+        </div>
+
+        <!-- Filter Conditions -->
+        <div class="form-group">
+          <label class="form-label">Filter Conditions</label>
+          
+          @for (condition of conditions; track $index; let i = $index) {
+            <div class="flex gap-2 mb-2 items-end">
+              <select 
+                class="select select-bordered select-sm flex-1"
+                [(ngModel)]="condition.column"
+              >
+                <option value="">Select column...</option>
+                @for (col of columns(); track col.name) {
+                  <option [value]="col.name">{{ col.name }}</option>
+                }
+              </select>
+
+              <select 
+                class="select select-bordered select-sm w-24"
+                [(ngModel)]="condition.operator"
+              >
+                <option value="==">equals</option>
+                <option value="!=">not equals</option>
+                <option value=">">greater than</option>
+                <option value=">=">greater or equal</option>
+                <option value="<">less than</option>
+                <option value="<=">less or equal</option>
+                <option value="%in%">in</option>
+                <option value="is.na">is NA</option>
+                <option value="!is.na">is not NA</option>
+              </select>
+
+              @if (condition.operator !== 'is.na' && condition.operator !== '!is.na') {
+                <input
+                  type="text"
+                  class="input input-bordered input-sm flex-1"
+                  placeholder="Value..."
+                  [(ngModel)]="condition.value"
+                />
+              }
+
+              <button 
+                class="btn btn-ghost btn-sm btn-square"
+                (click)="removeCondition(i)"
+                [disabled]="conditions.length === 1"
+              >
+                ✕
+              </button>
+            </div>
+          }
+
+          <button class="btn btn-ghost btn-sm" (click)="addCondition()">
+            + Add Condition
+          </button>
+        </div>
+
+        <!-- Logic -->
+        <div class="form-group">
+          <label class="form-label">Combine conditions with</label>
+          <div class="flex gap-4">
+            <label class="label cursor-pointer gap-2">
+              <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="&" />
+              <span>AND (all must match)</span>
+            </label>
+            <label class="label cursor-pointer gap-2">
+              <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="|" />
+              <span>OR (any can match)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Code Preview -->
+        @if (showCodePreview()) {
+          <div class="form-group mt-4">
+            <label class="form-label">R Code Preview</label>
+            <pre class="code-block">{{ buildRCode() }}</pre>
+          </div>
+        }
+      </div>
+
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
+          {{ showCodePreview() ? 'Hide' : 'Show' }} Code
+        </button>
+        <div class="flex-1"></div>
+        <button class="btn btn-ghost" (click)="cancel()">Cancel</button>
+        <button 
+          class="btn btn-primary" 
+          (click)="execute()"
+          [disabled]="!isValid() || isLoading()"
+        >
+          @if (isLoading()) {
+            <span class="loading loading-spinner loading-sm"></span>
+          }
+          OK
+        </button>
+      </div>
+    </div>
+  `,
+})
+export class FilterDialogComponent extends DialogBase {
+  readonly dialogTitle = 'Filter Rows';
+
+  conditions: FilterCondition[] = [
+    { column: '', operator: '==', value: '' }
+  ];
+  combineLogic = '&';
+
+  addCondition(): void {
+    this.conditions = [...this.conditions, { column: '', operator: '==', value: '' }];
+  }
+
+  removeCondition(index: number): void {
+    this.conditions = this.conditions.filter((_, i) => i !== index);
+  }
+
+  buildRCode(): string {
+    const df = this.selectedDataframe();
+    if (!df) {
+      return '# Select a dataframe first';
+    }
+    
+    const filterExprs = this.conditions
+      .filter(c => c.column && (c.operator === 'is.na' || c.operator === '!is.na' || c.value))
+      .map(c => {
+        if (c.operator === 'is.na') {
+          return `is.na(${c.column})`;
+        }
+        if (c.operator === '!is.na') {
+          return `!is.na(${c.column})`;
+        }
+        
+        // Determine if value is numeric
+        const isNumeric = !isNaN(Number(c.value));
+        const valueStr = isNumeric ? c.value : `"${c.value}"`;
+        
+        if (c.operator === '%in%') {
+          return `${c.column} %in% c(${valueStr})`;
+        }
+        
+        return `${c.column} ${c.operator} ${valueStr}`;
+      });
+
+    if (filterExprs.length === 0) {
+      return '# Add filter conditions above';
+    }
+
+    const filterStr = filterExprs.join(` ${this.combineLogic} `);
+
+    return `filtered_data <- get_dataframe("${df}") %>%
+  dplyr::filter(${filterStr})
+
+add_dataframe("${df}_filtered", filtered_data)`;
+  }
+
+  isValid(): boolean {
+    return !!this.selectedDataframe() && 
+      this.conditions.some(c => c.column && (c.operator === 'is.na' || c.operator === '!is.na' || c.value));
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "name": "r-instat-next",
+  "version": "0.1.0",
+  "description": "R-Instat - Cross-platform statistical analysis powered by R",
+  "main": "dist-electron/main.js",
+  "author": "IDEMS International",
+  "license": "GPL-3.0",
+  "private": true,
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "electron:dev": "npm run build:electron && concurrently \"ng serve\" \"wait-on http://localhost:4200 && electron .\"",
+    "electron:build": "ng build --configuration production && npm run build:electron && electron-builder",
+    "electron:start": "npm run build:electron && electron .",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@angular/animations": "^19.0.0",
+    "@angular/common": "^19.0.0",
+    "@angular/compiler": "^19.0.0",
+    "@angular/core": "^19.0.0",
+    "@angular/forms": "^19.0.0",
+    "@angular/platform-browser": "^19.0.0",
+    "@angular/platform-browser-dynamic": "^19.0.0",
+    "@angular/router": "^19.0.0",
+    "ag-grid-angular": "^32.0.0",
+    "ag-grid-community": "^32.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "zone.js": "~0.15.0",
+    "ngx-highlightjs": "^12.0.0",
+    "angular-split": "^17.0.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^19.0.0",
+    "@angular/cli": "^19.0.0",
+    "@angular/compiler-cli": "^19.0.0",
+    "@types/node": "^20.10.0",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "daisyui": "^4.12.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "~5.6.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "org.idems.rinstat",
+    "productName": "R-Instat",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "r-backend/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "r-backend",
+        "to": "r-backend"
+      },
+      {
+        "from": "assets/demo-data",
+        "to": "demo-data"
+      },
+      {
+        "from": "assets/instat-collection",
+        "to": "instat-collection"
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Science"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.education"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
+  }
+}

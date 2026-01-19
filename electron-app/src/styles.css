@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+:root {
+  --toolbar-height: 44px;
+  --statusbar-height: 28px;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: oklch(var(--b2));
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(var(--b3));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--bc) / 0.3);
+}
+
+/* Prevent text selection in UI elements */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Smooth transitions */
+.transition-theme {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Grid layout for main app */
+.app-layout {
+  display: grid;
+  grid-template-rows: var(--toolbar-height) 1fr var(--statusbar-height);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Panel styles */
+.panel {
+  @apply bg-base-200 rounded-lg border border-base-300;
+}
+
+.panel-header {
+  @apply px-4 py-2 border-b border-base-300 font-medium text-sm flex items-center justify-between;
+}
+
+.panel-content {
+  @apply overflow-auto;
+}
+
+/* Dialog styles */
+.dialog-overlay {
+  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50;
+  backdrop-filter: blur(2px);
+}
+
+.dialog-content {
+  @apply bg-base-100 rounded-xl shadow-2xl border border-base-300 max-w-2xl w-full max-h-[85vh] overflow-hidden;
+  animation: dialog-enter 0.2s ease-out;
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dialog-header {
+  @apply px-6 py-4 border-b border-base-300 flex items-center justify-between;
+}
+
+.dialog-body {
+  @apply px-6 py-4 overflow-y-auto;
+  max-height: calc(85vh - 140px);
+}
+
+.dialog-footer {
+  @apply px-6 py-4 border-t border-base-300 flex justify-end gap-3;
+}
+
+/* Form styles */
+.form-group {
+  @apply mb-4;
+}
+
+.form-label {
+  @apply block text-sm font-medium mb-1.5 text-base-content/80;
+}
+
+.form-hint {
+  @apply text-xs text-base-content/60 mt-1;
+}
+
+/* Code display */
+.code-block {
+  @apply font-mono text-sm bg-base-300 rounded-lg p-4 overflow-x-auto;
+}
+
+.code-inline {
+  @apply font-mono text-sm bg-base-300 px-1.5 py-0.5 rounded;
+}
+
+/* Output panel styles */
+.output-entry {
+  @apply border-b border-base-300 last:border-b-0;
+}
+
+.output-code {
+  @apply font-mono text-xs bg-base-300/50 p-3 rounded-lg mb-2;
+}
+
+.output-result {
+  @apply text-sm;
+}
+
+.output-plot {
+  @apply rounded-lg overflow-hidden bg-white max-w-full;
+}
+
+.output-error {
+  @apply text-error bg-error/10 p-3 rounded-lg text-sm;
+}
+
+/* AG Grid theme overrides for DaisyUI compatibility */
+.ag-theme-alpine-dark {
+  --ag-background-color: oklch(var(--b2));
+  --ag-header-background-color: oklch(var(--b3));
+  --ag-odd-row-background-color: oklch(var(--b2));
+  --ag-row-hover-color: oklch(var(--b3));
+  --ag-selected-row-background-color: oklch(var(--p) / 0.2);
+  --ag-border-color: oklch(var(--b3));
+  --ag-foreground-color: oklch(var(--bc));
+  --ag-header-foreground-color: oklch(var(--bc));
+  --ag-secondary-foreground-color: oklch(var(--bc) / 0.7);
+}
+
+.ag-theme-alpine {
+  --ag-background-color: oklch(var(--b1));
+  --ag-header-background-color: oklch(var(--b2));
+  --ag-odd-row-background-color: oklch(var(--b1));
+  --ag-row-hover-color: oklch(var(--b2));
+  --ag-selected-row-background-color: oklch(var(--p) / 0.1);
+  --ag-border-color: oklch(var(--b3));
+  --ag-foreground-color: oklch(var(--bc));
+  --ag-header-foreground-color: oklch(var(--bc));
+}
+
+/* Loading skeleton */
+.skeleton-pulse {
+  @apply animate-pulse bg-base-300 rounded;
+}
+
+/* Toast notifications */
+.toast-container {
+  @apply fixed bottom-4 right-4 z-50 flex flex-col gap-2;
+}
+
+.toast-item {
+  @apply alert shadow-lg max-w-sm;
+  animation: toast-enter 0.3s ease-out;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Column type indicators */
+.col-type-numeric {
+  @apply text-info;
+}
+
+.col-type-character {
+  @apply text-success;
+}
+
+.col-type-factor {
+  @apply text-warning;
+}
+
+.col-type-date {
+  @apply text-secondary;
+}
+
+.col-type-logical {
+  @apply text-accent;
+}
+
+/* Split pane handle */
+.split-gutter {
+  @apply bg-base-300 hover:bg-primary/30 transition-colors;
+}
+
+.split-gutter-horizontal {
+  cursor: col-resize;
+}
+
+.split-gutter-vertical {
+  cursor: row-resize;
+}
+
+/* Welcome screen */
+.welcome-hero {
+  @apply bg-gradient-to-br from-primary/20 via-base-100 to-secondary/20;
+}
+
+/* Keyboard shortcut display */
+.kbd-shortcut {
+  @apply inline-flex items-center gap-1;
+}
+
+.kbd-shortcut kbd {
+  @apply kbd kbd-sm;
+}

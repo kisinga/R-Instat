@@ -1,0 +1,88 @@
+# Electron Builder Configuration
+# https://www.electron.build/configuration/configuration
+
+appId: org.idems.rinstat
+productName: R-Instat
+copyright: Copyright © 2024 IDEMS International
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - r-backend/**/*
+  - "!**/*.map"
+  - "!**/node_modules/**/*.md"
+
+extraResources:
+  - from: r-backend
+    to: r-backend
+  - from: assets/demo-data
+    to: demo-data
+  - from: assets/instat-collection
+    to: instat-collection
+
+asar: true
+compression: maximum
+
+# Linux Configuration
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Science
+  icon: assets/icon.png
+  synopsis: Cross-platform statistical analysis powered by R
+  description: |
+    R-Instat is a free, open-source software for statistical analysis.
+    It provides a user-friendly interface to R's powerful statistical capabilities.
+
+# macOS Configuration
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  category: public.app-category.education
+  icon: assets/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+# Windows Configuration
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: assets/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  license: ../LICENCE
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+# DMG Configuration (macOS)
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Publish Configuration (for auto-updates - future)
+# publish:
+#   provider: github
+#   owner: IDEMS
+#   repo: R-Instat

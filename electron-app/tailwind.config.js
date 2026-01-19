@@ -1,0 +1,66 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{html,ts}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+      },
+    },
+  },
+  plugins: [require("daisyui")],
+  daisyui: {
+    themes: [
+      {
+        dark: {
+          "primary": "#6366f1",
+          "primary-content": "#ffffff",
+          "secondary": "#4f46e5",
+          "secondary-content": "#ffffff",
+          "accent": "#22d3ee",
+          "accent-content": "#000000",
+          "neutral": "#1e1e2e",
+          "neutral-content": "#cdd6f4",
+          "base-100": "#1e1e2e",
+          "base-200": "#181825",
+          "base-300": "#11111b",
+          "base-content": "#cdd6f4",
+          "info": "#89b4fa",
+          "info-content": "#000000",
+          "success": "#a6e3a1",
+          "success-content": "#000000",
+          "warning": "#f9e2af",
+          "warning-content": "#000000",
+          "error": "#f38ba8",
+          "error-content": "#000000",
+        },
+        light: {
+          "primary": "#4f46e5",
+          "primary-content": "#ffffff",
+          "secondary": "#6366f1",
+          "secondary-content": "#ffffff",
+          "accent": "#0891b2",
+          "accent-content": "#ffffff",
+          "neutral": "#f8fafc",
+          "neutral-content": "#1e293b",
+          "base-100": "#ffffff",
+          "base-200": "#f1f5f9",
+          "base-300": "#e2e8f0",
+          "base-content": "#1e293b",
+          "info": "#3b82f6",
+          "info-content": "#ffffff",
+          "success": "#22c55e",
+          "success-content": "#ffffff",
+          "warning": "#f59e0b",
+          "warning-content": "#000000",
+          "error": "#ef4444",
+          "error-content": "#ffffff",
+        },
+      },
+    ],
+    darkTheme: "dark",
+  },
+}
