@@ -1,10 +1,11 @@
 /**
  * Climatic R Code Builders
- * 
+ *
  * Pure functions for generating R code for climatic analysis.
- * Follows the composable pattern from describe/utils/r-code-builders.ts
+ * Uses the core r-codegen module for composable R code generation.
  */
 
+import { rStr, rDf, rBool, rPipe, rPlus, rFn, rIf } from '../../../../core/r-codegen';
 import {
   ClimaticSummaryOptions,
   InventoryPlotOptions,
@@ -13,20 +14,7 @@ import {
 } from './climatic-types';
 
 // ============================================================================
-// R Primitives (reused pattern)
-// ============================================================================
-
-/** R string literal with escaped quotes */
-const rStr = (s: string): string => `"${s.replace(/"/g, '\\"')}"`;
-
-/** R boolean literal */
-const rBool = (b: boolean): string => (b ? 'TRUE' : 'FALSE');
-
-/** Dataframe accessor via bridge function */
-const rDf = (name: string): string => `get_dataframe(${rStr(name)})`;
-
-// ============================================================================
-// Date Extraction Helpers 
+// Date Extraction Helpers
 // ============================================================================
 
 /**
@@ -36,15 +24,15 @@ const rDf = (name: string): string => `get_dataframe(${rStr(name)})`;
 const rParseDate = (dateCol: string): string => `as.Date(${dateCol})`;
 
 /** Extract year from date column using base R format() */
-export const rExtractYear = (dateCol: string): string => 
+export const rExtractYear = (dateCol: string): string =>
   `as.integer(format(${rParseDate(dateCol)}, "%Y"))`;
 
 /** Extract month from date column using base R format() */
-export const rExtractMonth = (dateCol: string): string => 
+export const rExtractMonth = (dateCol: string): string =>
   `as.integer(format(${rParseDate(dateCol)}, "%m"))`;
 
 /** Extract day of year from date column using base R format() */
-export const rExtractDoy = (dateCol: string): string => 
+export const rExtractDoy = (dateCol: string): string =>
   `as.integer(format(${rParseDate(dateCol)}, "%j"))`;
 
 // ============================================================================
@@ -53,7 +41,7 @@ export const rExtractDoy = (dateCol: string): string =>
 
 function getSummaryExpression(func: ClimaticSummaryFunction, col: string, naRm: boolean): string {
   const naArg = naRm ? ', na.rm = TRUE' : '';
-  
+
   switch (func) {
     case 'sum':
       return `sum(${col}${naArg})`;
@@ -74,13 +62,20 @@ function getSummaryExpression(func: ClimaticSummaryFunction, col: string, naRm: 
 
 function getSummaryLabel(func: ClimaticSummaryFunction): string {
   switch (func) {
-    case 'sum': return 'total';
-    case 'mean': return 'mean';
-    case 'max': return 'max';
-    case 'min': return 'min';
-    case 'count': return 'n';
-    case 'count_missing': return 'n_missing';
-    default: return 'result';
+    case 'sum':
+      return 'total';
+    case 'mean':
+      return 'mean';
+    case 'max':
+      return 'max';
+    case 'min':
+      return 'min';
+    case 'count':
+      return 'n';
+    case 'count_missing':
+      return 'n_missing';
+    default:
+      return 'result';
   }
 }
 
@@ -88,13 +83,13 @@ function getSummaryLabel(func: ClimaticSummaryFunction): string {
 // Grouping Helpers
 // ============================================================================
 
-function getGroupByColumns(level: SummaryLevel, dateCol: string, stationCol?: string): string[] {
+function getGroupByColumns(level: SummaryLevel, stationCol?: string): string[] {
   const groups: string[] = [];
-  
+
   if (stationCol) {
     groups.push(stationCol);
   }
-  
+
   switch (level) {
     case 'annual':
       groups.push('year');
@@ -109,22 +104,25 @@ function getGroupByColumns(level: SummaryLevel, dateCol: string, stationCol?: st
       // Only group by station (already added if present)
       break;
   }
-  
+
   return groups;
 }
 
-function getMutateStep(level: SummaryLevel, dateCol: string): string | null {
+function getMutateParams(
+  level: SummaryLevel,
+  dateCol: string
+): Record<string, string> | undefined {
   switch (level) {
     case 'annual':
-      return `mutate(year = ${rExtractYear(dateCol)})`;
+      return { year: rExtractYear(dateCol) };
     case 'monthly':
-      return `mutate(year = ${rExtractYear(dateCol)}, month = ${rExtractMonth(dateCol)})`;
+      return { year: rExtractYear(dateCol), month: rExtractMonth(dateCol) };
     case 'daily':
-      return `mutate(year = ${rExtractYear(dateCol)}, doy = ${rExtractDoy(dateCol)})`;
+      return { year: rExtractYear(dateCol), doy: rExtractDoy(dateCol) };
     case 'station':
-      return null; // No date extraction needed
+      return undefined;
     default:
-      return null;
+      return undefined;
   }
 }
 
@@ -134,7 +132,7 @@ function getMutateStep(level: SummaryLevel, dateCol: string): string | null {
 
 /**
  * Build R code for climatic summary
- * 
+ *
  * @example
  * buildClimaticSummary({
  *   dataframe: 'dodoma',
@@ -147,48 +145,29 @@ function getMutateStep(level: SummaryLevel, dateCol: string): string | null {
  * })
  * // Returns:
  * // get_dataframe("dodoma") %>%
- * //   mutate(year = year(date)) %>%
+ * //   mutate(year = as.integer(format(as.Date(date), "%Y"))) %>%
  * //   group_by(station, year) %>%
  * //   summarise(total = sum(rain, na.rm = TRUE), .groups = "drop")
  */
 export function buildClimaticSummary(opts: ClimaticSummaryOptions): string {
-  const {
-    dataframe,
-    dateColumn,
-    elementColumn,
-    stationColumn,
-    level,
-    summaryFunction,
-    omitMissing,
-  } = opts;
+  const { dataframe, dateColumn, elementColumn, stationColumn, level, summaryFunction, omitMissing } =
+    opts;
 
   if (!dataframe || !dateColumn || !elementColumn) {
     return '# Select dataframe, date column, and element column';
   }
 
-  const steps: string[] = [];
-  
-  // Start with dataframe
-  steps.push(rDf(dataframe));
-  
-  // Add mutate step for date extraction if needed
-  const mutateStep = getMutateStep(level, dateColumn);
-  if (mutateStep) {
-    steps.push(mutateStep);
-  }
-  
-  // Build group_by
-  const groupCols = getGroupByColumns(level, dateColumn, stationColumn);
-  if (groupCols.length > 0) {
-    steps.push(`group_by(${groupCols.join(', ')})`);
-  }
-  
-  // Build summarise
+  const mutateParams = getMutateParams(level, dateColumn);
+  const groupCols = getGroupByColumns(level, stationColumn);
   const summaryExpr = getSummaryExpression(summaryFunction, elementColumn, omitMissing);
   const summaryLabel = getSummaryLabel(summaryFunction);
-  steps.push(`summarise(${summaryLabel} = ${summaryExpr}, .groups = "drop")`);
 
-  return steps.join(' %>%\n  ');
+  return rPipe(
+    rDf(dataframe),
+    rIf(!!mutateParams, rFn('mutate', mutateParams)),
+    rIf(groupCols.length > 0, `group_by(${groupCols.join(', ')})`),
+    rFn('summarise', { [summaryLabel]: summaryExpr, '.groups': '"drop"' })
+  );
 }
 
 // ============================================================================
@@ -197,7 +176,7 @@ export function buildClimaticSummary(opts: ClimaticSummaryOptions): string {
 
 /**
  * Build R code for inventory plot (data availability heatmap)
- * 
+ *
  * @example
  * buildInventoryPlot({
  *   dataframe: 'dodoma',
@@ -227,46 +206,30 @@ export function buildInventoryPlot(opts: InventoryPlotOptions): string {
     return '# Select dataframe, date column, and element column';
   }
 
-  const lines: string[] = [];
-  
-  // Data preparation
-  lines.push(`${rDf(dataframe)} %>%`);
-  lines.push(`  mutate(`);
-  lines.push(`    year = ${rExtractYear(dateColumn)},`);
-  lines.push(`    doy = ${rExtractDoy(dateColumn)},`);
-  lines.push(`    has_data = !is.na(${elementColumn})`);
-  lines.push(`  ) %>%`);
-  
-  // ggplot base
-  lines.push(`  ggplot(aes(x = doy, y = factor(year), fill = has_data)) +`);
-  lines.push(`  geom_tile() +`);
-  
-  // Color scale
-  lines.push(`  scale_fill_manual(`);
-  lines.push(`    values = c("FALSE" = ${rStr(missingColor)}, "TRUE" = ${rStr(presentColor)}),`);
-  lines.push(`    labels = c("Missing", "Present"),`);
-  lines.push(`    name = "Data"`);
-  lines.push(`  ) +`);
-  
-  // Faceting
-  if (facetByStation && stationColumn) {
-    lines.push(`  facet_wrap(~ ${stationColumn}) +`);
-  }
-  
-  // Coord flip
-  if (flipCoords) {
-    lines.push(`  coord_flip() +`);
-  }
-  
-  // Theme and labels
-  lines.push(`  theme_minimal() +`);
-  lines.push(`  labs(`);
-  lines.push(`    title = ${rStr(title || 'Data Availability Inventory')},`);
-  lines.push(`    x = "Day of Year",`);
-  lines.push(`    y = "Year"`);
-  lines.push(`  )`);
+  // Data preparation pipeline
+  const dataPipe = rPipe(
+    rDf(dataframe),
+    rFn('mutate', {
+      year: rExtractYear(dateColumn),
+      doy: rExtractDoy(dateColumn),
+      has_data: `!is.na(${elementColumn})`,
+    })
+  );
 
-  return lines.join('\n');
+  // ggplot layers
+  return rPlus(
+    `${dataPipe} %>%\n  ggplot(aes(x = doy, y = factor(year), fill = has_data))`,
+    'geom_tile()',
+    `scale_fill_manual(values = c("FALSE" = ${rStr(missingColor)}, "TRUE" = ${rStr(presentColor)}), labels = c("Missing", "Present"), name = "Data")`,
+    rIf(facetByStation && !!stationColumn, `facet_wrap(~ ${stationColumn})`),
+    rIf(!!flipCoords, 'coord_flip()'),
+    'theme_minimal()',
+    rFn('labs', {
+      title: rStr(title || 'Data Availability Inventory'),
+      x: '"Day of Year"',
+      y: '"Year"',
+    })
+  );
 }
 
 // ============================================================================
@@ -287,12 +250,14 @@ export function buildAnnualRainfall(opts: AnnualRainfallOptions): string {
     return '# Select dataframe, date column, and rain column';
   }
 
-  const groups = stationColumn ? `${stationColumn}, year` : 'year';
-  
-  return `${rDf(dataframe)} %>%
-  mutate(year = ${rExtractYear(dateColumn)}) %>%
-  group_by(${groups}) %>%
-  summarise(annual_rain = sum(${rainColumn}, na.rm = TRUE), .groups = "drop")`;
+  const groupCols = stationColumn ? [stationColumn, 'year'] : ['year'];
+
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', { year: rExtractYear(dateColumn) }),
+    `group_by(${groupCols.join(', ')})`,
+    rFn('summarise', { annual_rain: `sum(${rainColumn}, na.rm = TRUE)`, '.groups': '"drop"' })
+  );
 }
 
 // ============================================================================
@@ -321,22 +286,27 @@ export function buildExtremes(opts: ExtremesOptions): string {
   groupParts.push('year');
   if (level === 'monthly') groupParts.push('month');
 
-  const mutateExpr = level === 'monthly'
-    ? `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)})`
-    : `mutate(year = ${rExtractYear(dateColumn)})`;
+  const mutateParams =
+    level === 'monthly'
+      ? { year: rExtractYear(dateColumn), month: rExtractMonth(dateColumn) }
+      : { year: rExtractYear(dateColumn) };
 
-  const summaries: string[] = [];
-  if (findMax) summaries.push(`max_${elementColumn} = max(${elementColumn}, na.rm = TRUE)`);
-  if (findMin) summaries.push(`min_${elementColumn} = min(${elementColumn}, na.rm = TRUE)`);
-  
-  if (summaries.length === 0) {
-    summaries.push(`max_${elementColumn} = max(${elementColumn}, na.rm = TRUE)`);
+  const summaryParams: Record<string, string> = {};
+  if (findMax) summaryParams[`max_${elementColumn}`] = `max(${elementColumn}, na.rm = TRUE)`;
+  if (findMin) summaryParams[`min_${elementColumn}`] = `min(${elementColumn}, na.rm = TRUE)`;
+
+  // Default to max if neither selected
+  if (!findMax && !findMin) {
+    summaryParams[`max_${elementColumn}`] = `max(${elementColumn}, na.rm = TRUE)`;
   }
+  summaryParams['.groups'] = '"drop"';
 
-  return `${rDf(dataframe)} %>%
-  ${mutateExpr} %>%
-  group_by(${groupParts.join(', ')}) %>%
-  summarise(${summaries.join(', ')}, .groups = "drop")`;
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', mutateParams),
+    `group_by(${groupParts.join(', ')})`,
+    rFn('summarise', summaryParams)
+  );
 }
 
 // ============================================================================
@@ -359,13 +329,15 @@ export function buildDayCount(opts: DayCountOptions): string {
     return '# Select dataframe, date column, and element column';
   }
 
-  const groups = stationColumn ? `${stationColumn}, year` : 'year';
+  const groupCols = stationColumn ? [stationColumn, 'year'] : ['year'];
   const condition = `${elementColumn} ${operator} ${threshold}`;
 
-  return `${rDf(dataframe)} %>%
-  mutate(year = ${rExtractYear(dateColumn)}) %>%
-  group_by(${groups}) %>%
-  summarise(day_count = sum(${condition}, na.rm = TRUE), .groups = "drop")`;
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', { year: rExtractYear(dateColumn) }),
+    `group_by(${groupCols.join(', ')})`,
+    rFn('summarise', { day_count: `sum(${condition}, na.rm = TRUE)`, '.groups': '"drop"' })
+  );
 }
 
 // ============================================================================
@@ -383,44 +355,45 @@ export interface SpellLengthsOptions {
 }
 
 export function buildSpellLengths(opts: SpellLengthsOptions): string {
-  const { dataframe, dateColumn, elementColumn, stationColumn, threshold, spellType, statistic } = opts;
+  const { dataframe, dateColumn, elementColumn, stationColumn, threshold, spellType, statistic } =
+    opts;
 
   if (!dataframe || !dateColumn || !elementColumn) {
     return '# Select dataframe, date column, and element column';
   }
 
-  const groups = stationColumn ? `${stationColumn}, year` : 'year';
-  const condition = spellType === 'wet' 
-    ? `${elementColumn} >= ${threshold}`
-    : `${elementColumn} < ${threshold}`;
-  
+  const groupCols = stationColumn ? [stationColumn, 'year'] : ['year'];
+  const condition = spellType === 'wet' ? `${elementColumn} >= ${threshold}` : `${elementColumn} < ${threshold}`;
+
   const spellLabel = `${spellType}_spell`;
-  
+
   // Build the statistic expression that works inside summarise
   // Uses inline computation to avoid list column issues
-  let statExpr: string;
   const rleExpr = `{ r <- rle(is_${spellType}); lens <- r$lengths[r$values == TRUE]; if(length(lens) > 0)`;
+  let statExpr: string;
   switch (statistic) {
     case 'max':
-      statExpr = `max_${spellLabel} = ${rleExpr} max(lens) else NA_integer_ }`;
+      statExpr = `${rleExpr} max(lens) else NA_integer_ }`;
       break;
     case 'mean':
-      statExpr = `mean_${spellLabel} = ${rleExpr} mean(lens) else NA_real_ }`;
+      statExpr = `${rleExpr} mean(lens) else NA_real_ }`;
       break;
     case 'count':
-      statExpr = `n_${spellLabel}s = ${rleExpr} length(lens) else 0L }`;
+      statExpr = `${rleExpr} length(lens) else 0L }`;
       break;
     default:
-      statExpr = `max_${spellLabel} = ${rleExpr} max(lens) else NA_integer_ }`;
+      statExpr = `${rleExpr} max(lens) else NA_integer_ }`;
   }
 
-  return `${rDf(dataframe)} %>%
-  mutate(
-    year = ${rExtractYear(dateColumn)},
-    is_${spellType} = ${condition}
-  ) %>%
-  group_by(${groups}) %>%
-  summarise(${statExpr}, .groups = "drop")`;
+  const statLabel =
+    statistic === 'count' ? `n_${spellLabel}s` : `${statistic}_${spellLabel}`;
+
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', { year: rExtractYear(dateColumn), [`is_${spellType}`]: condition }),
+    `group_by(${groupCols.join(', ')})`,
+    rFn('summarise', { [statLabel]: statExpr, '.groups': '"drop"' })
+  );
 }
 
 // ============================================================================
@@ -442,19 +415,17 @@ export function buildSeasonalSummary(opts: SeasonalSummaryOptions): string {
     return '# Select dataframe, date column, and element column';
   }
 
-  const groups = stationColumn ? `${stationColumn}, month` : 'month';
-  const funcMap: Record<string, string> = {
-    sum: 'sum',
-    mean: 'mean',
-    max: 'max',
-    min: 'min',
-  };
-  const func = funcMap[summaryFunction] || 'mean';
+  const groupCols = stationColumn ? [stationColumn, 'month'] : ['month'];
 
-  return `${rDf(dataframe)} %>%
-  mutate(month = ${rExtractMonth(dateColumn)}) %>%
-  group_by(${groups}) %>%
-  summarise(${summaryFunction}_${elementColumn} = ${func}(${elementColumn}, na.rm = TRUE), .groups = "drop")`;
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', { month: rExtractMonth(dateColumn) }),
+    `group_by(${groupCols.join(', ')})`,
+    rFn('summarise', {
+      [`${summaryFunction}_${elementColumn}`]: `${summaryFunction}(${elementColumn}, na.rm = TRUE)`,
+      '.groups': '"drop"',
+    })
+  );
 }
 
 // ============================================================================
@@ -476,31 +447,33 @@ export function buildMissingReport(opts: MissingReportOptions): string {
     return '# Select dataframe, date column, and at least one element column';
   }
 
-  let groupParts: string[] = [];
+  const groupParts: string[] = [];
   if (stationColumn) groupParts.push(stationColumn);
   if (level === 'annual') groupParts.push('year');
   if (level === 'monthly') groupParts.push('year', 'month');
 
-  let mutateExpr = '';
-  if (level === 'annual') {
-    mutateExpr = `mutate(year = ${rExtractYear(dateColumn)}) %>%\n  `;
-  } else if (level === 'monthly') {
-    mutateExpr = `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)}) %>%\n  `;
-  }
+  const mutateParams: Record<string, string> | undefined =
+    level === 'annual'
+      ? { year: rExtractYear(dateColumn) }
+      : level === 'monthly'
+        ? { year: rExtractYear(dateColumn), month: rExtractMonth(dateColumn) }
+        : undefined;
 
-  const missingExprs = elementColumns.map(col => 
-    `${col}_missing = sum(is.na(${col})), ${col}_total = n(), ${col}_pct = round(100 * sum(is.na(${col})) / n(), 1)`
-  ).join(',\n    ');
+  // Build summary params for each column
+  const summaryParams: Record<string, string> = {};
+  elementColumns.forEach((col) => {
+    summaryParams[`${col}_missing`] = `sum(is.na(${col}))`;
+    summaryParams[`${col}_total`] = 'n()';
+    summaryParams[`${col}_pct`] = `round(100 * sum(is.na(${col})) / n(), 1)`;
+  });
+  summaryParams['.groups'] = '"drop"';
 
-  const groupExpr = groupParts.length > 0 
-    ? `group_by(${groupParts.join(', ')}) %>%\n  `
-    : '';
-
-  return `${rDf(dataframe)} %>%
-  ${mutateExpr}${groupExpr}summarise(
-    ${missingExprs},
-    .groups = "drop"
-  )`;
+  return rPipe(
+    rDf(dataframe),
+    rIf(!!mutateParams, rFn('mutate', mutateParams)),
+    rIf(groupParts.length > 0, `group_by(${groupParts.join(', ')})`),
+    rFn('summarise', summaryParams)
+  );
 }
 
 // ============================================================================
@@ -528,25 +501,26 @@ export function buildTemperatureSummary(opts: TemperatureSummaryOptions): string
   groupParts.push('year');
   if (level === 'monthly') groupParts.push('month');
 
-  const mutateExpr = level === 'monthly'
-    ? `mutate(year = ${rExtractYear(dateColumn)}, month = ${rExtractMonth(dateColumn)})`
-    : `mutate(year = ${rExtractYear(dateColumn)})`;
+  const mutateParams =
+    level === 'monthly'
+      ? { year: rExtractYear(dateColumn), month: rExtractMonth(dateColumn) }
+      : { year: rExtractYear(dateColumn) };
 
-  const summaries: string[] = [];
+  const summaryParams: Record<string, string> = {};
   if (tmaxColumn) {
-    summaries.push(`mean_tmax = mean(${tmaxColumn}, na.rm = TRUE)`);
-    summaries.push(`max_tmax = max(${tmaxColumn}, na.rm = TRUE)`);
+    summaryParams['mean_tmax'] = `mean(${tmaxColumn}, na.rm = TRUE)`;
+    summaryParams['max_tmax'] = `max(${tmaxColumn}, na.rm = TRUE)`;
   }
   if (tminColumn) {
-    summaries.push(`mean_tmin = mean(${tminColumn}, na.rm = TRUE)`);
-    summaries.push(`min_tmin = min(${tminColumn}, na.rm = TRUE)`);
+    summaryParams['mean_tmin'] = `mean(${tminColumn}, na.rm = TRUE)`;
+    summaryParams['min_tmin'] = `min(${tminColumn}, na.rm = TRUE)`;
   }
+  summaryParams['.groups'] = '"drop"';
 
-  return `${rDf(dataframe)} %>%
-  ${mutateExpr} %>%
-  group_by(${groupParts.join(', ')}) %>%
-  summarise(
-    ${summaries.join(',\n    ')},
-    .groups = "drop"
-  )`;
+  return rPipe(
+    rDf(dataframe),
+    rFn('mutate', mutateParams),
+    `group_by(${groupParts.join(', ')})`,
+    rFn('summarise', summaryParams)
+  );
 }

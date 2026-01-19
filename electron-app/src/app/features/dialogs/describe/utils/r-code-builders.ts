@@ -4,10 +4,10 @@
  * Generates R code for describe operations: graphs, summaries, and frequencies.
  *
  * Architecture:
- * - R Primitives: Low-level R string formatting (rStr, rVec, rBool, rParams)
- * - ggplot2 Layers: Composable ggplot components (ggAes, ggFacet, ggLabs, etc.)
+ * - Core r-codegen: Shared primitives and composition functions
+ * - ggplot2 Helpers: Domain-specific ggplot layer builders
  * - Graph Builders: One pure function per graph type, returns complete ggplot code
- * - Pipe Builders: dplyr/tidyr chain construction for tabular outputs
+ * - Summary/Frequency Builders: dplyr/tidyr chain construction for tabular outputs
  *
  * All functions are pure. Invalid inputs return R comment strings (e.g., "# Select...").
  *
@@ -16,6 +16,18 @@
  * // => 'ggplot(get_dataframe("df"), aes(x = x)) + geom_histogram(...) + ...'
  */
 
+import {
+  rStr,
+  rBool,
+  rVec,
+  rParams,
+  rDf,
+  rCol,
+  rPipe,
+  rPlus,
+  rFn,
+  rIf,
+} from '../../../../core/r-codegen';
 import { GraphType, VariableAnalysis } from './variable-type-analyzer';
 
 // ============================================================================
@@ -63,48 +75,8 @@ export interface DescribeOptions {
 }
 
 // ============================================================================
-// R Primitives
+// ggplot2 Layer Builders (Domain-specific helpers)
 // ============================================================================
-
-/** R string literal with escaped quotes */
-const rStr = (s: string): string => `"${s.replace(/"/g, '\\"')}"`;
-
-/** R boolean literal */
-const rBool = (b: boolean): string => (b ? 'TRUE' : 'FALSE');
-
-/** R vector: c("a", "b") or single value if length 1 */
-function rVec(items: string[], quote = true): string {
-  if (items.length === 0) return '';
-  const formatted = items.map(item => (quote ? rStr(item) : item));
-  return items.length === 1 ? formatted[0] : `c(${formatted.join(', ')})`;
-}
-
-/** Named R parameters: key = value, key2 = value2 */
-function rParams(obj: Record<string, string | number | boolean | undefined>): string {
-  return Object.entries(obj)
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => {
-      if (typeof v === 'boolean') return `${k} = ${rBool(v)}`;
-      if (typeof v === 'number') return `${k} = ${v}`;
-      return `${k} = ${v}`;
-    })
-    .join(', ');
-}
-
-/** Dataframe accessor via bridge function */
-const rDf = (name: string): string => `get_dataframe(${rStr(name)})`;
-
-/** Column accessor: df$col */
-const rCol = (df: string, col: string): string => `${rDf(df)}$${col}`;
-
-// ============================================================================
-// ggplot2 Layer Builders
-// ============================================================================
-
-/** Join ggplot layers with + operator, filtering undefined/empty */
-function ggLayers(...layers: (string | undefined | null)[]): string {
-  return layers.filter(Boolean).join(' +\n  ');
-}
 
 /** Build aes() string from mappings */
 function ggAes(mappings: Record<string, string | undefined>): string {
@@ -120,12 +92,10 @@ function ggBase(df: string, aes: string): string {
 }
 
 /** facet_wrap layer (returns undefined if no facet) */
-const ggFacet = (by?: string): string | undefined =>
-  by ? `facet_wrap(~ ${by})` : undefined;
+const ggFacet = (by?: string): string | undefined => (by ? `facet_wrap(~ ${by})` : undefined);
 
 /** coord_flip layer (returns undefined if not flipping) */
-const ggFlip = (flip?: boolean): string | undefined =>
-  flip ? 'coord_flip()' : undefined;
+const ggFlip = (flip?: boolean): string | undefined => (flip ? 'coord_flip()' : undefined);
 
 /** theme layer */
 const ggTheme = (name = 'minimal'): string => `theme_${name}()`;
@@ -163,15 +133,6 @@ function resolveNumCatAxes(columns: string[], analysis: VariableAnalysis): AxisM
 }
 
 // ============================================================================
-// dplyr Pipe Builder
-// ============================================================================
-
-/** Join dplyr pipe steps with %>%, filtering undefined/empty */
-function dplyrPipe(...steps: (string | undefined | null | false)[]): string {
-  return steps.filter(Boolean).join(' %>%\n  ');
-}
-
-// ============================================================================
 // Graph Builders
 // ============================================================================
 
@@ -181,7 +142,7 @@ function buildHistogram(ctx: GraphBuildContext): string {
   const { dataframe, columns, bins = 30, alpha = 0.8, fillBy, facetBy, title, xLabel } = ctx;
   const col = columns[0];
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: col, fill: fillBy })),
     `geom_histogram(bins = ${bins}, alpha = ${alpha}, color = "white")`,
     ggFacet(facetBy),
@@ -194,7 +155,7 @@ function buildDensity(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.6, colorBy, fillBy, facetBy, title, xLabel } = ctx;
   const col = columns[0];
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: col, color: colorBy, fill: fillBy })),
     `geom_density(alpha = ${alpha})`,
     ggFacet(facetBy),
@@ -207,7 +168,7 @@ function buildBoxplot(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title, analysis } = ctx;
   const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
     `geom_boxplot(alpha = ${alpha})`,
     ggFacet(facetBy),
@@ -226,7 +187,7 @@ function buildViolin(ctx: GraphBuildContext): string {
     xVar = '"all"';
   }
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
     `geom_violin(alpha = ${alpha})`,
     ggFacet(facetBy),
@@ -237,13 +198,23 @@ function buildViolin(ctx: GraphBuildContext): string {
 }
 
 function buildBarChart(ctx: GraphBuildContext): string {
-  const { dataframe, columns, position = 'stack', fillBy, facetBy, flipCoords, showLabels, title, xLabel } = ctx;
+  const {
+    dataframe,
+    columns,
+    position = 'stack',
+    fillBy,
+    facetBy,
+    flipCoords,
+    showLabels,
+    title,
+    xLabel,
+  } = ctx;
   const col = columns[0];
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: col, fill: fillBy ?? col })),
     `geom_bar(position = ${rStr(position)}, alpha = 0.8)`,
-    showLabels ? 'geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)' : undefined,
+    rIf(!!showLabels, 'geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)'),
     ggFacet(facetBy),
     ggFlip(flipCoords),
     ggTheme(),
@@ -256,15 +227,15 @@ function buildPieChart(ctx: GraphBuildContext): string {
   const col = columns[0];
 
   // Pie = bar with polar coords; requires count transformation
-  return dplyrPipe(
-    rDf(dataframe),
-    `dplyr::count(${col})`
-  ) + ` %>%
-  ggplot(aes(x = "", y = n, fill = ${col})) +
-  geom_bar(stat = "identity", width = 1) +
-  coord_polar("y", start = 0) +
-  theme_void() +
-  labs(title = ${rStr(title ?? `Distribution of ${col}`)}, fill = ${rStr(col)})`;
+  const dataPipe = rPipe(rDf(dataframe), `dplyr::count(${col})`);
+
+  return rPlus(
+    `${dataPipe} %>%\n  ggplot(aes(x = "", y = n, fill = ${col}))`,
+    'geom_bar(stat = "identity", width = 1)',
+    'coord_polar("y", start = 0)',
+    'theme_void()',
+    `labs(title = ${rStr(title ?? `Distribution of ${col}`)}, fill = ${rStr(col)})`
+  );
 }
 
 function buildScatter(ctx: GraphBuildContext): string {
@@ -276,7 +247,7 @@ function buildScatter(ctx: GraphBuildContext): string {
 
   const [xVar, yVar] = columns;
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy })),
     `geom_point(alpha = ${alpha})`,
     ggFacet(facetBy),
@@ -302,7 +273,7 @@ function buildJitter(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.5, colorBy, facetBy, flipCoords, title, analysis } = ctx;
   const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
 
-  return ggLayers(
+  return rPlus(
     ggBase(dataframe, ggAes({ x: xVar ?? columns[1], y: yVar, color: colorBy ?? xVar })),
     `geom_jitter(width = 0.2, alpha = ${alpha})`,
     ggFacet(facetBy),
@@ -321,7 +292,7 @@ function buildMosaic(ctx: GraphBuildContext): string {
 
   const [var1, var2] = columns;
 
-  return ggLayers(
+  return rPlus(
     `ggplot(${rDf(dataframe)})`,
     `ggmosaic::geom_mosaic(aes(x = ggmosaic::product(${var2}, ${var1}), fill = ${var2}))`,
     ggTheme(),
@@ -333,19 +304,22 @@ function buildCorrelationHeatmap(ctx: GraphBuildContext): string {
   const { dataframe, columns, title } = ctx;
   const colsStr = rVec(columns, true);
 
-  return dplyrPipe(
+  const dataPipe = rPipe(
     rDf(dataframe),
     `dplyr::select(${colsStr})`,
     'cor(use = "pairwise.complete.obs")',
     'as.data.frame()',
     'tibble::rownames_to_column("var1")',
     'tidyr::pivot_longer(-var1, names_to = "var2", values_to = "correlation")'
-  ) + ` %>%
-  ggplot(aes(x = var1, y = var2, fill = correlation)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
-  theme_minimal() +
-  labs(title = ${rStr(title ?? 'Correlation Heatmap')})`;
+  );
+
+  return rPlus(
+    `${dataPipe} %>%\n  ggplot(aes(x = var1, y = var2, fill = correlation))`,
+    'geom_tile()',
+    'scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0)',
+    'theme_minimal()',
+    `labs(title = ${rStr(title ?? 'Correlation Heatmap')})`
+  );
 }
 
 // ============================================================================
@@ -366,8 +340,8 @@ const GRAPH_BUILDERS: Record<GraphType, GraphBuilder> = {
   'scatter-matrix': buildScatterMatrix,
   jitter: buildJitter,
   mosaic: buildMosaic,
-  'stacked-bar': ctx => buildBarChart({ ...ctx, position: 'stack' }),
-  'grouped-bar': ctx => buildBarChart({ ...ctx, position: 'dodge' }),
+  'stacked-bar': (ctx) => buildBarChart({ ...ctx, position: 'stack' }),
+  'grouped-bar': (ctx) => buildBarChart({ ...ctx, position: 'dodge' }),
   'summary-plot': buildBoxplot, // Summary plot extends boxplot
   'correlation-heatmap': buildCorrelationHeatmap,
 };
@@ -383,11 +357,7 @@ function buildDefaultSummary(opts: DescribeOptions): string {
     return `summary(${rDf(dataframe)})`;
   }
 
-  return dplyrPipe(
-    rDf(dataframe),
-    `dplyr::select(${rVec(columns)})`,
-    'summary()'
-  );
+  return rPipe(rDf(dataframe), `dplyr::select(${rVec(columns)})`, 'summary()');
 }
 
 function buildSkimSummary(opts: DescribeOptions): string {
@@ -397,10 +367,7 @@ function buildSkimSummary(opts: DescribeOptions): string {
     return `skimr::skim_without_charts(${rDf(dataframe)})`;
   }
 
-  return dplyrPipe(
-    rDf(dataframe),
-    `skimr::skim_without_charts(${columns.join(', ')})`
-  );
+  return rPipe(rDf(dataframe), `skimr::skim_without_charts(${columns.join(', ')})`);
 }
 
 /** Map statistic name to dplyr across formula */
@@ -428,17 +395,17 @@ function buildCustomSummary(
   const { dataframe, columns } = opts;
   const naRm = rBool(omitMissing);
 
-  const statFns = statistics.map(s => statToFormula(s, naRm)).filter(Boolean);
+  const statFns = statistics.map((s) => statToFormula(s, naRm)).filter(Boolean);
   if (statFns.length === 0) {
     return '# Select at least one statistic';
   }
 
   const colSelector = columns.length > 0 ? 'everything()' : 'where(is.numeric)';
 
-  return dplyrPipe(
+  return rPipe(
     rDf(dataframe),
-    groupBy && `dplyr::group_by(${groupBy})`,
-    columns.length > 0 && `dplyr::select(${rVec(columns)})`,
+    rIf(!!groupBy, `dplyr::group_by(${groupBy})`),
+    rIf(columns.length > 0, `dplyr::select(${rVec(columns)})`),
     `dplyr::summarise(
     dplyr::across(
       ${colSelector},
@@ -466,7 +433,14 @@ function buildOneWayFrequency(opts: DescribeOptions & FrequencyOptions): string 
 }
 
 function buildTwoWayFrequency(opts: DescribeOptions & FrequencyOptions): string {
-  const { dataframe, columns, showCount = true, showRowPercent = false, showColPercent = false, weights } = opts;
+  const {
+    dataframe,
+    columns,
+    showCount = true,
+    showRowPercent = false,
+    showColPercent = false,
+    weights,
+  } = opts;
   const [rowVar, colVar] = columns;
 
   const params = rParams({

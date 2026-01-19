@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-
-interface FilterCondition {
-  column: string;
-  operator: string;
-  value: string;
-}
+import {
+  FilterCondition,
+  FilterOperator,
+  CombineLogic,
+  buildFilter,
+  isConditionValid,
+} from './filter-r-builders';
 
 @Component({
   selector: 'app-filter-dialog',
@@ -138,10 +139,8 @@ interface FilterCondition {
 export class FilterDialogComponent extends DialogBase {
   readonly dialogTitle = 'Filter Rows';
 
-  conditions: FilterCondition[] = [
-    { column: '', operator: '==', value: '' }
-  ];
-  combineLogic = '&';
+  conditions: FilterCondition[] = [{ column: '', operator: '==', value: '' }];
+  combineLogic: CombineLogic = '&';
 
   addCondition(): void {
     this.conditions = [...this.conditions, { column: '', operator: '==', value: '' }];
@@ -152,46 +151,14 @@ export class FilterDialogComponent extends DialogBase {
   }
 
   buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) {
-      return '# Select a dataframe first';
-    }
-    
-    const filterExprs = this.conditions
-      .filter(c => c.column && (c.operator === 'is.na' || c.operator === '!is.na' || c.value))
-      .map(c => {
-        if (c.operator === 'is.na') {
-          return `is.na(${c.column})`;
-        }
-        if (c.operator === '!is.na') {
-          return `!is.na(${c.column})`;
-        }
-        
-        // Determine if value is numeric
-        const isNumeric = !isNaN(Number(c.value));
-        const valueStr = isNumeric ? c.value : `"${c.value}"`;
-        
-        if (c.operator === '%in%') {
-          return `${c.column} %in% c(${valueStr})`;
-        }
-        
-        return `${c.column} ${c.operator} ${valueStr}`;
-      });
-
-    if (filterExprs.length === 0) {
-      return '# Add filter conditions above';
-    }
-
-    const filterStr = filterExprs.join(` ${this.combineLogic} `);
-
-    return `filtered_data <- get_dataframe("${df}") %>%
-  dplyr::filter(${filterStr})
-
-add_dataframe("${df}_filtered", filtered_data)`;
+    return buildFilter({
+      dataframe: this.selectedDataframe() || '',
+      conditions: this.conditions,
+      combineLogic: this.combineLogic,
+    });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && 
-      this.conditions.some(c => c.column && (c.operator === 'is.na' || c.operator === '!is.na' || c.value));
+    return !!this.selectedDataframe() && this.conditions.some(isConditionValid);
   }
 }
