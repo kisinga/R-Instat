@@ -15,6 +15,7 @@ import { LanguageService } from '../../../core/services/language.service';
 import { ColumnInfo } from '../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { DescribeDialogService, OutputMode } from './describe-dialog.service';
+import { GraphMode } from './utils/variable-type-analyzer';
 import { SummaryPanelComponent } from './panels/summary-panel.component';
 import { GraphPanelComponent } from './panels/graph-panel.component';
 import { FrequencyPanelComponent } from './panels/frequency-panel.component';
@@ -44,6 +45,23 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
       <div class="dialog-body">
         <!-- Left Column: Data Selection -->
         <div class="data-selection">
+          <!-- Graph Mode Selector -->
+          @if (service.outputMode() === 'graph') {
+            <div class="form-group">
+              <label class="form-label">{{ 'DESCRIBE.GRAPH_MODE' | translate }}</label>
+              <select 
+                class="select select-bordered w-full select-sm"
+                [ngModel]="service.graphMode()"
+                (ngModelChange)="setGraphMode($event)"
+              >
+                <option value="distribution">{{ 'DESCRIBE.MODE_DISTRIBUTION' | translate }}</option>
+                <option value="comparison">{{ 'DESCRIBE.MODE_COMPARISON' | translate }}</option>
+                <option value="faceted">{{ 'DESCRIBE.MODE_FACETED' | translate }}</option>
+              </select>
+              <p class="text-xs text-base-content/60 mt-1">{{ service.modeConfig().hint }}</p>
+            </div>
+          }
+
           <!-- Dataframe Selection -->
           <div class="form-group">
             <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
@@ -64,36 +82,98 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
             }
           </div>
 
-          <!-- Column Selection -->
-          <div class="form-group flex-1">
-            <div class="flex items-center justify-between">
+          <!-- Analyze Variables (Primary) -->
+          <div class="form-group">
+            <div class="flex items-center gap-2">
               <label class="form-label">
-                {{ 'DIALOG.VARIABLES' | translate }}
-                <span class="text-xs text-base-content/60">({{ selectedColumns().length }}/{{ columns().length }})</span>
+                {{ getAnalyzeLabel() | translate }}
               </label>
-              <div class="flex gap-1">
-                <button 
-                  class="btn btn-ghost btn-xs"
-                  (click)="selectAllColumns()"
-                  [disabled]="columns().length === 0"
-                >{{ 'DIALOG.ALL' | translate }}</button>
-                <button 
-                  class="btn btn-ghost btn-xs"
-                  (click)="clearColumns()"
-                  [disabled]="selectedColumns().length === 0"
-                >{{ 'DIALOG.NONE' | translate }}</button>
-              </div>
+              <span 
+                class="tooltip tooltip-right cursor-help" 
+                [attr.data-tip]="'DESCRIBE.ANALYZE_TOOLTIP' | translate"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+              @if (allowMultipleAnalyze()) {
+                <span class="text-xs text-base-content/60 ml-auto">({{ analyzeVarNames.length }}/{{ columns().length }})</span>
+              }
             </div>
             <app-column-picker
               [columns]="columns()"
-              [multiple]="true"
-              [(selectedColumns)]="selectedColumnsNames"
-              (selectedColumnsChange)="onColumnsChange($event)"
+              [multiple]="allowMultipleAnalyze()"
+              [(selectedColumns)]="analyzeVarNames"
+              (selectedColumnsChange)="onAnalyzeVarsChange($event)"
             />
           </div>
 
+          <!-- Group By (for Two/Three Variable modes) -->
+          @if (showGroupBy()) {
+            <div class="form-group">
+              <div class="flex items-center gap-2">
+                <label class="form-label">
+                  {{ 'DESCRIBE.GROUP_BY' | translate }}
+                </label>
+                @if (service.graphMode() === 'comparison') {
+                  <span class="text-xs text-base-content/60">({{ 'DIALOG.OPTIONAL' | translate }})</span>
+                }
+                <span 
+                  class="tooltip tooltip-right cursor-help" 
+                  [attr.data-tip]="'DESCRIBE.GROUP_BY_TOOLTIP' | translate"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+              </div>
+              <select 
+                class="select select-bordered w-full select-sm"
+                [ngModel]="groupByVarName"
+                (ngModelChange)="onGroupByChange($event)"
+              >
+                <option value="">{{ 'DIALOG.NONE' | translate }}</option>
+                @for (col of availableGroupByColumns(); track col.name) {
+                  <option [value]="col.name">{{ col.name }} ({{ col.type }})</option>
+                }
+              </select>
+              <p class="text-xs text-base-content/50 mt-1">{{ 'DESCRIBE.GROUP_BY_HINT' | translate }}</p>
+            </div>
+          }
+
+          <!-- Facet By (for Three Variable mode) -->
+          @if (showFacetBy()) {
+            <div class="form-group">
+              <div class="flex items-center gap-2">
+                <label class="form-label">
+                  {{ 'DESCRIBE.FACET_BY' | translate }}
+                </label>
+                <span class="text-xs text-base-content/60">({{ 'DIALOG.OPTIONAL' | translate }})</span>
+                <span 
+                  class="tooltip tooltip-right cursor-help" 
+                  [attr.data-tip]="'DESCRIBE.FACET_BY_TOOLTIP' | translate"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+              </div>
+              <select 
+                class="select select-bordered w-full select-sm"
+                [ngModel]="facetByVarName"
+                (ngModelChange)="onFacetByChange($event)"
+              >
+                <option value="">{{ 'DIALOG.NONE' | translate }}</option>
+                @for (col of factorColumns(); track col.name) {
+                  <option [value]="col.name">{{ col.name }}</option>
+                }
+              </select>
+              <p class="text-xs text-base-content/50 mt-1">{{ 'DESCRIBE.FACET_BY_HINT' | translate }}</p>
+            </div>
+          }
+
           <!-- Variable Type Indicator -->
-          @if (service.analysis().combination !== 'none') {
+          @if (service.roles().analyze.length > 0) {
             <div class="type-indicator">
               <span class="badge badge-sm" [class]="getTypeBadgeClass()">
                 {{ getTypeLabelKey() | translate }}
@@ -306,10 +386,31 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   columns = signal<ColumnInfo[]>([]);
   isLoading = signal(false);
   showCodePreview = signal(false);
-  selectedColumnsNames: string[] = [];
+  
+  // UI control computed properties from service modeConfig
+  showGroupBy = computed(() => 
+    this.service.outputMode() !== 'graph' || this.service.modeConfig().showGroupBy
+  );
+  showFacetBy = computed(() => 
+    this.service.outputMode() !== 'graph' || this.service.modeConfig().showFacetBy
+  );
+  allowMultipleAnalyze = computed(() => 
+    this.service.outputMode() !== 'graph' || this.service.modeConfig().allowMultipleAnalyze
+  );
+  
+  // Explicit variable role selections
+  analyzeVarNames: string[] = [];
+  groupByVarName = '';
+  facetByVarName = '';
 
-  // Computed
-  selectedColumns = computed(() => this.service.selectedColumns());
+  // Computed: Selected columns (for backward compatibility)
+  selectedColumns = computed(() => this.service.roles().analyze);
+  
+  // Computed: Columns available for groupBy (exclude already selected analyze vars)
+  availableGroupByColumns = computed(() => {
+    const analyzeNames = new Set(this.analyzeVarNames);
+    return this.columns().filter(c => !analyzeNames.has(c.name));
+  });
   
   factorColumns = computed(() => 
     this.columns().filter(c => {
@@ -369,31 +470,79 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
 
   async onDataframeChange(name: string): Promise<void> {
     this.service.setDataframe(name);
-    this.selectedColumnsNames = [];
+    this.analyzeVarNames = [];
+    this.groupByVarName = '';
+    this.facetByVarName = '';
     await this.loadColumns();
   }
 
-  onColumnsChange(columnNames: string[]): void {
-    const selectedCols = this.columns().filter(c => columnNames.includes(c.name));
-    this.service.setSelectedColumns(selectedCols);
+  /**
+   * Handle changes to the "Analyze" variable selection
+   */
+  onAnalyzeVarsChange(columnNames: string[]): void {
+    const analyzeCols = this.columns().filter(c => columnNames.includes(c.name));
+    this.service.setAnalyzeVariables(analyzeCols);
+    
+    // If groupBy is now in the analyze list, clear it
+    if (this.groupByVarName && columnNames.includes(this.groupByVarName)) {
+      this.groupByVarName = '';
+      this.service.setGroupByVariable(undefined);
+    }
   }
 
-  selectAllColumns(): void {
-    this.selectedColumnsNames = this.columns().map(c => c.name);
-    this.service.setSelectedColumns(this.columns());
+  /**
+   * Handle changes to the "Group by" variable selection
+   */
+  onGroupByChange(columnName: string): void {
+    this.groupByVarName = columnName;
+    const groupByCol = columnName ? this.columns().find(c => c.name === columnName) : undefined;
+    this.service.setGroupByVariable(groupByCol);
   }
 
-  clearColumns(): void {
-    this.selectedColumnsNames = [];
-    this.service.setSelectedColumns([]);
+  /**
+   * Handle changes to the "Facet by" variable selection
+   */
+  onFacetByChange(columnName: string): void {
+    this.facetByVarName = columnName;
+    const facetByCol = columnName ? this.columns().find(c => c.name === columnName) : undefined;
+    this.service.setFacetByVariable(facetByCol);
   }
 
   setOutputMode(mode: OutputMode): void {
     this.service.setOutputMode(mode);
   }
 
+  setGraphMode(mode: GraphMode): void {
+    this.service.setGraphMode(mode);
+    // Clear inappropriate selections when changing mode
+    const config = this.service.modeConfig();
+    if (!config.allowMultipleAnalyze && this.analyzeVarNames.length > 1) {
+      // Keep only first analyze variable
+      this.analyzeVarNames = [this.analyzeVarNames[0]];
+      this.onAnalyzeVarsChange(this.analyzeVarNames);
+    }
+    if (!config.showGroupBy) {
+      this.groupByVarName = '';
+      this.onGroupByChange('');
+    }
+    if (!config.showFacetBy) {
+      this.facetByVarName = '';
+      this.onFacetByChange('');
+    }
+  }
+
+  getAnalyzeLabel(): string {
+    if (this.service.outputMode() !== 'graph') {
+      return 'DESCRIBE.ANALYZE';
+    }
+    // Use mode-specific labels
+    return this.service.modeConfig().allowMultipleAnalyze 
+      ? 'DESCRIBE.FIRST_VARIABLES' 
+      : 'DESCRIBE.VARIABLE';
+  }
+
   getTypeBadgeClass(): string {
-    const combo = this.service.analysis().combination;
+    const combo = this.service.combination();
     switch (combo) {
       case 'single-numeric':
       case 'multi-numeric':
@@ -412,7 +561,7 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   }
 
   getTypeLabelKey(): string {
-    const combo = this.service.analysis().combination;
+    const combo = this.service.combination();
     switch (combo) {
       case 'single-numeric': return 'DESCRIBE.TYPE_NUMERIC';
       case 'single-categorical': return 'DESCRIBE.TYPE_CATEGORICAL';

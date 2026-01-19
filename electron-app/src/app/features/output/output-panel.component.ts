@@ -40,6 +40,35 @@ import { OutputEntry } from '../../core/models/r.model';
         </div>
       </div>
 
+      <!-- Maximized Plot Modal -->
+      @if (maximizedPlotUrl()) {
+        <dialog class="modal modal-open" (click)="closeMaximizedPlot()">
+          <div class="modal-box max-w-[95vw] max-h-[95vh] w-auto p-2 bg-base-100" (click)="$event.stopPropagation()">
+            <div class="flex justify-end gap-2 mb-2">
+              <button 
+                class="btn btn-ghost btn-sm"
+                (click)="exportMaximizedPlot()"
+                [title]="'OUTPUT.SAVE_PNG' | translate"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {{ 'OUTPUT.SAVE_PNG' | translate }}
+              </button>
+              <button class="btn btn-ghost btn-sm btn-circle" (click)="closeMaximizedPlot()">✕</button>
+            </div>
+            <img 
+              [src]="maximizedPlotUrl()" 
+              alt="Maximized plot"
+              class="max-w-full max-h-[85vh] object-contain mx-auto"
+            />
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button (click)="closeMaximizedPlot()">close</button>
+          </form>
+        </dialog>
+      }
+
       <!-- Output Content -->
       <div class="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         @if (entries().length === 0) {
@@ -86,18 +115,30 @@ import { OutputEntry } from '../../core/models/r.model';
                       <img 
                         [src]="entry.result.result?.dataUrl || entry.result.result?.path" 
                         [alt]="'OUTPUT.PLOT_ALT' | translate"
-                        class="max-w-full rounded-lg shadow-lg"
+                        class="max-w-full rounded-lg shadow-lg cursor-pointer"
                         loading="lazy"
+                        (click)="maximizePlot(entry)"
                       />
-                      <button 
-                        class="btn btn-ghost btn-xs absolute top-2 right-2 bg-base-100/80 opacity-70 hover:opacity-100"
-                        (click)="exportPlot(entry)"
-                        [title]="'OUTPUT.SAVE_PNG' | translate"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                      </button>
+                      <div class="absolute top-2 right-2 flex gap-1">
+                        <button 
+                          class="btn btn-ghost btn-xs bg-base-100/80 opacity-70 hover:opacity-100"
+                          (click)="maximizePlot(entry)"
+                          [title]="'OUTPUT.MAXIMIZE' | translate"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          </svg>
+                        </button>
+                        <button 
+                          class="btn btn-ghost btn-xs bg-base-100/80 opacity-70 hover:opacity-100"
+                          (click)="exportPlot(entry)"
+                          [title]="'OUTPUT.SAVE_PNG' | translate"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   }
                   @case ('dataframe') {
@@ -173,6 +214,8 @@ export class OutputPanelComponent implements OnInit, OnDestroy {
 
   entries = signal<OutputEntry[]>([]);
   showCode = signal(true);
+  maximizedPlotUrl = signal<string | null>(null);
+  private maximizedEntry: OutputEntry | null = null;
 
   ngOnInit(): void {
     this.subscription = this.rService.output$.subscribe(entries => {
@@ -190,6 +233,25 @@ export class OutputPanelComponent implements OnInit, OnDestroy {
 
   clearOutput(): void {
     this.rService.clearHistory();
+  }
+
+  maximizePlot(entry: OutputEntry): void {
+    const url = entry.result.result?.dataUrl || entry.result.result?.path;
+    if (url) {
+      this.maximizedPlotUrl.set(url);
+      this.maximizedEntry = entry;
+    }
+  }
+
+  closeMaximizedPlot(): void {
+    this.maximizedPlotUrl.set(null);
+    this.maximizedEntry = null;
+  }
+
+  async exportMaximizedPlot(): Promise<void> {
+    if (this.maximizedEntry) {
+      await this.exportPlot(this.maximizedEntry);
+    }
   }
 
   formatTextOutput(value: unknown): string {

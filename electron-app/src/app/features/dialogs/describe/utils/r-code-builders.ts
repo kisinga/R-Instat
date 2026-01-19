@@ -117,18 +117,53 @@ interface AxisMapping {
   y: string;
 }
 
-/** Resolve x/y axes for numeric-by-categorical patterns */
+/**
+ * Resolve x/y axes from explicit column order.
+ * 
+ * The columns array follows explicit role assignment:
+ * - columns[0]: Primary variable (Analyze) - typically Y-axis
+ * - columns[1]: Grouping variable (GroupBy) - typically X-axis
+ * 
+ * This replaces the old type-inferring approach with explicit user intent.
+ */
+function resolveAxesFromColumns(columns: string[], graphType: GraphType): AxisMapping {
+  const primaryVar = columns[0];
+  const groupingVar = columns.length > 1 ? columns[1] : undefined;
+  
+  // Distribution graphs: primary variable on X-axis
+  if (['histogram', 'density', 'bar-chart', 'pie-chart'].includes(graphType)) {
+    return { x: primaryVar, y: 'count' };
+  }
+  
+  // Scatter/line: if no grouping, use columns[0] as Y, columns[1] as X
+  // If we have explicit grouping, use it as X
+  if (['scatter', 'line'].includes(graphType)) {
+    if (columns.length >= 2) {
+      return { x: groupingVar!, y: primaryVar };
+    }
+    return { x: undefined, y: primaryVar };
+  }
+  
+  // Comparison graphs (boxplot, violin, jitter, etc.): grouping on X, primary on Y
+  return { x: groupingVar, y: primaryVar };
+}
+
+/**
+ * Legacy axis resolution for backward compatibility.
+ * @deprecated Use resolveAxesFromColumns with explicit column order instead.
+ */
 function resolveNumCatAxes(columns: string[], analysis: VariableAnalysis): AxisMapping {
   if (analysis.combination === 'single-numeric') {
     return { x: undefined, y: columns[0] };
   }
 
-  const numericCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'numeric');
-  const catCol = analysis.selectedColumns.find((_, i) => analysis.types[i] === 'categorical');
+  // Use column order: first = primary (Y), second = grouping (X)
+  const primaryVar = columns[0];
+  const groupingVar = columns.length > 1 ? columns[1] : undefined;
 
   return {
-    x: catCol?.name,
-    y: numericCol?.name ?? columns[0],
+    x: groupingVar,
+    y: primaryVar,
   };
 }
 
@@ -140,8 +175,25 @@ type GraphBuildContext = DescribeOptions & GraphOptions & { analysis: VariableAn
 
 function buildHistogram(ctx: GraphBuildContext): string {
   const { dataframe, columns, bins = 30, alpha = 0.8, fillBy, facetBy, title, xLabel } = ctx;
-  const col = columns[0];
+  
+  // Multi-column: pivot to long format and facet by variable name
+  if (columns.length > 1) {
+    const colsVec = rVec(columns, true);
+    const pivotPipe = rPipe(
+      rDf(dataframe),
+      `tidyr::pivot_longer(cols = ${colsVec}, names_to = "variable", values_to = "value")`
+    );
+    return rPlus(
+      `${pivotPipe} %>%\n  ggplot(aes(x = value, fill = variable))`,
+      `geom_histogram(bins = ${bins}, alpha = ${alpha}, color = "white")`,
+      'facet_wrap(~ variable, scales = "free")',
+      ggTheme(),
+      ggLabs({ title: title ?? 'Histograms', x: xLabel ?? 'Value', y: 'Count' })
+    );
+  }
 
+  // Single column: original behavior
+  const col = columns[0];
   return rPlus(
     ggBase(dataframe, ggAes({ x: col, fill: fillBy })),
     `geom_histogram(bins = ${bins}, alpha = ${alpha}, color = "white")`,
@@ -153,8 +205,25 @@ function buildHistogram(ctx: GraphBuildContext): string {
 
 function buildDensity(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.6, colorBy, fillBy, facetBy, title, xLabel } = ctx;
-  const col = columns[0];
+  
+  // Multi-column: pivot to long format and facet by variable name
+  if (columns.length > 1) {
+    const colsVec = rVec(columns, true);
+    const pivotPipe = rPipe(
+      rDf(dataframe),
+      `tidyr::pivot_longer(cols = ${colsVec}, names_to = "variable", values_to = "value")`
+    );
+    return rPlus(
+      `${pivotPipe} %>%\n  ggplot(aes(x = value, fill = variable, color = variable))`,
+      `geom_density(alpha = ${alpha})`,
+      'facet_wrap(~ variable, scales = "free")',
+      ggTheme(),
+      ggLabs({ title: title ?? 'Density Plots', x: xLabel ?? 'Value', y: 'Density' })
+    );
+  }
 
+  // Single column: original behavior
+  const col = columns[0];
   return rPlus(
     ggBase(dataframe, ggAes({ x: col, color: colorBy, fill: fillBy })),
     `geom_density(alpha = ${alpha})`,
@@ -166,8 +235,25 @@ function buildDensity(ctx: GraphBuildContext): string {
 
 function buildBoxplot(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title, analysis } = ctx;
-  const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
+  
+  // Multi-column with all numeric: pivot to long format and facet
+  if (columns.length > 1 && analysis.combination === 'multi-numeric') {
+    const colsVec = rVec(columns, true);
+    const pivotPipe = rPipe(
+      rDf(dataframe),
+      `tidyr::pivot_longer(cols = ${colsVec}, names_to = "variable", values_to = "value")`
+    );
+    return rPlus(
+      `${pivotPipe} %>%\n  ggplot(aes(x = variable, y = value, fill = variable))`,
+      `geom_boxplot(alpha = ${alpha})`,
+      ggFlip(flipCoords),
+      ggTheme(),
+      ggLabs({ title: title ?? 'Boxplots', x: 'Variable', y: 'Value' })
+    );
+  }
 
+  // Single column or numeric-by-categorical: original behavior
+  const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
   return rPlus(
     ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
     `geom_boxplot(alpha = ${alpha})`,
@@ -180,6 +266,24 @@ function buildBoxplot(ctx: GraphBuildContext): string {
 
 function buildViolin(ctx: GraphBuildContext): string {
   const { dataframe, columns, alpha = 0.8, fillBy, facetBy, flipCoords, title, analysis } = ctx;
+  
+  // Multi-column with all numeric: pivot to long format
+  if (columns.length > 1 && analysis.combination === 'multi-numeric') {
+    const colsVec = rVec(columns, true);
+    const pivotPipe = rPipe(
+      rDf(dataframe),
+      `tidyr::pivot_longer(cols = ${colsVec}, names_to = "variable", values_to = "value")`
+    );
+    return rPlus(
+      `${pivotPipe} %>%\n  ggplot(aes(x = variable, y = value, fill = variable))`,
+      `geom_violin(alpha = ${alpha})`,
+      ggFlip(flipCoords),
+      ggTheme(),
+      ggLabs({ title: title ?? 'Violin Plots', x: 'Variable', y: 'Value' })
+    );
+  }
+
+  // Single column or numeric-by-categorical: original behavior
   let { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
 
   // Violin needs an x grouping; use placeholder if single numeric
@@ -245,7 +349,9 @@ function buildScatter(ctx: GraphBuildContext): string {
     return '# Select two numeric variables for scatter plot';
   }
 
-  const [xVar, yVar] = columns;
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns[1];
 
   return rPlus(
     ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy })),
@@ -270,16 +376,19 @@ function buildScatterMatrix(ctx: GraphBuildContext): string {
 }
 
 function buildJitter(ctx: GraphBuildContext): string {
-  const { dataframe, columns, alpha = 0.5, colorBy, facetBy, flipCoords, title, analysis } = ctx;
-  const { x: xVar, y: yVar } = resolveNumCatAxes(columns, analysis);
+  const { dataframe, columns, alpha = 0.5, colorBy, facetBy, flipCoords, title } = ctx;
+  
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns.length > 1 ? columns[1] : '"all"';
 
   return rPlus(
-    ggBase(dataframe, ggAes({ x: xVar ?? columns[1], y: yVar, color: colorBy ?? xVar })),
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy ?? xVar })),
     `geom_jitter(width = 0.2, alpha = ${alpha})`,
     ggFacet(facetBy),
     ggFlip(flipCoords),
     ggTheme(),
-    ggLabs({ title: title ?? `${yVar} by ${xVar ?? columns[1]}` })
+    ggLabs({ title: title ?? `${yVar} by ${xVar}` })
   );
 }
 
@@ -290,13 +399,15 @@ function buildMosaic(ctx: GraphBuildContext): string {
     return '# Select two categorical variables for mosaic plot';
   }
 
-  const [var1, var2] = columns;
+  // Explicit role pattern: columns[0] = primary, columns[1] = grouping
+  const primaryVar = columns[0];
+  const groupingVar = columns[1];
 
   return rPlus(
     `ggplot(${rDf(dataframe)})`,
-    `ggmosaic::geom_mosaic(aes(x = ggmosaic::product(${var2}, ${var1}), fill = ${var2}))`,
+    `ggmosaic::geom_mosaic(aes(x = ggmosaic::product(${groupingVar}, ${primaryVar}), fill = ${groupingVar}))`,
     ggTheme(),
-    ggLabs({ title: title ?? `${var1} by ${var2}` })
+    ggLabs({ title: title ?? `${primaryVar} by ${groupingVar}` })
   );
 }
 
@@ -323,26 +434,175 @@ function buildCorrelationHeatmap(ctx: GraphBuildContext): string {
 }
 
 // ============================================================================
+// Composite Graph Builders
+// ============================================================================
+
+/**
+ * Boxplot with jittered data points overlay.
+ * Shows distribution summary (boxplot) with individual observations (jitter).
+ */
+function buildBoxplotJitter(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.4, fillBy, facetBy, flipCoords, title } = ctx;
+  
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns.length > 1 ? columns[1] : '"all"';
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
+    'geom_boxplot(outlier.shape = NA, alpha = 0.7)',
+    `geom_jitter(width = 0.2, alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} by ${xVar}` })
+  );
+}
+
+/**
+ * Violin plot with boxplot inside.
+ * Shows density shape (violin) with quartile summary (boxplot).
+ */
+function buildViolinBoxplot(ctx: GraphBuildContext): string {
+  const { dataframe, columns, fillBy, facetBy, flipCoords, title } = ctx;
+  
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns.length > 1 ? columns[1] : '"all"';
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
+    'geom_violin(alpha = 0.7)',
+    'geom_boxplot(width = 0.1, fill = "white", alpha = 0.8)',
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} by ${xVar}` })
+  );
+}
+
+/**
+ * Violin plot with jittered data points.
+ * Shows density shape (violin) with individual observations (jitter).
+ */
+function buildViolinJitter(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.4, fillBy, facetBy, flipCoords, title } = ctx;
+  
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns.length > 1 ? columns[1] : '"all"';
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, fill: fillBy ?? xVar })),
+    'geom_violin(alpha = 0.7)',
+    `geom_jitter(width = 0.15, alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} by ${xVar}` })
+  );
+}
+
+/**
+ * Summary plot with mean crossbar and error bars.
+ * Shows group means with standard error bars.
+ */
+function buildSummaryPlot(ctx: GraphBuildContext): string {
+  const { dataframe, columns, colorBy, facetBy, flipCoords, title } = ctx;
+  
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns.length > 1 ? columns[1] : '"all"';
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy ?? xVar })),
+    'stat_summary(fun = mean, geom = "crossbar", width = 0.5, linewidth = 0.8)',
+    'stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2)',
+    ggFacet(facetBy),
+    ggFlip(flipCoords),
+    ggTheme(),
+    ggLabs({ title: title ?? `Mean of ${yVar} by ${xVar}` })
+  );
+}
+
+/**
+ * Line plot connecting data points.
+ * Shows trend over ordered variable.
+ */
+function buildLinePlot(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.8, colorBy, facetBy, title, xLabel, yLabel } = ctx;
+
+  if (columns.length < 2) {
+    return '# Select two variables for line plot';
+  }
+
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns[1];
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy, group: colorBy ?? '1' })),
+    `geom_line(alpha = ${alpha})`,
+    ggFacet(facetBy),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} over ${xVar}`, x: xLabel ?? xVar, y: yLabel ?? yVar })
+  );
+}
+
+/**
+ * Line plot with data points.
+ * Shows trend with individual observations.
+ */
+function buildLinePoints(ctx: GraphBuildContext): string {
+  const { dataframe, columns, alpha = 0.8, colorBy, facetBy, title, xLabel, yLabel } = ctx;
+
+  if (columns.length < 2) {
+    return '# Select two variables for line plot';
+  }
+
+  // Explicit role pattern: columns[0] = primary (Y), columns[1] = grouping (X)
+  const yVar = columns[0];
+  const xVar = columns[1];
+
+  return rPlus(
+    ggBase(dataframe, ggAes({ x: xVar, y: yVar, color: colorBy, group: colorBy ?? '1' })),
+    `geom_line(alpha = ${alpha})`,
+    'geom_point(size = 2)',
+    ggFacet(facetBy),
+    ggTheme(),
+    ggLabs({ title: title ?? `${yVar} over ${xVar}`, x: xLabel ?? xVar, y: yLabel ?? yVar })
+  );
+}
+
+// ============================================================================
 // Graph Builder Registry
 // ============================================================================
 
 type GraphBuilder = (ctx: GraphBuildContext) => string;
 
 const GRAPH_BUILDERS: Record<GraphType, GraphBuilder> = {
+  // Single variable
   histogram: buildHistogram,
   density: buildDensity,
   boxplot: buildBoxplot,
   violin: buildViolin,
   'bar-chart': buildBarChart,
   'pie-chart': buildPieChart,
+  // Two variable
   scatter: buildScatter,
-  line: buildScatter, // Line uses same logic as scatter
+  line: buildLinePlot,
   'scatter-matrix': buildScatterMatrix,
   jitter: buildJitter,
   mosaic: buildMosaic,
   'stacked-bar': (ctx) => buildBarChart({ ...ctx, position: 'stack' }),
   'grouped-bar': (ctx) => buildBarChart({ ...ctx, position: 'dodge' }),
-  'summary-plot': buildBoxplot, // Summary plot extends boxplot
+  // Composite graphs
+  'boxplot-jitter': buildBoxplotJitter,
+  'violin-boxplot': buildViolinBoxplot,
+  'violin-jitter': buildViolinJitter,
+  'summary-plot': buildSummaryPlot,
+  'line-points': buildLinePoints,
+  // Multi-variable
   'correlation-heatmap': buildCorrelationHeatmap,
 };
 

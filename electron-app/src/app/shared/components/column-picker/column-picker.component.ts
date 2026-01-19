@@ -73,11 +73,12 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
   `,
   styles: [`
     .column-picker {
-      @apply w-full;
+      @apply w-full min-w-0;
     }
 
     .column-list {
-      @apply border border-base-300 rounded-lg max-h-48 overflow-y-auto;
+      @apply border border-base-300 rounded-lg max-h-48 overflow-y-auto overflow-x-auto;
+      min-width: 280px;
     }
 
     .column-list.multi {
@@ -86,6 +87,7 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
 
     .column-item {
       @apply flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors border-b border-base-300 last:border-b-0;
+      min-width: max-content;
     }
 
     .column-item.selected {
@@ -93,15 +95,16 @@ import { ColumnInfo, mapRTypeToCategory, getColumnTypeIcon } from '../../../core
     }
 
     .column-type {
-      @apply text-xs font-mono w-5 text-center;
+      @apply text-xs font-mono w-5 text-center flex-shrink-0;
     }
 
     .column-name {
-      @apply flex-1 text-sm truncate;
+      @apply text-sm whitespace-nowrap;
+      flex: 0 0 auto;
     }
 
     .column-type-label {
-      @apply text-xs text-base-content/50;
+      @apply text-xs text-base-content/50 flex-shrink-0 ml-auto;
     }
   `]
 })

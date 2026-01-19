@@ -17,7 +17,8 @@ export type RCommandType =
   | 'list_package_datasets'
   | 'load_package_dataset'
   | 'list_instat_collection'
-  | 'load_instat_collection_dataset';
+  | 'load_instat_collection_dataset'
+  | 'import_file';
 
 /**
  * Base command interface (without id, which is added by sendCommand)

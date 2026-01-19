@@ -39,6 +39,11 @@ export type GraphType =
   | 'mosaic'
   | 'stacked-bar'
   | 'grouped-bar'
+  // Composite graphs (multiple geoms)
+  | 'boxplot-jitter'
+  | 'violin-boxplot'
+  | 'violin-jitter'
+  | 'line-points'
   // Multi-variable
   | 'scatter-matrix'
   | 'correlation-heatmap';
@@ -72,6 +77,79 @@ export interface VariableAnalysis {
   supportsFrequency: boolean;
   /** Default graph type for this combination */
   defaultGraph: GraphType | null;
+}
+
+// ============================================================================
+// Graph Mode Configuration
+// ============================================================================
+
+/** Graph mode for Describe dialog */
+export type GraphMode = 'distribution' | 'comparison' | 'faceted';
+
+/** Configuration for each graph mode */
+export interface GraphModeConfig {
+  /** Display label for UI */
+  label: string;
+  /** Subtitle hint describing the mode */
+  hint: string;
+  /** Graph types available in this mode */
+  allowedGraphs: GraphType[];
+  /** Whether multiple analyze variables are allowed */
+  allowMultipleAnalyze: boolean;
+  /** Whether to show Group By field */
+  showGroupBy: boolean;
+  /** Whether to show Facet By field */
+  showFacetBy: boolean;
+}
+
+/** All graph types for faceted mode (all support faceting) */
+const ALL_GRAPH_TYPES: GraphType[] = [
+  'histogram', 'density', 'boxplot', 'violin', 'bar-chart', 'pie-chart',
+  'scatter', 'line', 'jitter', 'summary-plot', 'mosaic', 'stacked-bar', 'grouped-bar',
+  'boxplot-jitter', 'violin-boxplot', 'violin-jitter', 'line-points',
+  'scatter-matrix', 'correlation-heatmap'
+];
+
+/** Graph mode configurations - single source of truth for mode behavior */
+export const GRAPH_MODE_CONFIGS: Record<GraphMode, GraphModeConfig> = {
+  distribution: {
+    label: 'Distribution',
+    hint: 'Explore one variable\'s shape and spread',
+    allowedGraphs: ['histogram', 'density', 'boxplot', 'violin', 'bar-chart', 'pie-chart'],
+    allowMultipleAnalyze: false,
+    showGroupBy: false,
+    showFacetBy: false,
+  },
+  comparison: {
+    label: 'Comparison',
+    hint: 'Compare variable(s) against a grouping factor',
+    allowedGraphs: [
+      'scatter', 'line', 'line-points', 'boxplot', 'violin', 'jitter',
+      'boxplot-jitter', 'violin-boxplot', 'violin-jitter', 'summary-plot',
+      'scatter-matrix', 'correlation-heatmap', 'stacked-bar', 'grouped-bar', 'mosaic',
+      'histogram', 'density' // For faceted single-var with multiple analyze vars
+    ],
+    allowMultipleAnalyze: true,
+    showGroupBy: true,
+    showFacetBy: false,
+  },
+  faceted: {
+    label: 'Faceted',
+    hint: 'Split into panels by a third variable',
+    allowedGraphs: ALL_GRAPH_TYPES,
+    allowMultipleAnalyze: true,
+    showGroupBy: true,
+    showFacetBy: true,
+  },
+};
+
+/**
+ * Filter graphs by mode - returns only graphs allowed in the given mode.
+ * Pure function for testability.
+ */
+export function filterGraphsByMode(graphs: GraphType[], mode: GraphMode): GraphType[] {
+  const allowed = GRAPH_MODE_CONFIGS[mode].allowedGraphs;
+  return graphs.filter(g => allowed.includes(g));
 }
 
 /** All available graph configurations */
@@ -172,6 +250,35 @@ export const GRAPH_CONFIGS: Record<GraphType, GraphConfig> = {
     requiresNumeric: false,
     requiresCategorical: true,
   },
+  // Composite graphs (multiple geoms)
+  'boxplot-jitter': {
+    type: 'boxplot-jitter',
+    label: 'Boxplot + Points',
+    description: 'Boxplot with jittered data points overlay',
+    requiresNumeric: true,
+    requiresCategorical: false,
+  },
+  'violin-boxplot': {
+    type: 'violin-boxplot',
+    label: 'Violin + Boxplot',
+    description: 'Violin plot with boxplot inside',
+    requiresNumeric: true,
+    requiresCategorical: false,
+  },
+  'violin-jitter': {
+    type: 'violin-jitter',
+    label: 'Violin + Points',
+    description: 'Violin plot with jittered data points',
+    requiresNumeric: true,
+    requiresCategorical: false,
+  },
+  'line-points': {
+    type: 'line-points',
+    label: 'Line + Points',
+    description: 'Line plot with data points',
+    requiresNumeric: true,
+    requiresCategorical: false,
+  },
   // Multi-variable
   'scatter-matrix': {
     type: 'scatter-matrix',
@@ -246,17 +353,26 @@ export function getRecommendedGraphs(combination: VariableCombination): GraphTyp
     case 'single-categorical':
       return ['bar-chart', 'pie-chart'];
     case 'multi-numeric':
-      return ['scatter', 'scatter-matrix', 'correlation-heatmap', 'line'];
+      // Include single-var graphs (histogram, etc.) which will be faceted per variable
+      return [
+        'histogram', 'density', 'boxplot', 'violin',  // Faceted single-var graphs
+        'scatter', 'line', 'line-points', 'scatter-matrix', 'correlation-heatmap'
+      ];
     case 'multi-categorical':
       return ['stacked-bar', 'grouped-bar', 'mosaic'];
     case 'numeric-by-categorical':
     case 'categorical-by-numeric':
-      return ['boxplot', 'violin', 'jitter', 'summary-plot', 'histogram', 'density'];
+      // Include composite graphs for richer visualization options
+      return [
+        'boxplot', 'violin', 'jitter', 
+        'boxplot-jitter', 'violin-boxplot', 'violin-jitter',
+        'summary-plot', 'histogram', 'density'
+      ];
     case 'categorical-by-categorical':
       return ['stacked-bar', 'grouped-bar', 'mosaic'];
     case 'mixed':
-      // For mixed, offer the most versatile options
-      return ['boxplot', 'scatter', 'bar-chart'];
+      // For mixed types, scatter-matrix (ggpairs) handles this well
+      return ['scatter-matrix', 'boxplot', 'scatter', 'bar-chart'];
   }
 }
 

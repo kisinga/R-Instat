@@ -133,23 +133,6 @@ import { GraphType, GRAPH_CONFIGS } from '../utils/variable-type-analyzer';
             <span class="text-xs text-base-content/60">{{ (service.graphOptions().alpha || 0.8) * 100 | number:'1.0-0' }}%</span>
           </div>
 
-          <!-- Facet By (optional grouping) -->
-          @if (factorColumns.length > 0) {
-            <div class="form-group">
-              <label class="form-label">Facet By (optional)</label>
-              <select 
-                class="select select-bordered select-sm w-full"
-                [ngModel]="service.graphOptions().facetBy || ''"
-                (ngModelChange)="updateOption('facetBy', $event || undefined)"
-              >
-                <option value="">No faceting</option>
-                @for (col of factorColumns; track col.name) {
-                  <option [value]="col.name">{{ col.name }}</option>
-                }
-              </select>
-            </div>
-          }
-
           <!-- Color By (optional) -->
           @if (factorColumns.length > 0 && supportsColor()) {
             <div class="form-group">
@@ -274,6 +257,11 @@ export class GraphPanelComponent {
       'grouped-bar': '▥',
       'scatter-matrix': '⊞',
       'correlation-heatmap': '🔥',
+      // Composite graphs
+      'boxplot-jitter': '📦⋮',
+      'violin-boxplot': '🎻📦',
+      'violin-jitter': '🎻⋮',
+      'line-points': '📈⚬',
     };
     return icons[type] || '📊';
   }
@@ -294,7 +282,7 @@ export class GraphPanelComponent {
 
   supportsColor(): boolean {
     const type = this.service.graphType();
-    return ['scatter', 'line', 'jitter', 'density'].includes(type || '');
+    return ['scatter', 'scatter-matrix', 'line', 'line-points', 'jitter', 'density', 'boxplot-jitter', 'violin-jitter'].includes(type || '');
   }
 
   isBarChart(): boolean {

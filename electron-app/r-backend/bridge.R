@@ -8,7 +8,7 @@
 # Package Check and Healthcheck System
 # ============================================================================
 
-required_packages <- c("jsonlite", "dplyr", "tidyr", "ggplot2", "sjPlot", "sjmisc", "skimr")
+required_packages <- c("jsonlite", "dplyr", "tidyr", "ggplot2", "GGally", "sjPlot", "sjmisc", "skimr")
 
 # Check for missing packages BEFORE loading
 missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
@@ -111,6 +111,7 @@ tryCatch({
     library(dplyr)
     library(tidyr)
     library(ggplot2)
+    library(GGally)
     library(sjPlot)
     library(sjmisc)
     library(skimr)
@@ -205,10 +206,14 @@ handle_execute <- function(cmd) {
     result <- eval(parse(text = cmd$code))
     
     # Determine result type and format response
-    if (inherits(result, "ggplot") || inherits(result, "gg")) {
+    # Check for ggplot, gg, or ggmatrix (from GGally::ggpairs)
+    is_plot <- inherits(result, "ggplot") || inherits(result, "gg") || inherits(result, "ggmatrix")
+    
+    if (is_plot) {
       # Save plot to temp file and encode as base64
       tmp_file <- tempfile(fileext = ".png")
-      # Suppress ggsave message output as well
+      # For ggmatrix objects, we need to use print() to render, then ggsave
+      # ggsave works with ggmatrix in recent GGally versions
       suppressMessages(ggplot2::ggsave(tmp_file, result, width = 10, height = 7, dpi = 150))
       
       # Read file as raw bytes and encode as base64 data URL

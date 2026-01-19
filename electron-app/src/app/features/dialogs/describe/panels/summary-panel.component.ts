@@ -87,8 +87,8 @@ interface StatisticOption {
             <label class="form-label">Group By (optional)</label>
             <select 
               class="select select-bordered select-sm w-full"
-              [ngModel]="service.groupBy()"
-              (ngModelChange)="service.setGroupBy($event)"
+              [ngModel]="service.summaryGroupBy()"
+              (ngModelChange)="service.setSummaryGroupBy($event)"
             >
               <option value="">No grouping</option>
               @for (col of factorColumns; track col.name) {
