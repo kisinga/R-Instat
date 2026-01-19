@@ -43,22 +43,26 @@ import { FrequencyPanelComponent } from './panels/frequency-panel.component';
       <div class="dialog-body">
         <!-- Left Column: Data Selection -->
         <div class="data-selection">
-          <!-- Graph Mode Selector -->
-          @if (service.outputMode() === 'graph') {
-            <div class="form-group">
-              <label class="form-label">{{ 'DESCRIBE.GRAPH_MODE' | translate }}</label>
-              <select 
-                class="select select-bordered w-full select-sm"
-                [ngModel]="service.graphMode()"
-                (ngModelChange)="setGraphMode($event)"
-              >
-                <option value="distribution">{{ 'DESCRIBE.MODE_DISTRIBUTION' | translate }}</option>
-                <option value="comparison">{{ 'DESCRIBE.MODE_COMPARISON' | translate }}</option>
-                <option value="faceted">{{ 'DESCRIBE.MODE_FACETED' | translate }}</option>
-              </select>
-              <p class="text-xs text-base-content/60 mt-1">{{ service.modeConfig().hint }}</p>
-            </div>
-          }
+          <!-- Analysis Type Selector (affects both Graph and Frequency modes) -->
+          <div class="form-group">
+            <label class="form-label">{{ 'DESCRIBE.GRAPH_MODE' | translate }}</label>
+            <select 
+              class="select select-bordered w-full select-sm"
+              [ngModel]="service.graphMode()"
+              (ngModelChange)="setGraphMode($event)"
+            >
+              <option value="distribution">{{ 'DESCRIBE.MODE_DISTRIBUTION' | translate }}</option>
+              <option value="comparison">{{ 'DESCRIBE.MODE_COMPARISON' | translate }}</option>
+              <option value="faceted">{{ 'DESCRIBE.MODE_FACETED' | translate }}</option>
+            </select>
+            <p class="text-xs text-base-content/60 mt-1">
+              @if (service.outputMode() === 'graph') {
+                {{ service.modeConfig().hint }}
+              } @else {
+                {{ 'DESCRIBE.ANALYSIS_TYPE_HINT' | translate }}
+              }
+            </p>
+          </div>
 
           <!-- Dataframe Selection -->
           <div class="form-group">
@@ -516,10 +520,8 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   }
 
   getAnalyzeLabel(): string {
-    if (this.service.outputMode() !== 'graph') {
-      return 'DESCRIBE.ANALYZE';
-    }
-    // Use mode-specific labels
+    // Use mode-specific labels for both Graph and Frequency modes
+    // Frequency tables also benefit from Distribution/Comparison/Faceted concepts
     return this.service.modeConfig().allowMultipleAnalyze 
       ? 'DESCRIBE.FIRST_VARIABLES' 
       : 'DESCRIBE.VARIABLE';

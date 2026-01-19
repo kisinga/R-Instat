@@ -306,6 +306,7 @@
     "GRAPH": "Graph",
     "FREQUENCY": "Frequency",
     "GRAPH_MODE": "Analysis Type",
+    "ANALYSIS_TYPE_HINT": "Controls variable selection for both graphs and frequency tables",
     "MODE_DISTRIBUTION": "Distribution - One Variable",
     "MODE_DISTRIBUTION_HINT": "Explore one variable's shape and spread",
     "MODE_COMPARISON": "Comparison - By Group",
