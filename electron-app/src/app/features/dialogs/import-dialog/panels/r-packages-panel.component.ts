@@ -1,6 +1,5 @@
 import { Component, OnInit, Output, EventEmitter, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { RService } from '../../../../core/services/r.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
@@ -13,7 +12,7 @@ interface PackageDataset {
 @Component({
   selector: 'app-r-packages-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="sub-panel-content">
       <!-- Search -->
@@ -25,13 +24,14 @@ interface PackageDataset {
           <input
             type="text"
             class="input input-bordered input-sm w-full pl-9"
-            placeholder="Search datasets..."
-            [(ngModel)]="searchQuery"
+            placeholder="Search by package or dataset name..."
+            [value]="searchQuery()"
+            (input)="searchQuery.set($any($event.target).value)"
           />
-          @if (searchQuery) {
+          @if (searchQuery()) {
             <button 
               class="btn btn-ghost btn-xs btn-circle absolute right-2 top-1/2 -translate-y-1/2"
-              (click)="searchQuery = ''"
+              (click)="searchQuery.set('')"
             >✕</button>
           }
         </div>
@@ -60,7 +60,7 @@ interface PackageDataset {
           </div>
         } @else if (filteredDatasets().length === 0) {
           <div class="dataset-list-container flex flex-col items-center justify-center text-base-content/50">
-            <p class="text-sm">No matches for "{{ searchQuery }}"</p>
+            <p class="text-sm">No matches for "{{ searchQuery() }}"</p>
           </div>
         } @else {
           <div class="dataset-list-container overflow-y-auto">
@@ -170,12 +170,12 @@ export class RPackagesPanelComponent implements OnInit {
 
   datasets = signal<PackageDataset[]>([]);
   selectedDataset = signal<PackageDataset | null>(null);
-  searchQuery = '';
+  searchQuery = signal('');
   isLoadingList = signal(false);
   isLoading = signal(false);
 
   filteredDatasets = computed(() => {
-    const query = this.searchQuery.toLowerCase().trim();
+    const query = this.searchQuery().toLowerCase().trim();
     if (!query) {
       return this.datasets();
     }
