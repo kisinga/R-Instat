@@ -33,6 +33,14 @@ import { SeasonalSummaryDialogComponent } from './climatic/seasonal-summary/seas
 import { MissingReportDialogComponent } from './climatic/missing-report/missing-report-dialog.component';
 import { TemperatureSummaryDialogComponent } from './climatic/temperature-summary/temperature-summary-dialog.component';
 
+// High Priority dialogs
+import { ExportDialogComponent } from './export/export-dialog.component';
+import { MergeDialogComponent } from './merge/merge-dialog.component';
+import { StackDialogComponent } from './stack/stack-dialog.component';
+import { UnstackDialogComponent } from './unstack/unstack-dialog.component';
+import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component';
+import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
+
 // Dialog registry
 const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   'import': ImportDialogComponent,
@@ -64,6 +72,13 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
   'seasonal-summary': SeasonalSummaryDialogComponent,
   'missing-report': MissingReportDialogComponent,
   'temperature-summary': TemperatureSummaryDialogComponent,
+  // High Priority dialogs
+  'export': ExportDialogComponent,
+  'merge': MergeDialogComponent,
+  'stack': StackDialogComponent,
+  'unstack': UnstackDialogComponent,
+  'line-plot': LinePlotDialogComponent,
+  'dot-plot': DotPlotDialogComponent,
 };
 
 @Component({
@@ -98,6 +113,13 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
     SeasonalSummaryDialogComponent,
     MissingReportDialogComponent,
     TemperatureSummaryDialogComponent,
+    // High Priority dialogs
+    ExportDialogComponent,
+    MergeDialogComponent,
+    StackDialogComponent,
+    UnstackDialogComponent,
+    LinePlotDialogComponent,
+    DotPlotDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -186,6 +208,24 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
           }
           @case ('temperature-summary') {
             <app-temperature-summary-dialog (close)="closeDialog()" />
+          }
+          @case ('export') {
+            <app-export-dialog (close)="closeDialog()" />
+          }
+          @case ('merge') {
+            <app-merge-dialog (close)="closeDialog()" />
+          }
+          @case ('stack') {
+            <app-stack-dialog (close)="closeDialog()" />
+          }
+          @case ('unstack') {
+            <app-unstack-dialog (close)="closeDialog()" />
+          }
+          @case ('line-plot') {
+            <app-line-plot-dialog (close)="closeDialog()" />
+          }
+          @case ('dot-plot') {
+            <app-dot-plot-dialog (close)="closeDialog()" />
           }
         }
       </div>

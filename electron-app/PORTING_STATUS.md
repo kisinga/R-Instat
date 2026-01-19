@@ -3,8 +3,8 @@
 ## Executive Summary
 
 **Original R-Instat**: ~318 dialogs across 10+ menus (VB.NET + R backend)  
-**Electron POC**: 26 dialogs across 6 menus (Angular + Electron + R backend)  
-**Port Coverage**: ~8% of dialogs, covers core POC functionality + Climatic POC (10 dialogs)
+**Electron POC**: 32 dialogs across 6 menus (Angular + Electron + R backend)  
+**Port Coverage**: ~10% of dialogs, covers core POC + Climatic (10) + High Priority (6)
 
 ---
 
@@ -24,30 +24,36 @@
 
 | Menu | Items | Status |
 |------|-------|--------|
-| **File** | Import, Save | ✅ Basic |
-| **Data** | Filter, Sort, Calculate, Recode, Rename | ✅ Complete |
-| **Describe** | Describe (unified), Quick Summary, Quick Graph, Histogram, Boxplot, Scatter, Bar Chart | ✅ Core |
+| **File** | Import, Export | ✅ Complete |
+| **Data** | Filter, Sort, Calculate, Recode, Rename, Stack, Unstack, Merge | ✅ Complete |
+| **Describe** | Describe (unified), Quick Summary, Histogram, Boxplot, Scatter, Bar Chart, Line Plot, Dot Plot | ✅ Complete |
 | **Model** | Correlation, t-Test, Regression | ✅ Core |
 | **Domain Expert** | Define Climatic Data, Climatic Summary, Inventory Plot, Annual Rainfall, Extremes, Day Count, Spell Lengths, Seasonal Summary, Missing Report, Temperature Summary | ✅ Climatic Complete |
 | **View** | Native Electron | ✅ |
 | **Help** | About, Documentation link | ✅ Basic |
 
-### Dialogs Implemented (26 total)
+### Dialogs Implemented (32 total)
 
 | Dialog | Features | Complexity |
 |--------|----------|------------|
 | **Import** | File upload (CSV, Excel, RDS), R package datasets, Instat collection | Full |
+| **Export** | Export to CSV, Excel, RDS via rio::export | Basic |
 | **Filter** | Expression-based row filtering | Basic |
 | **Sort** | Single/multi-column sorting | Basic |
 | **Calculate** | New column from R expression | Basic |
 | **Recode** | Value replacement with conditions | Basic |
 | **Rename** | Column renaming | Basic |
+| **Stack** | Wide to long format using tidyr::pivot_longer | Medium |
+| **Unstack** | Long to wide format using tidyr::pivot_wider | Medium |
+| **Merge** | Join two dataframes with dplyr joins (full, left, right, inner, semi, anti) | Medium |
 | **Describe** | Unified dialog with Summary/Graph/Frequency tabs, variable type detection | Advanced |
 | **Summary** | Quick descriptive statistics | Basic |
 | **Histogram** | Single variable with bins control | Basic |
 | **Boxplot** | Variable by optional factor | Basic |
 | **Scatter** | X vs Y with optional grouping | Basic |
 | **Bar Chart** | Factor variable counts | Basic |
+| **Line Plot** | Time series/connected scatter with geom_line | Basic |
+| **Dot Plot** | Dot plot with geom_dotplot and stack direction | Basic |
 | **Correlation** | Pairwise correlation matrix | Basic |
 | **t-Test** | One-sample, two-sample, paired | Full |
 | **Regression** | Simple linear regression | Basic |
@@ -176,11 +182,11 @@ R packages management, Themes customization, Calculator
 
 ## Priority Recommendations for Next Phase
 
-### High Priority (Core Workflow)
-1. **Save/Export** - Essential for completing analysis workflow
-2. **Stack/Unstack** - Critical data restructuring
-3. **Merge** - Combining datasets
-4. **More Graphs** - Line plot, Dot plot at minimum
+### High Priority (Core Workflow) - COMPLETED
+1. ~~**Save/Export**~~ - ✅ Export dialog with CSV, Excel, RDS support
+2. ~~**Stack/Unstack**~~ - ✅ Stack (pivot_longer) and Unstack (pivot_wider) dialogs
+3. ~~**Merge**~~ - ✅ Merge dialog with all dplyr join types
+4. ~~**More Graphs**~~ - ✅ Line Plot and Dot Plot dialogs
 
 ### Medium Priority (Statistical Power)
 1. **Chi-square test** - Common categorical analysis
@@ -199,7 +205,7 @@ R packages management, Themes customization, Calculator
 
 | Area | Original | Electron POC |
 |------|----------|--------------|
-| Dialog files | 318 .vb | 26 components |
+| Dialog files | 318 .vb | 32 components |
 | R scripts | 86 .R | 1 bridge.R |
 | Forms/UI | 814 .resx | Angular templates |
 | Total VB files | 1051 | N/A |
@@ -207,4 +213,4 @@ R packages management, Themes customization, Calculator
 ---
 
 *Last updated: January 2026*  
-*Recent: Expanded Climatic menu to 10 dialogs with ClimaticDataService and DateConversionService*
+*Recent: Implemented all high-priority items (Export, Stack/Unstack, Merge, Line/Dot plots)*

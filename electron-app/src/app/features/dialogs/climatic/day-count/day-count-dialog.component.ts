@@ -42,17 +42,17 @@ import { buildDayCount, DayCountOptions } from '../utils/climatic-r-builders';
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [(selectedColumn)]="dateColumn" />
+            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.ELEMENT_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="elementColumn" />
+            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="elementColumn()" (selectedColumnChange)="elementColumn.set($event)" />
           </div>
         </div>
 
         <div class="form-group mt-4">
           <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-          <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="stationColumn" />
+          <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
         </div>
 
         <div class="grid grid-cols-2 gap-4 mt-4">
@@ -107,9 +107,10 @@ export class DayCountDialogComponent implements OnInit {
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   
-  dateColumn = '';
-  elementColumn = '';
-  stationColumn = '';
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  elementColumn = signal('');
+  stationColumn = signal('');
   operator: '>=' | '>' | '<=' | '<' = '>=';
   threshold = 1;
   
@@ -119,16 +120,16 @@ export class DayCountDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: DayCountOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      elementColumn: this.elementColumn,
-      stationColumn: this.stationColumn || undefined,
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn() || undefined,
       threshold: this.threshold,
       operator: this.operator,
     };
     return buildDayCount(opts);
   });
 
-  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn && this.elementColumn));
+  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn() && this.elementColumn()));
 
   async ngOnInit(): Promise<void> {
     const dfs = this.rService.dataframes();
@@ -149,18 +150,18 @@ export class DayCountDialogComponent implements OnInit {
     const df = this.selectedDataframe();
     if (!df) return;
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) this.dateColumn = roles.date;
-    if (roles.rain && !this.elementColumn) this.elementColumn = roles.rain;
-    if (roles.station && !this.stationColumn) this.stationColumn = roles.station;
+    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
+    if (roles.rain && !this.elementColumn()) this.elementColumn.set(roles.rain);
+    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = ''; this.elementColumn = ''; this.stationColumn = '';
+    this.dateColumn.set(''); this.elementColumn.set(''); this.stationColumn.set('');
     await this.loadColumns();
   }
 
-  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('date') || t.includes('posix') || t.includes('character'); }); }
+  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); const n = c.name.toLowerCase(); if (t.includes('date') || t.includes('posix')) return true; if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day'; return false; }); }
   getNumericColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('numeric') || t.includes('integer') || t.includes('double'); }); }
   getFactorColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('factor') || t.includes('character'); }); }
 

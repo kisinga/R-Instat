@@ -42,22 +42,22 @@ import { buildTemperatureSummary, TemperatureSummaryOptions } from '../utils/cli
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [(selectedColumn)]="dateColumn" />
+            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="stationColumn" />
+            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.TMAX_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="tmaxColumn" />
+            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="tmaxColumn()" (selectedColumnChange)="tmaxColumn.set($event)" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.TMIN_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="tminColumn" />
+            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="tminColumn()" (selectedColumnChange)="tminColumn.set($event)" />
           </div>
         </div>
 
@@ -111,10 +111,11 @@ export class TemperatureSummaryDialogComponent implements OnInit {
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   
-  dateColumn = '';
-  stationColumn = '';
-  tmaxColumn = '';
-  tminColumn = '';
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  stationColumn = signal('');
+  tmaxColumn = signal('');
+  tminColumn = signal('');
   level: 'annual' | 'monthly' = 'annual';
   
   isLoading = signal(false);
@@ -123,16 +124,16 @@ export class TemperatureSummaryDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: TemperatureSummaryOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      tmaxColumn: this.tmaxColumn || undefined,
-      tminColumn: this.tminColumn || undefined,
-      stationColumn: this.stationColumn || undefined,
+      dateColumn: this.dateColumn(),
+      tmaxColumn: this.tmaxColumn() || undefined,
+      tminColumn: this.tminColumn() || undefined,
+      stationColumn: this.stationColumn() || undefined,
       level: this.level,
     };
     return buildTemperatureSummary(opts);
   });
 
-  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn && (this.tmaxColumn || this.tminColumn)));
+  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn() && (this.tmaxColumn() || this.tminColumn())));
 
   async ngOnInit(): Promise<void> {
     const dfs = this.rService.dataframes();
@@ -153,19 +154,19 @@ export class TemperatureSummaryDialogComponent implements OnInit {
     const df = this.selectedDataframe();
     if (!df) return;
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) this.dateColumn = roles.date;
-    if (roles.station && !this.stationColumn) this.stationColumn = roles.station;
-    if (roles.tmax && !this.tmaxColumn) this.tmaxColumn = roles.tmax;
-    if (roles.tmin && !this.tminColumn) this.tminColumn = roles.tmin;
+    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
+    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
+    if (roles.tmax && !this.tmaxColumn()) this.tmaxColumn.set(roles.tmax);
+    if (roles.tmin && !this.tminColumn()) this.tminColumn.set(roles.tmin);
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = ''; this.stationColumn = ''; this.tmaxColumn = ''; this.tminColumn = '';
+    this.dateColumn.set(''); this.stationColumn.set(''); this.tmaxColumn.set(''); this.tminColumn.set('');
     await this.loadColumns();
   }
 
-  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('date') || t.includes('posix') || t.includes('character'); }); }
+  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); const n = c.name.toLowerCase(); if (t.includes('date') || t.includes('posix')) return true; if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day'; return false; }); }
   getNumericColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('numeric') || t.includes('integer') || t.includes('double'); }); }
   getFactorColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('factor') || t.includes('character'); }); }
 

@@ -150,12 +150,15 @@ export class ToolbarComponent {
       icon: '📂',
       items: [
         { labelKey: 'TOOLBAR.IMPORT', action: 'import', shortcut: 'Ctrl+I' },
-        { labelKey: 'TOOLBAR.SAVE', action: 'save', shortcut: 'Ctrl+S', dividerAfter: true },
+        { labelKey: 'TOOLBAR.EXPORT', action: 'export', dividerAfter: true },
         { labelKey: 'TOOLBAR.FILTER', action: 'filter' },
         { labelKey: 'TOOLBAR.SORT', action: 'sort', dividerAfter: true },
         { labelKey: 'TOOLBAR.CALCULATE', action: 'calculate' },
         { labelKey: 'TOOLBAR.RECODE', action: 'recode' },
-        { labelKey: 'TOOLBAR.RENAME', action: 'rename' },
+        { labelKey: 'TOOLBAR.RENAME', action: 'rename', dividerAfter: true },
+        { labelKey: 'TOOLBAR.STACK', action: 'stack' },
+        { labelKey: 'TOOLBAR.UNSTACK', action: 'unstack' },
+        { labelKey: 'TOOLBAR.MERGE', action: 'merge' },
       ]
     },
     {
@@ -174,6 +177,8 @@ export class ToolbarComponent {
         { labelKey: 'TOOLBAR.BOX_PLOT', action: 'boxplot' },
         { labelKey: 'TOOLBAR.SCATTER', action: 'scatter' },
         { labelKey: 'TOOLBAR.BAR_CHART', action: 'bar-chart' },
+        { labelKey: 'TOOLBAR.LINE_PLOT', action: 'line-plot' },
+        { labelKey: 'TOOLBAR.DOT_PLOT', action: 'dot-plot' },
       ]
     },
     {

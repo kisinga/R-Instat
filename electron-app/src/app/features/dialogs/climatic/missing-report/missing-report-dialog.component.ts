@@ -42,11 +42,11 @@ import { buildMissingReport, MissingReportOptions } from '../utils/climatic-r-bu
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [(selectedColumn)]="dateColumn" />
+            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="stationColumn" />
+            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
           </div>
         </div>
 
@@ -56,7 +56,7 @@ import { buildMissingReport, MissingReportOptions } from '../utils/climatic-r-bu
             @for (col of getNumericColumns(); track col.name) {
               <label class="cursor-pointer flex items-center gap-1.5 bg-base-200 px-2 py-1 rounded">
                 <input type="checkbox" class="checkbox checkbox-xs" 
-                  [checked]="elementColumns.includes(col.name)"
+                  [checked]="elementColumns().includes(col.name)"
                   (change)="toggleElement(col.name)" />
                 <span class="text-sm">{{ col.name }}</span>
               </label>
@@ -118,9 +118,10 @@ export class MissingReportDialogComponent implements OnInit {
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   
-  dateColumn = '';
-  stationColumn = '';
-  elementColumns: string[] = [];
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  stationColumn = signal('');
+  elementColumns = signal<string[]>([]);
   level: 'annual' | 'monthly' | 'overall' = 'annual';
   
   isLoading = signal(false);
@@ -129,15 +130,15 @@ export class MissingReportDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: MissingReportOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      elementColumns: this.elementColumns,
-      stationColumn: this.stationColumn || undefined,
+      dateColumn: this.dateColumn(),
+      elementColumns: this.elementColumns(),
+      stationColumn: this.stationColumn() || undefined,
       level: this.level,
     };
     return buildMissingReport(opts);
   });
 
-  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn && this.elementColumns.length > 0));
+  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn() && this.elementColumns().length > 0));
 
   async ngOnInit(): Promise<void> {
     const dfs = this.rService.dataframes();
@@ -158,27 +159,32 @@ export class MissingReportDialogComponent implements OnInit {
     const df = this.selectedDataframe();
     if (!df) return;
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) this.dateColumn = roles.date;
-    if (roles.station && !this.stationColumn) this.stationColumn = roles.station;
+    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
+    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
     // Auto-select rain, tmax, tmin if available
-    if (roles.rain && !this.elementColumns.includes(roles.rain)) this.elementColumns.push(roles.rain);
-    if (roles.tmax && !this.elementColumns.includes(roles.tmax)) this.elementColumns.push(roles.tmax);
-    if (roles.tmin && !this.elementColumns.includes(roles.tmin)) this.elementColumns.push(roles.tmin);
+    const cols = [...this.elementColumns()];
+    if (roles.rain && !cols.includes(roles.rain)) cols.push(roles.rain);
+    if (roles.tmax && !cols.includes(roles.tmax)) cols.push(roles.tmax);
+    if (roles.tmin && !cols.includes(roles.tmin)) cols.push(roles.tmin);
+    this.elementColumns.set(cols);
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = ''; this.stationColumn = ''; this.elementColumns = [];
+    this.dateColumn.set(''); this.stationColumn.set(''); this.elementColumns.set([]);
     await this.loadColumns();
   }
 
   toggleElement(colName: string): void {
-    const idx = this.elementColumns.indexOf(colName);
-    if (idx >= 0) { this.elementColumns.splice(idx, 1); }
-    else { this.elementColumns.push(colName); }
+    const cols = this.elementColumns();
+    if (cols.includes(colName)) {
+      this.elementColumns.set(cols.filter(c => c !== colName));
+    } else {
+      this.elementColumns.set([...cols, colName]);
+    }
   }
 
-  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('date') || t.includes('posix') || t.includes('character'); }); }
+  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); const n = c.name.toLowerCase(); if (t.includes('date') || t.includes('posix')) return true; if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day'; return false; }); }
   getNumericColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('numeric') || t.includes('integer') || t.includes('double'); }); }
   getFactorColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('factor') || t.includes('character'); }); }
 

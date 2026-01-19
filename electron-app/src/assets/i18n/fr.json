@@ -23,18 +23,24 @@
     "SELECT_DOMAIN": "Sélectionner un domaine...",
     "CHANGE_DOMAIN": "Changer de domaine...",
     "IMPORT": "Importer des données",
+    "EXPORT": "Exporter des données",
     "SAVE": "Enregistrer",
     "FILTER": "Filtrer",
     "SORT": "Trier",
     "CALCULATE": "Calculer",
     "RECODE": "Recoder",
     "RENAME": "Renommer une colonne",
+    "STACK": "Empiler",
+    "UNSTACK": "Dépiler",
+    "MERGE": "Fusionner",
     "DESCRIBE": "Décrire les données",
     "SUMMARY": "Résumé rapide",
     "HISTOGRAM": "Histogramme",
     "BOX_PLOT": "Boîte à moustaches",
     "SCATTER": "Nuage de points",
     "BAR_CHART": "Diagramme en barres",
+    "LINE_PLOT": "Graphique linéaire",
+    "DOT_PLOT": "Graphique à points",
     "CORRELATION": "Corrélation",
     "TTEST": "Test t",
     "REGRESSION": "Régression linéaire"
@@ -75,7 +81,15 @@
     "PLOT_ALT": "Graphique R",
     "SHOWING_ROWS": "Affichage de {{shown}} sur {{total}} lignes",
     "SUCCESS_DEFAULT": "Commande exécutée avec succès",
-    "ERROR": "Erreur"
+    "ERROR": "Erreur",
+    "SAVE_TXT": "Enregistrer en texte",
+    "SAVE_PNG": "Enregistrer en image",
+    "SAVE_CSV": "Enregistrer en CSV",
+    "EXPORT_SUCCESS": "Fichier enregistré avec succès",
+    "EXPORT_FAILED": "Échec de l'enregistrement du fichier",
+    "EXPORT_NA": "Exportation non disponible",
+    "NO_PLOT_DATA": "Aucune donnée de graphique disponible",
+    "NO_TABLE_DATA": "Aucune donnée de tableau disponible"
   },
   "DATA_VIEW": {
     "NO_DATA_LOADED": "Aucune donnée chargée",
@@ -402,5 +416,70 @@
     "CONVERSION_FAILED": "Échec de la conversion de la colonne de date",
     "ROLES_SAVED": "Configuration des données climatiques enregistrée",
     "AUTO_DETECTED": "{{count}} colonne(s) détectée(s) automatiquement"
+  },
+  "EXPORT": {
+    "TITLE": "Exporter des données",
+    "FORMAT": "Format de fichier",
+    "FILE_PATH": "Enregistrer sous",
+    "SELECT_FILE": "Sélectionner l'emplacement",
+    "BROWSE": "Parcourir...",
+    "EXPORT": "Exporter",
+    "SUCCESS": "Données exportées avec succès vers {{path}}",
+    "FAILED": "Échec de l'exportation"
+  },
+  "MERGE": {
+    "TITLE": "Fusionner les données",
+    "FIRST_DATAFRAME": "Premier jeu de données",
+    "SECOND_DATAFRAME": "Deuxième jeu de données",
+    "JOIN_TYPE": "Type de jointure",
+    "JOIN_COLUMN_1": "Colonne de jointure (Premier)",
+    "JOIN_COLUMN_2": "Colonne de jointure (Deuxième)",
+    "SELECT_COLUMN": "Sélectionner une colonne",
+    "RESULT_NAME": "Nom du résultat",
+    "NEED_TWO_DATAFRAMES": "Vous avez besoin d'au moins deux jeux de données pour fusionner",
+    "SUCCESS": "Jeux de données fusionnés avec succès"
+  },
+  "STACK": {
+    "TITLE": "Empiler les données (Large vers Long)",
+    "COLUMNS_TO_STACK": "Colonnes à empiler",
+    "COLUMNS_HINT": "Sélectionnez les colonnes à pivoter en une seule colonne",
+    "NAMES_TO": "Colonne des noms",
+    "NAMES_HINT": "Colonne pour les noms de variables",
+    "VALUES_TO": "Colonne des valeurs",
+    "VALUES_HINT": "Colonne pour les valeurs",
+    "DROP_NA": "Supprimer les valeurs manquantes",
+    "RESULT_NAME": "Nom du résultat",
+    "SUCCESS": "Données empilées avec succès"
+  },
+  "UNSTACK": {
+    "TITLE": "Dépiler les données (Long vers Large)",
+    "NAMES_FROM": "Noms depuis",
+    "NAMES_HINT": "Colonne avec les noms de catégories",
+    "VALUES_FROM": "Valeurs depuis",
+    "VALUES_HINT": "Colonne avec les valeurs à étaler",
+    "VALUES_FILL": "Valeur de remplissage",
+    "FILL_HINT": "Valeur pour les combinaisons manquantes (défaut: NA)",
+    "RESULT_NAME": "Nom du résultat",
+    "SUCCESS": "Données dépilées avec succès"
+  },
+  "LINE_PLOT": {
+    "TITLE": "Graphique linéaire",
+    "X_VARIABLE": "Variable X",
+    "Y_VARIABLE": "Variable Y",
+    "GROUP_BY": "Grouper par",
+    "SHOW_POINTS": "Afficher les points",
+    "SMOOTH_LINE": "Ligne lissée"
+  },
+  "DOT_PLOT": {
+    "TITLE": "Graphique à points",
+    "X_VARIABLE": "Variable X (Catégorie)",
+    "X_HINT": "Variable de regroupement catégorielle",
+    "Y_VARIABLE": "Variable Y",
+    "FILL_BY": "Remplir par",
+    "DOT_SIZE": "Taille des points",
+    "STACK_DIRECTION": "Direction d'empilement",
+    "CENTER": "Centre",
+    "UP": "Haut",
+    "DOWN": "Bas"
   }
 }

@@ -49,17 +49,17 @@ import { buildAnnualRainfall, AnnualRainfallOptions } from '../utils/climatic-r-
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [(selectedColumn)]="dateColumn" />
+            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.RAIN_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="rainColumn" />
+            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="rainColumn()" (selectedColumnChange)="rainColumn.set($event)" />
           </div>
         </div>
 
         <div class="form-group mt-4">
           <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-          <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="stationColumn" />
+          <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
         </div>
 
         <!-- Code Preview -->
@@ -101,9 +101,10 @@ export class AnnualRainfallDialogComponent implements OnInit {
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   
-  dateColumn = '';
-  rainColumn = '';
-  stationColumn = '';
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  rainColumn = signal('');
+  stationColumn = signal('');
   
   isLoading = signal(false);
   showCode = signal(false);
@@ -111,14 +112,14 @@ export class AnnualRainfallDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: AnnualRainfallOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      rainColumn: this.rainColumn,
-      stationColumn: this.stationColumn || undefined,
+      dateColumn: this.dateColumn(),
+      rainColumn: this.rainColumn(),
+      stationColumn: this.stationColumn() || undefined,
     };
     return buildAnnualRainfall(opts);
   });
 
-  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn && this.rainColumn));
+  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn() && this.rainColumn()));
 
   async ngOnInit(): Promise<void> {
     const dfs = this.rService.dataframes();
@@ -147,23 +148,26 @@ export class AnnualRainfallDialogComponent implements OnInit {
     const df = this.selectedDataframe();
     if (!df) return;
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) this.dateColumn = roles.date;
-    if (roles.rain && !this.rainColumn) this.rainColumn = roles.rain;
-    if (roles.station && !this.stationColumn) this.stationColumn = roles.station;
+    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
+    if (roles.rain && !this.rainColumn()) this.rainColumn.set(roles.rain);
+    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = '';
-    this.rainColumn = '';
-    this.stationColumn = '';
+    this.dateColumn.set('');
+    this.rainColumn.set('');
+    this.stationColumn.set('');
     await this.loadColumns();
   }
 
   getDateColumns(): ColumnInfo[] {
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
-      return t.includes('date') || t.includes('posix') || t.includes('character');
+      const name = c.name.toLowerCase();
+      if (t.includes('date') || t.includes('posix')) return true;
+      if (t.includes('character')) return name.includes('date') || name.includes('time') || name === 'day';
+      return false;
     });
   }
 

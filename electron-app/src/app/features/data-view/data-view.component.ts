@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridReadyEvent, GridApi } from 'ag-grid-community';
+import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { mapRTypeToCategory, getColumnTypeIcon } from '../../core/models/r.model';
@@ -19,10 +20,10 @@ import { ColumnHeaderComponent } from './column-header.component';
       <!-- Dataframe Tabs -->
       <div class="flex items-center border-b border-base-300 bg-base-200 px-2">
         <div class="flex items-center gap-1 overflow-x-auto py-1">
-          @for (df of rService.dataframes(); track df) {
+          @for (df of appState.dataframes(); track df) {
             <button
               class="tab-btn"
-              [class.active]="df === rService.activeDataframe()"
+              [class.active]="df === appState.activeDataframe()"
               (click)="selectDataframe(df)"
             >
               {{ df }}
@@ -30,7 +31,7 @@ import { ColumnHeaderComponent } from './column-header.component';
           }
         </div>
         
-        @if (rService.dataframes().length === 0) {
+        @if (appState.dataframes().length === 0) {
           <span class="text-sm text-base-content/50 py-2">{{ 'DATA_VIEW.NO_DATA_LOADED' | translate }}</span>
         }
       </div>
@@ -54,7 +55,7 @@ import { ColumnHeaderComponent } from './column-header.component';
             [ensureDomOrder]="true"
             (gridReady)="onGridReady($event)"
           />
-        } @else if (rService.activeDataframe()) {
+        } @else if (appState.activeDataframe()) {
           <div class="h-full flex items-center justify-center text-base-content/50">
             <p>{{ 'DATA_VIEW.NO_DATA_DISPLAY' | translate }}</p>
           </div>
@@ -141,7 +142,8 @@ import { ColumnHeaderComponent } from './column-header.component';
   `]
 })
 export class DataViewComponent implements OnInit, OnDestroy {
-  readonly rService = inject(RService);
+  readonly appState = inject(AppStateService);
+  private readonly rService = inject(RService);
   private readonly themeService = inject(ThemeService);
   private subscriptions: Subscription[] = [];
   private gridApi?: GridApi;
@@ -176,14 +178,14 @@ export class DataViewComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    // Load data when active dataframe changes
-    const sub = this.rService.onDataRefresh$.subscribe(() => {
+    // Load data when data context changes
+    const sub = this.appState.onDataRefresh$.subscribe(() => {
       this.loadData();
     });
     this.subscriptions.push(sub);
 
     // Initial load if there's an active dataframe
-    if (this.rService.activeDataframe()) {
+    if (this.appState.activeDataframe()) {
       this.loadData();
     }
   }
@@ -193,13 +195,13 @@ export class DataViewComponent implements OnInit, OnDestroy {
   }
 
   selectDataframe(name: string): void {
-    this.rService.setActiveDataframe(name);
-    this.currentPage.set(1); // Reset to first page
+    this.appState.setActiveDataframe(name);
+    this.currentPage.set(1);
     this.loadData();
   }
 
   async loadData(): Promise<void> {
-    const dfName = this.rService.activeDataframe();
+    const dfName = this.appState.activeDataframe();
     if (!dfName) {
       this.rowData.set([]);
       this.columnDefs.set([]);
@@ -282,7 +284,7 @@ export class DataViewComponent implements OnInit, OnDestroy {
 
   changePageSize(size: number): void {
     this.pageSize.set(size);
-    this.currentPage.set(1); // Reset to first page
+    this.currentPage.set(1);
     this.loadData();
   }
 

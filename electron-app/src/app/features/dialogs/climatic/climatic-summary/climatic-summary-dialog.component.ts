@@ -8,6 +8,7 @@ import { Component, Output, EventEmitter, inject, signal, computed, OnInit } fro
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { AppStateService } from '../../../../core/services/app-state.service';
 import { RService } from '../../../../core/services/r.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LanguageService } from '../../../../core/services/language.service';
@@ -67,7 +68,8 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getDateColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="dateColumn"
+                [selectedColumn]="dateColumn()"
+                (selectedColumnChange)="dateColumn.set($event)"
               />
             </div>
 
@@ -77,7 +79,8 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getNumericColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="elementColumn"
+                [selectedColumn]="elementColumn()"
+                (selectedColumnChange)="elementColumn.set($event)"
               />
             </div>
 
@@ -90,7 +93,8 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getFactorColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="stationColumn"
+                [selectedColumn]="stationColumn()"
+                (selectedColumnChange)="stationColumn.set($event)"
               />
             </div>
           </div>
@@ -218,20 +222,21 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
 export class ClimaticSummaryDialogComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
 
+  private readonly appState = inject(AppStateService);
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
   private readonly languageService = inject(LanguageService);
   private readonly climaticService = inject(ClimaticDataService);
 
-  // Data
-  dataframes = signal<string[]>([]);
+  // Data (from AppStateService - single source of truth)
+  readonly dataframes = this.appState.dataframes;
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
 
-  // Form state
-  dateColumn = '';
-  elementColumn = '';
-  stationColumn = '';
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  elementColumn = signal('');
+  stationColumn = signal('');
   summaryLevel: SummaryLevel = DEFAULT_SUMMARY_OPTIONS.level!;
   summaryFunction: ClimaticSummaryFunction = DEFAULT_SUMMARY_OPTIONS.summaryFunction!;
   omitMissing = DEFAULT_SUMMARY_OPTIONS.omitMissing!;
@@ -248,9 +253,9 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: ClimaticSummaryOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      elementColumn: this.elementColumn,
-      stationColumn: this.stationColumn || undefined,
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn() || undefined,
       level: this.summaryLevel,
       summaryFunction: this.summaryFunction,
       omitMissing: this.omitMissing,
@@ -261,8 +266,8 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   isValid = computed(() => {
     return !!(
       this.selectedDataframe() &&
-      this.dateColumn &&
-      this.elementColumn
+      this.dateColumn() &&
+      this.elementColumn()
     );
   });
 
@@ -271,10 +276,9 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   }
 
   private async loadDataframes(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-
-    const active = this.rService.activeDataframe();
+    const dfs = this.dataframes();
+    const active = this.appState.activeDataframe();
+    
     if (active && dfs.includes(active)) {
       this.selectedDataframe.set(active);
       await this.loadColumns();
@@ -308,30 +312,35 @@ export class ClimaticSummaryDialogComponent implements OnInit {
     if (!df) return;
 
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) {
-      this.dateColumn = roles.date;
+    if (roles.date && !this.dateColumn()) {
+      this.dateColumn.set(roles.date);
     }
-    if (roles.rain && !this.elementColumn) {
-      this.elementColumn = roles.rain;
+    if (roles.rain && !this.elementColumn()) {
+      this.elementColumn.set(roles.rain);
     }
-    if (roles.station && !this.stationColumn) {
-      this.stationColumn = roles.station;
+    if (roles.station && !this.stationColumn()) {
+      this.stationColumn.set(roles.station);
     }
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = '';
-    this.elementColumn = '';
-    this.stationColumn = '';
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
     await this.loadColumns();
   }
 
   getDateColumns(): ColumnInfo[] {
-    // Include both Date types and character (for date strings from CSV)
+    // Include Date types directly, and character columns that look like dates
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
-      return t.includes('date') || t.includes('posix') || t.includes('character');
+      const name = c.name.toLowerCase();
+      if (t.includes('date') || t.includes('posix')) return true;
+      if (t.includes('character')) {
+        return name.includes('date') || name.includes('time') || name === 'day';
+      }
+      return false;
     });
   }
 
@@ -350,9 +359,9 @@ export class ClimaticSummaryDialogComponent implements OnInit {
   }
 
   reset(): void {
-    this.dateColumn = '';
-    this.elementColumn = '';
-    this.stationColumn = '';
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
     this.summaryLevel = DEFAULT_SUMMARY_OPTIONS.level!;
     this.summaryFunction = DEFAULT_SUMMARY_OPTIONS.summaryFunction!;
     this.omitMissing = DEFAULT_SUMMARY_OPTIONS.omitMissing!;

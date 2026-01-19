@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
+import { ToastService } from '../../core/services/toast.service';
+import { LanguageService } from '../../core/services/language.service';
 import { OutputEntry } from '../../core/models/r.model';
 
 @Component({
@@ -66,22 +68,51 @@ import { OutputEntry } from '../../core/models/r.model';
               @if (entry.result.success) {
                 @switch (entry.result.result?.type) {
                   @case ('text') {
-                    <pre class="output-result whitespace-pre-wrap font-mono text-sm bg-base-200 p-3 rounded-lg overflow-x-auto">{{ formatTextOutput(entry.result.result?.value) }}</pre>
+                    <div class="relative">
+                      <pre class="output-result whitespace-pre-wrap font-mono text-sm bg-base-200 p-3 rounded-lg overflow-x-auto">{{ formatTextOutput(entry.result.result?.value) }}</pre>
+                      <button 
+                        class="btn btn-ghost btn-xs absolute top-1 right-1 opacity-60 hover:opacity-100"
+                        (click)="exportText(entry)"
+                        [title]="'OUTPUT.SAVE_TXT' | translate"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      </button>
+                    </div>
                   }
                   @case ('plot') {
-                    <div class="output-plot">
+                    <div class="output-plot relative inline-block">
                       <img 
                         [src]="entry.result.result?.dataUrl || entry.result.result?.path" 
                         [alt]="'OUTPUT.PLOT_ALT' | translate"
                         class="max-w-full rounded-lg shadow-lg"
                         loading="lazy"
                       />
+                      <button 
+                        class="btn btn-ghost btn-xs absolute top-2 right-2 bg-base-100/80 opacity-70 hover:opacity-100"
+                        (click)="exportPlot(entry)"
+                        [title]="'OUTPUT.SAVE_PNG' | translate"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      </button>
                     </div>
                   }
                   @case ('dataframe') {
                     <div class="overflow-x-auto">
-                      <div class="text-xs text-base-content/60 mb-1">
-                        {{ 'OUTPUT.SHOWING_ROWS' | translate: {shown: entry.result.result?.data?.length || 0, total: entry.result.result?.totalRows || 0} }}
+                      <div class="flex items-center justify-between text-xs text-base-content/60 mb-1">
+                        <span>{{ 'OUTPUT.SHOWING_ROWS' | translate: {shown: entry.result.result?.data?.length || 0, total: entry.result.result?.totalRows || 0} }}</span>
+                        <button 
+                          class="btn btn-ghost btn-xs opacity-60 hover:opacity-100"
+                          (click)="exportDataframe(entry)"
+                          [title]="'OUTPUT.SAVE_CSV' | translate"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
                       </div>
                       <table class="table table-xs table-zebra">
                         <thead>
@@ -136,6 +167,8 @@ import { OutputEntry } from '../../core/models/r.model';
 })
 export class OutputPanelComponent implements OnInit, OnDestroy {
   private readonly rService = inject(RService);
+  private readonly toastService = inject(ToastService);
+  private readonly languageService = inject(LanguageService);
   private subscription?: Subscription;
 
   entries = signal<OutputEntry[]>([]);
@@ -175,5 +208,132 @@ export class OutputPanelComponent implements OnInit, OnDestroy {
       return Number.isInteger(value) ? value.toString() : value.toFixed(4);
     }
     return String(value);
+  }
+
+  async exportText(entry: OutputEntry): Promise<void> {
+    if (!window.electronAPI?.dialog?.saveFile || !window.electronAPI?.file?.writeText) {
+      this.toastService.warning(this.languageService.instant('OUTPUT.EXPORT_NA'));
+      return;
+    }
+
+    const timestamp = new Date(entry.timestamp).toISOString().slice(0, 19).replace(/:/g, '-');
+    const defaultName = `output_${timestamp}.txt`;
+
+    try {
+      const result = await window.electronAPI.dialog.saveFile({
+        title: this.languageService.instant('OUTPUT.SAVE_TXT'),
+        defaultPath: defaultName,
+        filters: [{ name: 'Text Files', extensions: ['txt'] }],
+      });
+
+      if (!result.canceled && result.filePath) {
+        const content = this.formatTextOutput(entry.result.result?.value);
+        const writeResult = await window.electronAPI.file.writeText(result.filePath, content);
+        
+        if (writeResult.success) {
+          this.toastService.success(this.languageService.instant('OUTPUT.EXPORT_SUCCESS'));
+        } else {
+          this.toastService.error(writeResult.error || this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to export text:', error);
+      this.toastService.error(this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+    }
+  }
+
+  async exportPlot(entry: OutputEntry): Promise<void> {
+    if (!window.electronAPI?.dialog?.saveFile || !window.electronAPI?.file?.writeBase64) {
+      this.toastService.warning(this.languageService.instant('OUTPUT.EXPORT_NA'));
+      return;
+    }
+
+    const dataUrl = entry.result.result?.dataUrl;
+    if (!dataUrl) {
+      this.toastService.warning(this.languageService.instant('OUTPUT.NO_PLOT_DATA'));
+      return;
+    }
+
+    const timestamp = new Date(entry.timestamp).toISOString().slice(0, 19).replace(/:/g, '-');
+    const defaultName = `plot_${timestamp}.png`;
+
+    try {
+      const result = await window.electronAPI.dialog.saveFile({
+        title: this.languageService.instant('OUTPUT.SAVE_PNG'),
+        defaultPath: defaultName,
+        filters: [{ name: 'PNG Images', extensions: ['png'] }],
+      });
+
+      if (!result.canceled && result.filePath) {
+        const writeResult = await window.electronAPI.file.writeBase64(result.filePath, dataUrl);
+        
+        if (writeResult.success) {
+          this.toastService.success(this.languageService.instant('OUTPUT.EXPORT_SUCCESS'));
+        } else {
+          this.toastService.error(writeResult.error || this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to export plot:', error);
+      this.toastService.error(this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+    }
+  }
+
+  async exportDataframe(entry: OutputEntry): Promise<void> {
+    if (!window.electronAPI?.dialog?.saveFile || !window.electronAPI?.file?.writeText) {
+      this.toastService.warning(this.languageService.instant('OUTPUT.EXPORT_NA'));
+      return;
+    }
+
+    const data = entry.result.result?.data;
+    const columns = entry.result.result?.columns;
+    if (!data || !columns) {
+      this.toastService.warning(this.languageService.instant('OUTPUT.NO_TABLE_DATA'));
+      return;
+    }
+
+    const timestamp = new Date(entry.timestamp).toISOString().slice(0, 19).replace(/:/g, '-');
+    const defaultName = `data_${timestamp}.csv`;
+
+    try {
+      const result = await window.electronAPI.dialog.saveFile({
+        title: this.languageService.instant('OUTPUT.SAVE_CSV'),
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      });
+
+      if (!result.canceled && result.filePath) {
+        // Build CSV content
+        const csvContent = this.buildCsv(columns, data);
+        const writeResult = await window.electronAPI.file.writeText(result.filePath, csvContent);
+        
+        if (writeResult.success) {
+          this.toastService.success(this.languageService.instant('OUTPUT.EXPORT_SUCCESS'));
+        } else {
+          this.toastService.error(writeResult.error || this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to export dataframe:', error);
+      this.toastService.error(this.languageService.instant('OUTPUT.EXPORT_FAILED'));
+    }
+  }
+
+  private buildCsv(columns: string[], data: Record<string, unknown>[]): string {
+    const escapeCsvValue = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const header = columns.map(escapeCsvValue).join(',');
+    const rows = data.map(row => 
+      columns.map(col => escapeCsvValue(row[col])).join(',')
+    );
+    
+    return [header, ...rows].join('\n');
   }
 }

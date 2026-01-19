@@ -60,7 +60,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getDateColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="dateColumn"
+                [selectedColumn]="dateColumn()"
+                (selectedColumnChange)="dateColumn.set($event)"
               />
             </div>
 
@@ -70,7 +71,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getNumericColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="elementColumn"
+                [selectedColumn]="elementColumn()"
+                (selectedColumnChange)="elementColumn.set($event)"
               />
             </div>
 
@@ -83,7 +85,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
               <app-column-picker
                 [columns]="getFactorColumns()"
                 [multiple]="false"
-                [(selectedColumn)]="stationColumn"
+                [selectedColumn]="stationColumn()"
+                (selectedColumnChange)="stationColumn.set($event)"
               />
             </div>
           </div>
@@ -108,7 +111,7 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
                   type="checkbox" 
                   class="checkbox checkbox-sm checkbox-primary" 
                   [(ngModel)]="facetByStation"
-                  [disabled]="!stationColumn"
+                  [disabled]="!stationColumn()"
                 />
                 <span class="text-sm">{{ 'CLIMATIC.FACET_BY_STATION' | translate }}</span>
               </label>
@@ -243,10 +246,10 @@ export class InventoryPlotDialogComponent implements OnInit {
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
 
-  // Form state
-  dateColumn = '';
-  elementColumn = '';
-  stationColumn = '';
+  // Form state (signals for reactivity with computed)
+  dateColumn = signal('');
+  elementColumn = signal('');
+  stationColumn = signal('');
   plotTitle = '';
   facetByStation = DEFAULT_INVENTORY_OPTIONS.facetByStation!;
   flipCoords = DEFAULT_INVENTORY_OPTIONS.flipCoords!;
@@ -261,10 +264,10 @@ export class InventoryPlotDialogComponent implements OnInit {
   rCode = computed(() => {
     const opts: InventoryPlotOptions = {
       dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn,
-      elementColumn: this.elementColumn,
-      stationColumn: this.stationColumn || undefined,
-      facetByStation: this.facetByStation && !!this.stationColumn,
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn() || undefined,
+      facetByStation: this.facetByStation && !!this.stationColumn(),
       flipCoords: this.flipCoords,
       title: this.plotTitle || undefined,
       presentColor: this.presentColor,
@@ -276,8 +279,8 @@ export class InventoryPlotDialogComponent implements OnInit {
   isValid = computed(() => {
     return !!(
       this.selectedDataframe() &&
-      this.dateColumn &&
-      this.elementColumn
+      this.dateColumn() &&
+      this.elementColumn()
     );
   });
 
@@ -323,30 +326,42 @@ export class InventoryPlotDialogComponent implements OnInit {
     if (!df) return;
 
     const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn) {
-      this.dateColumn = roles.date;
+    if (roles.date && !this.dateColumn()) {
+      this.dateColumn.set(roles.date);
     }
-    if (roles.rain && !this.elementColumn) {
-      this.elementColumn = roles.rain;
+    if (roles.rain && !this.elementColumn()) {
+      this.elementColumn.set(roles.rain);
     }
-    if (roles.station && !this.stationColumn) {
-      this.stationColumn = roles.station;
+    if (roles.station && !this.stationColumn()) {
+      this.stationColumn.set(roles.station);
     }
   }
 
   async onDataframeChange(name: string): Promise<void> {
     this.selectedDataframe.set(name);
-    this.dateColumn = '';
-    this.elementColumn = '';
-    this.stationColumn = '';
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
     await this.loadColumns();
   }
 
   getDateColumns(): ColumnInfo[] {
-    // Include both Date types and character (for date strings from CSV)
+    // Include Date types directly, and character columns that look like dates
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
-      return t.includes('date') || t.includes('posix') || t.includes('character');
+      const name = c.name.toLowerCase();
+      
+      // Always include actual Date/POSIXt types
+      if (t.includes('date') || t.includes('posix')) {
+        return true;
+      }
+      
+      // For character columns, only include if name suggests it's a date
+      if (t.includes('character')) {
+        return name.includes('date') || name.includes('time') || name === 'day';
+      }
+      
+      return false;
     });
   }
 
@@ -365,9 +380,9 @@ export class InventoryPlotDialogComponent implements OnInit {
   }
 
   reset(): void {
-    this.dateColumn = '';
-    this.elementColumn = '';
-    this.stationColumn = '';
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
     this.plotTitle = '';
     this.facetByStation = DEFAULT_INVENTORY_OPTIONS.facetByStation!;
     this.flipCoords = DEFAULT_INVENTORY_OPTIONS.flipCoords!;

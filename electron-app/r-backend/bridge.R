@@ -104,15 +104,29 @@ if (length(missing_packages) > 0) {
   close(stdin_con)
 }
 
-# Load all required packages
-suppressPackageStartupMessages({
-  library(jsonlite)
-  library(dplyr)
-  library(tidyr)
-  library(ggplot2)
-  library(sjPlot)
-  library(sjmisc)
-  library(skimr)
+# Load all required packages with error handling
+tryCatch({
+  suppressPackageStartupMessages({
+    library(jsonlite)
+    library(dplyr)
+    library(tidyr)
+    library(ggplot2)
+    library(sjPlot)
+    library(sjmisc)
+    library(skimr)
+  })
+}, error = function(e) {
+  # If we can't load packages after install, report the error
+  if (requireNamespace("jsonlite", quietly = TRUE)) {
+    cat(jsonlite::toJSON(list(
+      ready = FALSE,
+      error = paste("Failed to load packages:", e$message)
+    ), auto_unbox = TRUE), "\n")
+    flush(stdout())
+  } else {
+    cat("FATAL: Failed to load required packages:", e$message, "\n")
+  }
+  quit(status = 1)
 })
 
 # Global data storage (simple for MVP - no databook dependency initially)
@@ -184,14 +198,11 @@ capture_output <- function(expr) {
 }
 
 #' Handle execute command
-#' Captures ALL stdout during evaluation to prevent non-JSON leakage
+#' Evaluates R code and returns appropriate result type (plot, dataframe, or text)
 handle_execute <- function(cmd) {
   tryCatch({
-    # Capture ALL output during evaluation (prevents stdout leakage)
-    result <- NULL
-    all_output <- capture.output({
-      result <<- eval(parse(text = cmd$code))
-    })
+    # Evaluate directly - avoid capture.output with superassignment which has scoping issues
+    result <- eval(parse(text = cmd$code))
     
     # Determine result type and format response
     if (inherits(result, "ggplot") || inherits(result, "gg")) {
@@ -229,9 +240,9 @@ handle_execute <- function(cmd) {
         )
       )
     } else {
-      # Combine intermediate output with final result print
-      final_output <- capture_output(print(result))
-      combined <- paste(c(all_output, final_output), collapse = "\n")
+      # For other results, capture the print output
+      text_output <- capture.output(print(result))
+      combined <- paste(text_output, collapse = "\n")
       combined <- trimws(combined)
       
       list(

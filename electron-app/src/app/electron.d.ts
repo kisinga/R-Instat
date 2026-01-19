@@ -9,6 +9,7 @@ interface RResult {
     value?: string | string[];
     data?: Record<string, unknown>[];
     path?: string;
+    dataUrl?: string; // Base64 encoded image data URL for plots
     columns?: string[];
     totalRows?: number;
   };
@@ -62,6 +63,11 @@ interface FileDialogResult {
   filePaths: string[];
 }
 
+interface SaveDialogResult {
+  canceled: boolean;
+  filePath?: string;
+}
+
 interface ElectronAPI {
   r: {
     execute: (code: string) => Promise<RResult>;
@@ -81,9 +87,14 @@ interface ElectronAPI {
   };
   dialog: {
     openFile: (options?: FileDialogOptions) => Promise<FileDialogResult>;
+    saveFile: (options?: FileDialogOptions) => Promise<SaveDialogResult>;
   };
   app: {
     setLanguage: (lang: string) => Promise<{ success: boolean }>;
+  };
+  file: {
+    writeText: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    writeBase64: (filePath: string, base64Data: string) => Promise<{ success: boolean; error?: string }>;
   };
   onMenuCommand: (callback: (command: string, data?: unknown) => void) => () => void;
   platform: string;

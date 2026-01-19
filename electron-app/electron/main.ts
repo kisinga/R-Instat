@@ -271,6 +271,51 @@ function setupIPC(): void {
     return result;
   });
 
+  ipcMain.handle('dialog:saveFile', async (_event, options?: {
+    title?: string;
+    filters?: { name: string; extensions: string[] }[];
+    defaultPath?: string;
+  }) => {
+    if (!mainWindow) return { canceled: true, filePath: undefined };
+    
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: options?.title || 'Save File',
+      defaultPath: options?.defaultPath,
+      filters: options?.filters || [
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'Excel Files', extensions: ['xlsx'] },
+        { name: 'R Data Files', extensions: ['rds'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    
+    return result;
+  });
+
+  // File write handlers for output export
+  ipcMain.handle('file:writeText', async (_event, filePath: string, content: string) => {
+    try {
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Write failed' };
+    }
+  });
+
+  ipcMain.handle('file:writeBase64', async (_event, filePath: string, base64Data: string) => {
+    try {
+      // Remove data URL prefix if present (e.g., "data:image/png;base64,")
+      const base64Content = base64Data.includes(',') 
+        ? base64Data.split(',')[1] 
+        : base64Data;
+      const buffer = Buffer.from(base64Content, 'base64');
+      await fs.promises.writeFile(filePath, buffer);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Write failed' };
+    }
+  });
+
   // Start R process
   rBridge.start().catch((err) => {
     console.error('Failed to start R:', err);

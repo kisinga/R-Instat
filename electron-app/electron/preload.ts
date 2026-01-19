@@ -96,12 +96,28 @@ const electronAPI = {
       defaultPath?: string;
     }): Promise<{ canceled: boolean; filePaths: string[] }> =>
       ipcRenderer.invoke('dialog:openFile', options),
+    
+    saveFile: (options?: {
+      title?: string;
+      filters?: { name: string; extensions: string[] }[];
+      defaultPath?: string;
+    }): Promise<{ canceled: boolean; filePath?: string }> =>
+      ipcRenderer.invoke('dialog:saveFile', options),
   },
 
   // App APIs
   app: {
     setLanguage: (lang: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('app:setLanguage', lang),
+  },
+
+  // File APIs for output export
+  file: {
+    writeText: (filePath: string, content: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('file:writeText', filePath, content),
+    
+    writeBase64: (filePath: string, base64Data: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('file:writeBase64', filePath, base64Data),
   },
 };
 
@@ -113,6 +129,7 @@ interface RResult {
     value?: string | string[];
     data?: Record<string, unknown>[];
     path?: string;
+    dataUrl?: string; // Base64 encoded image data URL for plots
     columns?: string[];
     totalRows?: number;
   };

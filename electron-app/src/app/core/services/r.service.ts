@@ -1,55 +1,46 @@
-import { Injectable, NgZone, signal, computed, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subject, Observable } from 'rxjs';
+import { Injectable, NgZone, signal, computed, OnDestroy, inject } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { RResult, DataPreview, ColumnInfo, OutputEntry, RHealthStatus } from '../models/r.model';
+import { AppStateService } from './app-state.service';
 
 /**
- * R Service - Central service for all R backend communication
+ * R Service - R backend communication
  * 
- * This service:
- * - Communicates with R via Electron IPC
- * - Manages dataframe state
- * - Tracks command history for output panel
- * - Provides dialog open/close coordination
- * - Tracks R health status for package installation
+ * This service handles:
+ * - R code execution via Electron IPC
+ * - R health status and package management
+ * - Output history tracking
+ * - Data fetching (preview, columns)
+ * 
+ * State is delegated to AppStateService (single source of truth).
  */
 @Injectable({ providedIn: 'root' })
 export class RService implements OnDestroy {
-  // State signals
-  private readonly _dataframes = signal<string[]>([]);
-  private readonly _activeDataframe = signal<string | null>(null);
+  private readonly appState = inject(AppStateService);
+
+  // Connection state
   private readonly _isConnected = signal(false);
   private readonly _isLoading = signal(false);
-  
-  // Health status for R backend
   private readonly _healthStatus = signal<RHealthStatus>({ status: 'starting' });
 
-  // Public readonly signals
-  readonly dataframes = this._dataframes.asReadonly();
-  readonly activeDataframe = this._activeDataframe.asReadonly();
   readonly isConnected = this._isConnected.asReadonly();
   readonly isLoading = this._isLoading.asReadonly();
   readonly healthStatus = this._healthStatus.asReadonly();
-  
-  // Computed: is R ready for use?
   readonly isReady = computed(() => this._healthStatus().status === 'ready');
+
+  // Delegate to AppStateService - expose for backward compatibility
+  readonly dataframes = this.appState.dataframes;
+  readonly activeDataframe = this.appState.activeDataframe;
+  readonly onDataRefresh$ = this.appState.onDataRefresh$;
+  readonly dialog$ = this.appState.dialog$;
 
   // Output history
   private readonly outputHistory$ = new BehaviorSubject<OutputEntry[]>([]);
   readonly output$: Observable<OutputEntry[]> = this.outputHistory$.asObservable();
 
-  // Dialog coordination
-  private readonly dialogSubject = new Subject<{ action: 'open' | 'close'; dialog: string }>();
-  readonly dialog$ = this.dialogSubject.asObservable();
-
-  // Data refresh trigger
-  private readonly dataRefresh$ = new Subject<void>();
-  readonly onDataRefresh$ = this.dataRefresh$.asObservable();
-
-  // Status change listener cleanup
   private cleanupStatusListener?: () => void;
 
   constructor(private ngZone: NgZone) {
-    // Initial health check
     this.initializeHealthCheck();
   }
 
@@ -57,16 +48,41 @@ export class RService implements OnDestroy {
     this.cleanupStatusListener?.();
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATE DELEGATION (for backward compatibility)
+  // ═══════════════════════════════════════════════════════════════════════════
+
   /**
-   * Initialize health status tracking
+   * Set active dataframe - delegates to AppStateService
    */
+  setActiveDataframe(name: string): void {
+    this.appState.setActiveDataframe(name);
+  }
+
+  /**
+   * Open a dialog - delegates to AppStateService
+   */
+  openDialog(dialogName: string): void {
+    this.appState.openDialog(dialogName);
+  }
+
+  /**
+   * Close a dialog - delegates to AppStateService
+   */
+  closeDialog(dialogName: string): void {
+    this.appState.closeDialog(dialogName);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HEALTH & CONNECTION
+  // ═══════════════════════════════════════════════════════════════════════════
+
   private async initializeHealthCheck(): Promise<void> {
     if (!window.electronAPI) {
       this._healthStatus.set({ status: 'error', error: 'Electron API not available' });
       return;
     }
 
-    // Listen for status changes from main process
     this.cleanupStatusListener = window.electronAPI.r.onStatusChange((status) => {
       this.ngZone.run(() => {
         this._healthStatus.set(status);
@@ -74,7 +90,6 @@ export class RService implements OnDestroy {
       });
     });
 
-    // Get initial status
     try {
       const status = await window.electronAPI.r.status();
       this.ngZone.run(() => {
@@ -87,9 +102,6 @@ export class RService implements OnDestroy {
     }
   }
 
-  /**
-   * Check R connection status
-   */
   async checkConnection(): Promise<void> {
     try {
       if (window.electronAPI) {
@@ -105,9 +117,6 @@ export class RService implements OnDestroy {
     }
   }
 
-  /**
-   * Get R health status
-   */
   async getStatus(): Promise<RHealthStatus> {
     if (!window.electronAPI) {
       return { status: 'error', error: 'Electron API not available' };
@@ -115,9 +124,6 @@ export class RService implements OnDestroy {
     return window.electronAPI.r.status();
   }
 
-  /**
-   * Install missing R packages
-   */
   async installPackages(packages?: string[]): Promise<RResult> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
@@ -125,9 +131,6 @@ export class RService implements OnDestroy {
     return window.electronAPI.r.installPackages(packages);
   }
 
-  /**
-   * Restart R process
-   */
   async restartR(): Promise<void> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
@@ -135,9 +138,10 @@ export class RService implements OnDestroy {
     return window.electronAPI.r.restart();
   }
 
-  /**
-   * Execute R code and return result
-   */
+  // ═══════════════════════════════════════════════════════════════════════════
+  // R EXECUTION
+  // ═══════════════════════════════════════════════════════════════════════════
+
   async execute(code: string, silent = false): Promise<RResult> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
@@ -150,7 +154,6 @@ export class RService implements OnDestroy {
       const result = await window.electronAPI.r.execute(code);
       const duration = Date.now() - startTime;
 
-      // Add to output history unless silent
       if (!silent) {
         this.addToHistory({
           id: crypto.randomUUID(),
@@ -189,33 +192,26 @@ export class RService implements OnDestroy {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DATA FETCHING
+  // ═══════════════════════════════════════════════════════════════════════════
+
   /**
-   * Load available dataframes from R
+   * Refresh dataframes from R and update AppStateService
    */
   async refreshDataframes(): Promise<void> {
     if (!window.electronAPI) return;
 
     try {
       const names = await window.electronAPI.r.getDataframes();
-      this.ngZone.run(() => {
-        this._dataframes.set(names);
-        
-        // Set active dataframe if not set or current one no longer exists
-        const active = this._activeDataframe();
-        if (!active || !names.includes(active)) {
-          this._activeDataframe.set(names[0] || null);
-        }
-      });
-      
-      this.dataRefresh$.next();
+      // Invalidate column cache when dataframes change
+      this.appState.invalidateColumnCache();
+      this.appState.updateDataframes(names);
     } catch (error) {
       console.error('Failed to refresh dataframes:', error);
     }
   }
 
-  /**
-   * Get data preview for a dataframe
-   */
   async getDataPreview(name: string, limit = 100, offset = 0): Promise<DataPreview> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
@@ -223,9 +219,6 @@ export class RService implements OnDestroy {
     return window.electronAPI.r.getDataPreview(name, limit, offset);
   }
 
-  /**
-   * Get column names for a dataframe
-   */
   async getColumns(dataframe: string): Promise<string[]> {
     if (!window.electronAPI) {
       return [];
@@ -234,33 +227,24 @@ export class RService implements OnDestroy {
   }
 
   /**
-   * Get column info with types
+   * Get column info - uses AppStateService cache
    */
   async getColumnInfo(dataframe: string): Promise<ColumnInfo[]> {
-    if (!window.electronAPI) {
-      console.warn('[RService] getColumnInfo: electronAPI not available');
-      return [];
-    }
-
-    console.log('[RService] getColumnInfo for:', dataframe);
-    const [columns, types] = await Promise.all([
-      window.electronAPI.r.getColumns(dataframe),
-      window.electronAPI.r.getColumnTypes(dataframe),
-    ]);
-    console.log('[RService] columns:', columns);
-    console.log('[RService] types:', types);
-
-    const result = columns.map(name => ({
-      name,
-      type: types[name] || 'unknown',
-    }));
-    console.log('[RService] columnInfo result:', result);
-    return result;
+    return this.appState.getColumnInfo(dataframe, async () => {
+      if (!window.electronAPI) {
+        return [];
+      }
+      const [columns, types] = await Promise.all([
+        window.electronAPI.r.getColumns(dataframe),
+        window.electronAPI.r.getColumnTypes(dataframe),
+      ]);
+      return columns.map(name => ({
+        name,
+        type: types[name] || 'unknown',
+      }));
+    });
   }
 
-  /**
-   * Load demo data
-   */
   async loadDemoData(): Promise<RResult> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
@@ -270,7 +254,7 @@ export class RService implements OnDestroy {
     try {
       const result = await window.electronAPI.r.loadDemoData();
       await this.refreshDataframes();
-      
+
       this.addToHistory({
         id: crypto.randomUUID(),
         code: '# Loaded World Bank Tanzania demo dataset',
@@ -285,67 +269,27 @@ export class RService implements OnDestroy {
     }
   }
 
-  /**
-   * Set active dataframe
-   */
-  setActiveDataframe(name: string): void {
-    if (this._dataframes().includes(name)) {
-      this._activeDataframe.set(name);
-    }
-  }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OUTPUT HISTORY
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Open a dialog
-   */
-  openDialog(dialogName: string): void {
-    this.dialogSubject.next({ action: 'open', dialog: dialogName });
-  }
-
-  /**
-   * Close current dialog
-   */
-  closeDialog(dialogName: string): void {
-    this.dialogSubject.next({ action: 'close', dialog: dialogName });
-  }
-
-  /**
-   * Clear output history
-   */
   clearHistory(): void {
     this.outputHistory$.next([]);
   }
 
-  /**
-   * Add entry to output history
-   */
   private addToHistory(entry: OutputEntry): void {
-    // Use ngZone to ensure Angular detects the change
     this.ngZone.run(() => {
       const current = this.outputHistory$.value;
-      this.outputHistory$.next([entry, ...current].slice(0, 100)); // Keep last 100 entries
+      this.outputHistory$.next([entry, ...current].slice(0, 100));
     });
   }
 
-  /**
-   * Check if R code might change data (trigger refresh)
-   */
   private mightChangeData(code: string): boolean {
-    const dataChangingPatterns = [
-      '<-',
-      'read.',
-      'import',
-      'load',
-      'mutate',
-      'filter',
-      'select',
-      'rename',
-      'delete',
-      'add_',
-      'remove_',
-      'data_book',
+    const patterns = [
+      '<-', 'read.', 'import', 'load', 'mutate', 'filter',
+      'select', 'rename', 'delete', 'add_', 'remove_', 'data_book',
     ];
-    
-    const lowerCode = code.toLowerCase();
-    return dataChangingPatterns.some(pattern => lowerCode.includes(pattern.toLowerCase()));
+    const lower = code.toLowerCase();
+    return patterns.some(p => lower.includes(p.toLowerCase()));
   }
 }

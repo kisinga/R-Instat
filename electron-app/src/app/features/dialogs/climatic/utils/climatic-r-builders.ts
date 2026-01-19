@@ -26,17 +26,26 @@ const rBool = (b: boolean): string => (b ? 'TRUE' : 'FALSE');
 const rDf = (name: string): string => `get_dataframe(${rStr(name)})`;
 
 // ============================================================================
-// Date Extraction Helpers
+// Date Extraction Helpers 
 // ============================================================================
 
-/** Extract year from date column using lubridate */
-export const rExtractYear = (dateCol: string): string => `year(${dateCol})`;
+/**
+ * Convert date column to Date type using base R.
+ * Handles both Date objects (pass-through) and character strings (ISO format).
+ */
+const rParseDate = (dateCol: string): string => `as.Date(${dateCol})`;
 
-/** Extract month from date column using lubridate */
-export const rExtractMonth = (dateCol: string): string => `month(${dateCol})`;
+/** Extract year from date column using base R format() */
+export const rExtractYear = (dateCol: string): string => 
+  `as.integer(format(${rParseDate(dateCol)}, "%Y"))`;
 
-/** Extract day of year from date column using lubridate */
-export const rExtractDoy = (dateCol: string): string => `yday(${dateCol})`;
+/** Extract month from date column using base R format() */
+export const rExtractMonth = (dateCol: string): string => 
+  `as.integer(format(${rParseDate(dateCol)}, "%m"))`;
+
+/** Extract day of year from date column using base R format() */
+export const rExtractDoy = (dateCol: string): string => 
+  `as.integer(format(${rParseDate(dateCol)}, "%j"))`;
 
 // ============================================================================
 // Summary Function Mapping
@@ -387,19 +396,22 @@ export function buildSpellLengths(opts: SpellLengthsOptions): string {
   
   const spellLabel = `${spellType}_spell`;
   
+  // Build the statistic expression that works inside summarise
+  // Uses inline computation to avoid list column issues
   let statExpr: string;
+  const rleExpr = `{ r <- rle(is_${spellType}); lens <- r$lengths[r$values == TRUE]; if(length(lens) > 0)`;
   switch (statistic) {
     case 'max':
-      statExpr = `max_${spellLabel} = max(spell_lengths, na.rm = TRUE)`;
+      statExpr = `max_${spellLabel} = ${rleExpr} max(lens) else NA_integer_ }`;
       break;
     case 'mean':
-      statExpr = `mean_${spellLabel} = mean(spell_lengths, na.rm = TRUE)`;
+      statExpr = `mean_${spellLabel} = ${rleExpr} mean(lens) else NA_real_ }`;
       break;
     case 'count':
-      statExpr = `n_${spellLabel}s = length(spell_lengths)`;
+      statExpr = `n_${spellLabel}s = ${rleExpr} length(lens) else 0L }`;
       break;
     default:
-      statExpr = `max_${spellLabel} = max(spell_lengths, na.rm = TRUE)`;
+      statExpr = `max_${spellLabel} = ${rleExpr} max(lens) else NA_integer_ }`;
   }
 
   return `${rDf(dataframe)} %>%
@@ -408,11 +420,7 @@ export function buildSpellLengths(opts: SpellLengthsOptions): string {
     is_${spellType} = ${condition}
   ) %>%
   group_by(${groups}) %>%
-  summarise(
-    spell_lengths = list(rle(is_${spellType})$lengths[rle(is_${spellType})$values]),
-    .groups = "drop"
-  ) %>%
-  mutate(${statExpr})`;
+  summarise(${statExpr}, .groups = "drop")`;
 }
 
 // ============================================================================

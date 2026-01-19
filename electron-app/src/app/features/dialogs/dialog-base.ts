@@ -1,4 +1,5 @@
-import { inject, signal, OnInit, Output, EventEmitter, Directive } from '@angular/core';
+import { inject, signal, computed, OnInit, Output, EventEmitter, Directive } from '@angular/core';
+import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ColumnInfo } from '../../core/models/r.model';
@@ -7,69 +8,75 @@ import { ColumnInfo } from '../../core/models/r.model';
  * Base class for all statistical dialogs
  * 
  * Provides common functionality:
- * - Dataframe selection
- * - Column loading
+ * - Dataframe selection (from AppStateService - single source of truth)
+ * - Column loading (with caching)
  * - R code generation and execution
- * - Loading states
- * - Error handling
+ * - Dialog preference save/restore
+ * - Loading states and error handling
  */
 @Directive()
 export abstract class DialogBase implements OnInit {
   @Output() close = new EventEmitter<void>();
 
+  protected readonly appState = inject(AppStateService);
   protected readonly rService = inject(RService);
   protected readonly toastService = inject(ToastService);
 
-  // Common state
-  dataframes = signal<string[]>([]);
+  // Dataframes from global state (single source of truth)
+  readonly dataframes = this.appState.dataframes;
+  
+  // Local dialog state
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   isLoading = signal(false);
   showCodePreview = signal(false);
 
-  // Abstract properties that must be implemented
+  // Abstract properties
   abstract readonly dialogTitle: string;
+  
+  /**
+   * Optional: Override to provide a unique ID for preference storage
+   * Defaults to dialogTitle if not specified
+   */
+  get dialogId(): string {
+    return this.dialogTitle.toLowerCase().replace(/\s+/g, '-');
+  }
 
   ngOnInit(): void {
-    // Use Promise to handle async initialization without blocking
-    this.loadDataframes().catch(error => {
+    this.initializeDialog().catch(error => {
       console.error('Failed to initialize dialog:', error);
       this.toastService.error('Failed to load data');
     });
   }
 
   /**
-   * Load available dataframes
+   * Initialize dialog with data and restore preferences
    */
-  async loadDataframes(): Promise<void> {
-    try {
-      const dfs = this.rService.dataframes();
-      this.dataframes.set(dfs);
-      
-      // Select active dataframe or first one
-      const active = this.rService.activeDataframe();
-      if (active && dfs.includes(active)) {
-        this.selectedDataframe.set(active);
-      } else if (dfs.length > 0) {
-        this.selectedDataframe.set(dfs[0]);
-      }
-
-      // Load columns for selected dataframe
-      if (this.selectedDataframe()) {
-        await this.loadColumns();
-      }
-    } catch (error) {
-      console.error('Failed to load dataframes:', error);
-      throw error;
+  private async initializeDialog(): Promise<void> {
+    const dfs = this.dataframes();
+    
+    // Select active dataframe or first one
+    const active = this.appState.activeDataframe();
+    if (active && dfs.includes(active)) {
+      this.selectedDataframe.set(active);
+    } else if (dfs.length > 0) {
+      this.selectedDataframe.set(dfs[0]);
     }
+
+    // Load columns for selected dataframe
+    if (this.selectedDataframe()) {
+      await this.loadColumns();
+    }
+
+    // Restore saved preferences
+    this.restoreDefaults();
   }
 
   /**
-   * Load columns for the selected dataframe
+   * Load columns for the selected dataframe (uses cache)
    */
   async loadColumns(): Promise<void> {
     const df = this.selectedDataframe();
-    console.log('[DialogBase] loadColumns called for:', df);
     if (!df) {
       this.columns.set([]);
       return;
@@ -77,7 +84,6 @@ export abstract class DialogBase implements OnInit {
 
     try {
       const columnInfo = await this.rService.getColumnInfo(df);
-      console.log('[DialogBase] Loaded columns:', columnInfo);
       this.columns.set(columnInfo);
     } catch (error) {
       console.error('Failed to load columns:', error);
@@ -126,11 +132,13 @@ export abstract class DialogBase implements OnInit {
     try {
       const result = await this.rService.execute(code);
       
-      // Check if R returned an error
       if (!result.success) {
         this.toastService.error(result.error || 'R command failed');
-        return; // Don't close dialog on error
+        return;
       }
+      
+      // Save preferences on successful execution
+      this.saveDefaults();
       
       this.toastService.success('Command executed successfully');
       this.close.emit();
@@ -175,9 +183,54 @@ export abstract class DialogBase implements OnInit {
   }
 
   /**
+   * Get date columns
+   */
+  getDateColumns(): ColumnInfo[] {
+    return this.getColumnsByType(['date', 'posix']);
+  }
+
+  /**
    * Cancel and close dialog
    */
   cancel(): void {
     this.close.emit();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PREFERENCE SAVE/RESTORE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Override to return current dialog settings for persistence
+   */
+  protected getCurrentDefaults(): Record<string, unknown> {
+    return {};
+  }
+
+  /**
+   * Override to apply restored defaults to dialog fields
+   */
+  protected applyDefaults(_defaults: Record<string, unknown>): void {
+    // Override in subclass
+  }
+
+  /**
+   * Save current settings to preferences
+   */
+  protected saveDefaults(): void {
+    const defaults = this.getCurrentDefaults();
+    if (Object.keys(defaults).length > 0) {
+      this.appState.saveDialogDefaults(this.dialogId, defaults);
+    }
+  }
+
+  /**
+   * Restore saved settings from preferences
+   */
+  protected restoreDefaults(): void {
+    const defaults = this.appState.getDialogDefaults(this.dialogId);
+    if (defaults) {
+      this.applyDefaults(defaults);
+    }
   }
 }

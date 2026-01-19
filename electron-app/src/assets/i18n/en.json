@@ -23,18 +23,24 @@
     "SELECT_DOMAIN": "Select Domain...",
     "CHANGE_DOMAIN": "Change Domain...",
     "IMPORT": "Import Data",
+    "EXPORT": "Export Data",
     "SAVE": "Save",
     "FILTER": "Filter",
     "SORT": "Sort",
     "CALCULATE": "Calculate",
     "RECODE": "Recode",
     "RENAME": "Rename Column",
+    "STACK": "Stack",
+    "UNSTACK": "Unstack",
+    "MERGE": "Merge",
     "DESCRIBE": "Describe Data",
     "SUMMARY": "Quick Summary",
     "HISTOGRAM": "Histogram",
     "BOX_PLOT": "Box Plot",
     "SCATTER": "Scatter Plot",
     "BAR_CHART": "Bar Chart",
+    "LINE_PLOT": "Line Plot",
+    "DOT_PLOT": "Dot Plot",
     "CORRELATION": "Correlation",
     "TTEST": "t-Test",
     "REGRESSION": "Linear Regression"
@@ -75,7 +81,15 @@
     "PLOT_ALT": "R Plot",
     "SHOWING_ROWS": "Showing {{shown}} of {{total}} rows",
     "SUCCESS_DEFAULT": "Command executed successfully",
-    "ERROR": "Error"
+    "ERROR": "Error",
+    "SAVE_TXT": "Save as Text",
+    "SAVE_PNG": "Save as Image",
+    "SAVE_CSV": "Save as CSV",
+    "EXPORT_SUCCESS": "File saved successfully",
+    "EXPORT_FAILED": "Failed to save file",
+    "EXPORT_NA": "Export not available",
+    "NO_PLOT_DATA": "No plot data available",
+    "NO_TABLE_DATA": "No table data available"
   },
   "DATA_VIEW": {
     "NO_DATA_LOADED": "No data loaded",
@@ -402,5 +416,70 @@
     "CONVERSION_FAILED": "Failed to convert date column",
     "ROLES_SAVED": "Climatic data configuration saved",
     "AUTO_DETECTED": "Auto-detected {{count}} column(s)"
+  },
+  "EXPORT": {
+    "TITLE": "Export Data",
+    "FORMAT": "File Format",
+    "FILE_PATH": "Save To",
+    "SELECT_FILE": "Select location",
+    "BROWSE": "Browse...",
+    "EXPORT": "Export",
+    "SUCCESS": "Data exported successfully to {{path}}",
+    "FAILED": "Export failed"
+  },
+  "MERGE": {
+    "TITLE": "Merge Data",
+    "FIRST_DATAFRAME": "First Data Frame",
+    "SECOND_DATAFRAME": "Second Data Frame",
+    "JOIN_TYPE": "Join Type",
+    "JOIN_COLUMN_1": "Join Column (First)",
+    "JOIN_COLUMN_2": "Join Column (Second)",
+    "SELECT_COLUMN": "Select column",
+    "RESULT_NAME": "Result Name",
+    "NEED_TWO_DATAFRAMES": "You need at least two dataframes to merge",
+    "SUCCESS": "Dataframes merged successfully"
+  },
+  "STACK": {
+    "TITLE": "Stack Data (Wide to Long)",
+    "COLUMNS_TO_STACK": "Columns to Stack",
+    "COLUMNS_HINT": "Select columns to pivot into a single column",
+    "NAMES_TO": "Names Column",
+    "NAMES_HINT": "Column for variable names",
+    "VALUES_TO": "Values Column",
+    "VALUES_HINT": "Column for values",
+    "DROP_NA": "Drop missing values",
+    "RESULT_NAME": "Result Name",
+    "SUCCESS": "Data stacked successfully"
+  },
+  "UNSTACK": {
+    "TITLE": "Unstack Data (Long to Wide)",
+    "NAMES_FROM": "Names From",
+    "NAMES_HINT": "Column with category names",
+    "VALUES_FROM": "Values From",
+    "VALUES_HINT": "Column with values to spread",
+    "VALUES_FILL": "Fill Value",
+    "FILL_HINT": "Value for missing combinations (default: NA)",
+    "RESULT_NAME": "Result Name",
+    "SUCCESS": "Data unstacked successfully"
+  },
+  "LINE_PLOT": {
+    "TITLE": "Line Plot",
+    "X_VARIABLE": "X Variable",
+    "Y_VARIABLE": "Y Variable",
+    "GROUP_BY": "Group By",
+    "SHOW_POINTS": "Show points",
+    "SMOOTH_LINE": "Smooth line"
+  },
+  "DOT_PLOT": {
+    "TITLE": "Dot Plot",
+    "X_VARIABLE": "X Variable (Category)",
+    "X_HINT": "Categorical grouping variable",
+    "Y_VARIABLE": "Y Variable",
+    "FILL_BY": "Fill By",
+    "DOT_SIZE": "Dot Size",
+    "STACK_DIRECTION": "Stack Direction",
+    "CENTER": "Center",
+    "UP": "Up",
+    "DOWN": "Down"
   }
 }

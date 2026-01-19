@@ -10,6 +10,7 @@ import { Component, Output, EventEmitter, inject, signal, computed, OnInit } fro
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { AppStateService } from '../../../../core/services/app-state.service';
 import { RService } from '../../../../core/services/r.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LanguageService } from '../../../../core/services/language.service';
@@ -173,14 +174,15 @@ const ROLE_CONFIGS: RoleConfig[] = [
 export class DefineClimaticDataDialogComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
 
+  private readonly appState = inject(AppStateService);
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
   private readonly languageService = inject(LanguageService);
   readonly climaticService = inject(ClimaticDataService);
   private readonly dateConversionService = inject(DateConversionService);
 
-  // Data
-  dataframes = signal<string[]>([]);
+  // Data (from AppStateService - single source of truth)
+  readonly dataframes = this.appState.dataframes;
   selectedDataframe = signal<string>('');
   columns = signal<ColumnInfo[]>([]);
   
@@ -203,10 +205,9 @@ export class DefineClimaticDataDialogComponent implements OnInit {
   }
 
   private async loadDataframes(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-
-    const active = this.rService.activeDataframe();
+    const dfs = this.dataframes();
+    const active = this.appState.activeDataframe();
+    
     if (active && dfs.includes(active)) {
       this.selectedDataframe.set(active);
       await this.loadColumns();
