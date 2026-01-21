@@ -71,28 +71,39 @@ export class MyDialog extends DialogBase {
 }
 ```
 
-### 2. DialogBuilderService
+### 2. Dialog Builders
 
-**Location**: `core/dialogs/builders/dialog-builder.service.ts`
+**Location**: `core/dialogs/builders/dialog-builders.ts`
 
-Injectable service providing domain-specific R code builders as pure, composable functions.
+Pure functions providing domain-specific R code builders for dialogs. Builders are composable functions that return RSyntax instances.
 
 **Key Features**:
-- Injectable service (dependency injection)
+- Pure functions (no dependency injection needed)
 - Type-safe option interfaces
-- Pure builder functions returning RSyntax
+- Composable builder functions returning RSyntax
 - Reusable helpers (ggAes, ggBase, etc.)
+- `DialogBuilder` type alias for builder function signature
 
 **Usage**:
 ```typescript
-@Injectable({ providedIn: 'root' })
-export class DialogBuilderService {
-  buildBarChart(options: BarChartOptions): RSyntax {
-    return rSyntax()
-      .setBase(/* ggplot2 code */)
-      .setAssignment(rAssign('graph', options.name));
-  }
-}
+import { buildBarChart } from '@core/dialogs/builders/dialog-builders';
+
+// In component
+this.initializeCodeManager(() =>
+  buildBarChart({
+    dataframe: this.selectedDataframe(),
+    xVariable: this.xVariable(),
+    position: 'stack',
+  })
+);
+```
+
+**DialogBuilder Type**:
+```typescript
+import type { DialogBuilder } from '@core/dialogs/builders/types';
+
+// DialogBuilder is a type alias for: () => RSyntax
+// Used in DialogBase.initializeCodeManager() and DialogRCodeManager
 ```
 
 ### 3. ggplot2 Helpers
@@ -146,9 +157,9 @@ const colRef = columnRef('mydata', 'age'); // get_dataframe("mydata")$age
 ### Component
 
 ```typescript
-export class BarChartDialogComponent extends DialogBase implements OnInit {
-  private readonly builder = inject(DialogBuilderService);
+import { buildBarChart } from '@core/dialogs/builders/dialog-builders';
 
+export class BarChartDialogComponent extends DialogBase implements OnInit {
   // Dialog state using signals
   xVariable = signal('');
   fillVariable = signal('');
@@ -163,7 +174,7 @@ export class BarChartDialogComponent extends DialogBase implements OnInit {
 
     // Initialize code manager
     this.initializeCodeManager(() =>
-      this.builder.buildBarChart({
+      buildBarChart({
         dataframe: this.selectedDataframe(),
         xVariable: this.xVariable(),
         fillVariable: this.fillVariable() || undefined,
@@ -264,13 +275,14 @@ buildRCode(): string {
 ### After (New Pattern)
 
 ```typescript
-private readonly builder = inject(DialogBuilderService);
+// Import builder function directly
+import { buildBarChart } from '@core/dialogs/builders/dialog-builders';
 
 readonly rCode = computed(() => this.codeManager.code());
 
 ngOnInit(): void {
   this.initializeCodeManager(() =>
-    this.builder.buildBarChart({
+    buildBarChart({
       dataframe: this.selectedDataframe(),
       xVariable: this.xVariable(),
     })
@@ -289,9 +301,11 @@ ngOnInit(): void {
 ### Pattern 1: Simple Graph Dialog
 
 ```typescript
+import { buildBarChart } from '@core/dialogs/builders/dialog-builders';
+
 ngOnInit(): void {
   this.initializeCodeManager(() =>
-    this.builder.buildBarChart(options)
+    buildBarChart(options)
   );
   effect(() => { /* track dependencies */; this.rebuildRCode(); });
 }
@@ -321,15 +335,11 @@ ngOnInit(): void {
 ### Testing Builders
 
 ```typescript
-describe('DialogBuilderService', () => {
-  let service: DialogBuilderService;
+import { buildBarChart } from '@core/dialogs/builders/dialog-builders';
 
-  beforeEach(() => {
-    service = new DialogBuilderService();
-  });
-
+describe('buildBarChart', () => {
   it('should build bar chart code', () => {
-    const syntax = service.buildBarChart({
+    const syntax = buildBarChart({
       dataframe: 'mydata',
       xVariable: 'category',
     });

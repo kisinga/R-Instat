@@ -5,6 +5,7 @@
  */
 
 export { DialogRCodeManager } from './dialog-r-code-manager.service';
-export { DialogBuilderService } from './builders/dialog-builder.service';
-export type { BarChartOptions } from './builders/dialog-builder.service';
+export { buildBarChart } from './builders/barchart';
+export type { BarChartOptions } from './builders/barchart';
+export type { DialogBuilder } from './builders/types';
 export * from './utils/column-selections';

@@ -19,6 +19,7 @@ import { RSyntax } from '../r-codegen/syntax';
 import { RCode, Assignment } from '../r-codegen/types';
 import { RService } from '../services/r.service';
 import { RResult } from '../models/r.model';
+import { DialogBuilder } from './builders/types';
 
 @Injectable()
 export class DialogRCodeManager {
@@ -26,7 +27,7 @@ export class DialogRCodeManager {
   private readonly _syntax = signal<RSyntax | null>(null);
 
   // Builder function that constructs RSyntax from current dialog state
-  private readonly _builder = signal<(() => RSyntax) | null>(null);
+  private readonly _builder = signal<DialogBuilder | null>(null);
 
   // Assignment configuration
   private readonly _assignment = signal<Assignment | null>(null);
@@ -44,9 +45,9 @@ export class DialogRCodeManager {
    * The builder function is called whenever rebuild() is invoked.
    * It should return an RSyntax instance based on current dialog state.
    *
-   * @param builder - Function that builds RSyntax from dialog state
+   * @param builder - DialogBuilder function that builds RSyntax from dialog state
    */
-  initialize(builder: () => RSyntax): void {
+  initialize(builder: DialogBuilder): void {
     this._builder.set(builder);
     this.rebuild();
   }

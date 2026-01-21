@@ -1,10 +1,10 @@
-import { Component, computed, OnInit, inject, effect, signal } from '@angular/core';
+import { Component, computed, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
-import { DialogBuilderService } from '../../../core/dialogs/builders/dialog-builder.service';
+import { buildBarChart } from '../../../core/dialogs/builders/barchart';
 
 @Component({
   selector: 'app-bar-chart-dialog',
@@ -104,8 +104,6 @@ import { DialogBuilderService } from '../../../core/dialogs/builders/dialog-buil
 export class BarChartDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Bar Chart';
 
-  private readonly builder = inject(DialogBuilderService);
-
   // Dialog state using signals for reactivity
   xVariable = signal('');
   fillVariable = signal('');
@@ -118,7 +116,8 @@ export class BarChartDialogComponent extends DialogBase implements OnInit {
     // Initialize code manager with builder function
     // The builder will be called whenever rebuild() is invoked
     this.initializeCodeManager(() =>
-      this.builder.buildBarChart({
+      buildBarChart({
+        type: 'frequency', // Frequency bar chart (counts occurrences)
         dataframe: this.selectedDataframe(),
         xVariable: this.xVariable(),
         fillVariable: this.fillVariable() || undefined,

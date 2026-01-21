@@ -5,6 +5,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ColumnInfo } from '../../core/models/r.model';
 import { DialogRCodeManager } from '../../core/dialogs/dialog-r-code-manager.service';
 import { RSyntax } from '../../core/r-codegen/syntax';
+import { DialogBuilder } from '../../core/dialogs/builders/types';
 
 /**
  * Base class for all statistical dialogs
@@ -264,19 +265,19 @@ export abstract class DialogBase implements OnInit {
    * The code manager will automatically rebuild whenever rebuild() is called,
    * and provides a computed `code` signal that components can use.
    *
-   * @param builder - Function that builds RSyntax from dialog state
+   * @param builder - DialogBuilder function that builds RSyntax from dialog state
    *
    * @example
    * ngOnInit(): void {
    *   this.initializeCodeManager(() =>
-   *     this.builder.buildBarChart({
+   *     buildBarChart({
    *       dataframe: this.selectedDataframe(),
    *       xVariable: this.xVariable(),
    *     })
    *   );
    * }
    */
-  protected initializeCodeManager(builder: () => RSyntax): void {
+  protected initializeCodeManager(builder: DialogBuilder): void {
     this.codeManager.initialize(builder);
   }
 
