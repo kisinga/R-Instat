@@ -9,6 +9,7 @@ import {
   RCodeValue,
   RFunction,
   ROperator,
+  ROperatorSymbol,
   Parameter,
   Assignment,
   OperatorOptions,
@@ -82,33 +83,38 @@ export function rFnStr(
 /**
  * Create an R operator
  *
- * @param symbol - Operator symbol (e.g., '+', '-', '!', '<-')
- * @param params - Parameters (can be spread or array)
- * @param options - Optional operator formatting options
+ * @param symbol - Operator symbol (e.g., '+', '-', '!', '<-', '%>%')
+ * @param params - Parameters (spread arguments)
+ * @param options - Optional operator formatting options (can be passed as last argument)
  * @returns ROperator structure
+ *
+ * @example
+ * rOp('>=', 'rain', 1)
+ * rOp('>=', 'rain', 1, { asRString: true })
+ * rOp('%>%', rDf('data'), rFn('filter', { x: '> 0' }))
  */
 export function rOp(
-  symbol: string,
-  ...params: Array<RCode | string | number | boolean>
-): ROperator;
-export function rOp(
-  symbol: string,
-  params: Array<RCode | string | number | boolean>,
-  options?: OperatorOptions
-): ROperator;
-export function rOp(
-  symbol: string,
-  ...args: Array<any>
+  symbol: ROperatorSymbol,
+  ...args: Array<RCode | string | number | boolean | OperatorOptions>
 ): ROperator {
   let paramsArray: Array<RCode | string | number | boolean>;
   let options: OperatorOptions | undefined;
   
-  // Handle overloaded signatures
-  if (args.length > 0 && Array.isArray(args[0])) {
-    paramsArray = args[0];
-    options = args[1];
+  // Check if last argument is an options object
+  if (args.length > 0) {
+    const lastArg = args[args.length - 1];
+    if (lastArg && typeof lastArg === 'object' && !Array.isArray(lastArg) && 
+        ('brackets' in lastArg || 'allBrackets' in lastArg || 'spaceAround' in lastArg || 
+         'forceInclude' in lastArg || 'asRString' in lastArg)) {
+      // Last argument is options
+      options = lastArg as OperatorOptions;
+      paramsArray = args.slice(0, -1) as Array<RCode | string | number | boolean>;
+    } else {
+      // No options, all args are params
+      paramsArray = args as Array<RCode | string | number | boolean>;
+    }
   } else {
-    paramsArray = args as Array<RCode | string | number | boolean>;
+    paramsArray = [];
   }
   
   const parameterList: Parameter[] = paramsArray.map((param, index) => ({
@@ -348,4 +354,26 @@ export function rParams(obj: Record<string, string | number | boolean | undefine
  */
 export function rWrap(expr: string, condition: boolean = true): string {
   return condition ? `(${expr})` : expr;
+}
+
+/**
+ * Join items with comma separator
+ *
+ * Useful for building comma-separated parameter lists.
+ * Filters out falsy values and converts RCode structures to strings.
+ *
+ * @param items - Items to join (strings, numbers, booleans, or RCode structures)
+ * @returns Comma-separated string
+ */
+export function rComma(...items: Array<string | number | boolean | RCode | undefined | null | false>): string {
+  return items
+    .filter((item): item is string | number | boolean | RCode => Boolean(item))
+    .map((item) => {
+      if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+        return String(item);
+      }
+      // It's an RCode structure
+      return toScript(item);
+    })
+    .join(', ');
 }

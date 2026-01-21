@@ -50,6 +50,7 @@ export {
   rIf,
   rParams,
   rWrap,
+  rComma,
   type MaybeExpr,
 } from './builders';
 

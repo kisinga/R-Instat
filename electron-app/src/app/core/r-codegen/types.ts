@@ -27,6 +27,7 @@ export interface OperatorOptions {
   allBrackets?: boolean; // Enclose all parameters (except first) in brackets
   spaceAround?: boolean; // Put spaces around operator (default: true)
   forceInclude?: boolean; // Include operator even with single parameter (e.g., !x)
+  asRString?: boolean; // Wrap result in double quotes, replacing internal double quotes with single quotes
 }
 
 /**
@@ -44,7 +45,7 @@ export interface RFunction {
  */
 export interface ROperator {
   type: 'operator';
-  symbol: string;
+  symbol: ROperatorSymbol;
   params: Parameter[];
   options?: OperatorOptions;
 }
@@ -55,10 +56,33 @@ export interface ROperator {
 export type RCode = RFunction | ROperator | string;
 
 /**
+ * Operator symbol groups
+ * Organized by category for better maintainability.
+ */
+type ArithmeticOperator = '+' | '-' | '*' | '/' | '^' | '%%';
+type ComparisonOperatorGroup = '==' | '!=' | '>' | '>=' | '<' | '<=';
+type LogicalOperator = '&' | '|' | '!';
+type AssignmentOperator = '<-' | '=' | '<<-';
+type SpecialOperator = '%>%' | '%in%' | '~' | '$' | ':' | '[' | ']' | ',' | ' ' | '';
+
+/**
  * Comparison operators for R expressions
  * These are the standard comparison operators used in R code generation.
+ * Subset of ComparisonOperatorGroup (ordering operators only, excludes == and !=).
  */
-export type ComparisonOperator = '>=' | '>' | '<=' | '<';
+export type ComparisonOperator = Extract<ComparisonOperatorGroup, '>=' | '>' | '<=' | '<'>;
+
+/**
+ * R operator symbols
+ * Common R operators used in code generation.
+ * Includes arithmetic, comparison, logical, assignment, and special operators.
+ */
+export type ROperatorSymbol =
+  | ArithmeticOperator
+  | ComparisonOperatorGroup
+  | LogicalOperator
+  | AssignmentOperator
+  | SpecialOperator;
 
 /**
  * Assignment target types

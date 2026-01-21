@@ -106,6 +106,7 @@ function toScriptOperator(op: ROperator, script: string): string {
   const brackets = options.brackets !== false; // Default true
   const allBrackets = options.allBrackets || false;
   const forceInclude = options.forceInclude || false;
+  const asRString = options.asRString || false;
   
   const sortedParams = sortParameters(op.params);
   
@@ -124,14 +125,31 @@ function toScriptOperator(op: ROperator, script: string): string {
     if (forceInclude) {
       // Position 0 means parameter on left, otherwise on right
       const position = param.position ?? -1;
+      let result: string;
       if (position === 0) {
-        return `${paramScript}${operatorStr}`;
+        result = `${paramScript}${operatorStr}`;
       } else {
-        return `${operatorStr}${paramScript}`;
+        result = `${operatorStr}${paramScript}`;
       }
+      
+      // Apply asRString if needed
+      if (asRString) {
+        result = result.replace(/"/g, "'");
+        result = `"${result}"`;
+      }
+      
+      return result;
     } else {
       // Without forceInclude, single parameter doesn't show operator
-      return paramScript;
+      let result = paramScript;
+      
+      // Apply asRString if needed
+      if (asRString) {
+        result = result.replace(/"/g, "'");
+        result = `"${result}"`;
+      }
+      
+      return result;
     }
   }
   
@@ -164,6 +182,14 @@ function toScriptOperator(op: ROperator, script: string): string {
     }
     
     result += paramScript;
+  }
+  
+  // Apply asRString if needed (wrap entire expression)
+  if (asRString) {
+    // Replace double quotes with single quotes
+    result = result.replace(/"/g, "'");
+    // Wrap in double quotes
+    result = `"${result}"`;
   }
   
   return result;
