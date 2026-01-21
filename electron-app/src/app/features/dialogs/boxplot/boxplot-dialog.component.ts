@@ -4,12 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
 
 @Component({
   selector: 'app-boxplot-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule],
+  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -76,8 +77,7 @@ import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>
@@ -113,6 +113,14 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
 
   override ngOnInit(): void {
     super.ngOnInit();
+
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      yVariable: this.yVariable,
+      xVariable: this.xVariable,
+      fillVariable: this.fillVariable,
+      showPoints: this.showPoints,
+    });
 
     // Initialize code manager with builder function
     this.initializeCodeManager(() =>

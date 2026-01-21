@@ -30,7 +30,8 @@ import { ToastService } from '../../../core/services/toast.service';
           <button 
             class="btn btn-ghost btn-xs gap-1"
             (click)="copyCode()"
-            title="Copy code"
+            [disabled]="!formValid()"
+            [title]="formValid() ? 'Copy code' : 'Form must be valid to copy code with metadata'"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -78,9 +79,13 @@ export class CodePreviewComponent {
   code = input.required<string>();
   collapsible = input<boolean>(true);
   showMetadata = input<boolean>(true);
+  isValid = input<boolean>(true);
 
   // Internal state
   isExpanded = signal(false);
+
+  // Reactive validity - computed from input
+  readonly formValid = computed(() => this.isValid());
 
   // Computed
   metadata = computed(() => {

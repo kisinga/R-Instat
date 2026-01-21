@@ -2,6 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildSort } from '../../../core/dialogs/builders/data-manipulation';
 
 interface SortColumn {
@@ -12,7 +13,7 @@ interface SortColumn {
 @Component({
   selector: 'app-sort-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -79,8 +80,7 @@ interface SortColumn {
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>

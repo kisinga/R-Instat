@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCorrelation } from '../../../core/dialogs/builders/statistics';
 
 @Component({
   selector: 'app-correlation-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -71,8 +72,7 @@ import { buildCorrelation } from '../../../core/dialogs/builders/statistics';
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>

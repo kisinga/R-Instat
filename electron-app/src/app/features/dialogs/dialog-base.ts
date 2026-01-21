@@ -1,4 +1,4 @@
-import { inject, signal, computed, OnInit, Output, EventEmitter, Directive, Injector, runInInjectionContext, effect, WritableSignal } from '@angular/core';
+import { inject, signal, computed, OnInit, AfterViewInit, Output, EventEmitter, Directive, Injector, runInInjectionContext, effect, WritableSignal } from '@angular/core';
 import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -21,7 +21,7 @@ import { DialogRestoreService } from '../../core/services/dialog-restore.service
  * - Loading states and error handling
  */
 @Directive()
-export abstract class DialogBase implements OnInit {
+export abstract class DialogBase implements OnInit, AfterViewInit {
   @Output() close = new EventEmitter<void>();
 
   protected readonly appState = inject(AppStateService);
@@ -39,6 +39,12 @@ export abstract class DialogBase implements OnInit {
   columns = signal<ColumnInfo[]>([]);
   isLoading = signal(false);
   showCodePreview = signal(false);
+
+  /**
+   * Computed signal for form validity state
+   * Exposes the abstract isValid() method as a signal for use in templates
+   */
+  readonly formValid = computed(() => this.isValid());
 
   // Form field registry for automatic save/restore/auto-population
   private formFields = new Map<string, WritableSignal<any>>();
@@ -87,12 +93,20 @@ export abstract class DialogBase implements OnInit {
     // Auto-populate from registered sources (after restore, so roles override preferences)
     this.autoPopulateFromSources();
 
+    // Restoration will happen in ngAfterViewInit after child component has registered form fields
+  }
+
+  /**
+   * Called after view initialization - ensures child component's ngOnInit has completed
+   * This is where we check for restoration data, after form fields are registered
+   */
+  ngAfterViewInit(): void {
     // Check for restoration data from restore-from-code dialog
-    // Use setTimeout to ensure this runs after the dialog is fully initialized
+    // This runs after child component's ngOnInit, so form fields should be registered
     setTimeout(async () => {
       const restoreData = this.dialogRestoreService.getRestoreData();
       if (restoreData && restoreData.dialogId === this.dialogId) {
-        console.log('[DialogBase] Found restore data, restoring state:', restoreData);
+        console.log('[DialogBase] Found restore data in ngAfterViewInit, restoring state:', restoreData);
         const success = await this.restoreFromMetadata(restoreData);
         if (success) {
           this.dialogRestoreService.clearRestoreData();
@@ -297,8 +311,11 @@ export abstract class DialogBase implements OnInit {
   private getFormState(): Record<string, unknown> {
     const state: Record<string, unknown> = {};
     for (const [name, signal] of this.formFields) {
-      state[name] = signal();
+      const value = signal();
+      state[name] = value;
+      console.log(`[DialogBase] Form field ${name} =`, value);
     }
+    console.log('[DialogBase] Complete form state:', state);
     return state;
   }
 
@@ -338,6 +355,12 @@ export abstract class DialogBase implements OnInit {
       return null;
     }
 
+    // Only generate metadata when form is valid
+    if (!this.isValid()) {
+      console.log('[DialogBase] Form is invalid, skipping metadata generation');
+      return null;
+    }
+
     // Always include dataframe in state if available (even without form fields)
     const df = this.selectedDataframe();
     const state: Record<string, any> = {};
@@ -349,7 +372,18 @@ export abstract class DialogBase implements OnInit {
     // Add form field state if registered
     if (this.formFields.size > 0) {
       const formState = this.getFormState();
-      Object.assign(state, formState);
+      console.log('[DialogBase] Form state from registry:', formState, 'Form fields count:', this.formFields.size);
+      // Include all non-null/undefined values in metadata
+      // For strings, include them even if empty (empty might mean "none selected" for optional fields)
+      // But we'll include them so restoration can distinguish between "not set" and "explicitly empty"
+      for (const [key, value] of Object.entries(formState)) {
+        if (value !== null && value !== undefined) {
+          state[key] = value;
+        }
+      }
+      console.log('[DialogBase] State after adding form fields:', state);
+    } else {
+      console.log('[DialogBase] No form fields registered');
     }
     
     // Generate metadata if we have at least a dataframe
@@ -509,7 +543,9 @@ export abstract class DialogBase implements OnInit {
    */
   protected initializeCodeManager(builder: DialogBuilder, skipInitialRebuild: boolean = false): void {
     this.codeManager.initialize(() => {
+      console.log('[DialogBase] Builder called, reading signals for R code generation');
       const syntax = builder();
+      console.log('[DialogBase] R code generated, now generating metadata');
       const metadata = this.getDialogMetadata();
       if (metadata) {
         console.log('[DialogBase] Attaching metadata:', metadata);

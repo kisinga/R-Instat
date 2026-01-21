@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import {
   FilterCondition,
   FilterOperator,
@@ -15,7 +16,7 @@ import { rSyntax } from '../../../core/r-codegen';
 @Component({
   selector: 'app-filter-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -126,8 +127,7 @@ import { rSyntax } from '../../../core/r-codegen';
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>

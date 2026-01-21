@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRecode } from '../../../core/dialogs/builders/data-manipulation';
 
 interface RecodeMapping {
@@ -13,7 +14,7 @@ interface RecodeMapping {
 @Component({
   selector: 'app-recode-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -110,8 +111,7 @@ interface RecodeMapping {
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>
