@@ -60,11 +60,15 @@ export class AppStateService {
   // PREFERENCES
   // ═══════════════════════════════════════════════════════════════════════════
   
-  private readonly _preferences = signal<PreferencesState>({ ...DEFAULT_PREFERENCES });
+  private readonly _preferences = signal<PreferencesState>({ 
+    ...DEFAULT_PREFERENCES,
+    includeCodeMetadata: DEFAULT_PREFERENCES.includeCodeMetadata ?? true 
+  });
   readonly preferences = this._preferences.asReadonly();
 
   readonly graphPreferences = computed(() => this._preferences().graph);
   readonly summaryPreferences = computed(() => this._preferences().summary);
+  readonly includeCodeMetadata = computed(() => this._preferences().includeCodeMetadata ?? true);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DIALOG COORDINATION
@@ -229,6 +233,16 @@ export class AppStateService {
    */
   getDialogDefaults<T extends Record<string, unknown>>(dialogId: string): T | null {
     return (this._preferences().dialogDefaults[dialogId] as T) ?? null;
+  }
+
+  /**
+   * Set include code metadata feature flag
+   */
+  setIncludeCodeMetadata(value: boolean): void {
+    this._preferences.update(p => ({
+      ...p,
+      includeCodeMetadata: value,
+    }));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

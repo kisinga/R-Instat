@@ -14,6 +14,7 @@ import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
 import { buildMissingReport, MissingReportOptions } from '../utils/climatic-r-builders';
 import { rSyntax } from '../../../../core/r-codegen';
+import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 
 @Component({
   selector: 'app-missing-report-dialog',
@@ -119,6 +120,32 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      dateColumn: this.dateColumn,
+      stationColumn: this.stationColumn,
+      elementColumns: this.elementColumns,
+      level: this.level,
+    });
+
+    // Register auto-population source from climatic roles
+    // Special case: elementColumns is an array, so we add multiple roles
+    this.registerAutoPopulateSource(() => {
+      const df = this.selectedDataframe();
+      if (!df) return null;
+      const roles = this.climaticService.getRoles(df);
+      const elementCols: string[] = [];
+      if (roles.rain) elementCols.push(roles.rain);
+      if (roles.tmax) elementCols.push(roles.tmax);
+      if (roles.tmin) elementCols.push(roles.tmin);
+      
+      return {
+        dateColumn: roles.date,
+        stationColumn: roles.station,
+        elementColumns: elementCols.length > 0 ? elementCols : undefined,
+      };
+    });
+
     // Initialize code manager with builder
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();
@@ -137,7 +164,7 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
     });
 
     // Reactive updates
-    effect(() => {
+    this.createEffect(() => {
       this.selectedDataframe();
       this.dateColumn();
       this.stationColumn();
@@ -145,31 +172,6 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
       this.level();
       this.rebuildRCode();
     });
-  }
-
-  override onDataframeChanged(): void {
-    this.autoFillFromRoles();
-  }
-
-  override async onDataframeChange(name: string): Promise<void> {
-    this.dateColumn.set('');
-    this.stationColumn.set('');
-    this.elementColumns.set([]);
-    await super.onDataframeChange(name);
-  }
-
-  private autoFillFromRoles(): void {
-    const df = this.selectedDataframe();
-    if (!df) return;
-    const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
-    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
-    // Auto-select rain, tmax, tmin if available
-    const cols = [...this.elementColumns()];
-    if (roles.rain && !cols.includes(roles.rain)) cols.push(roles.rain);
-    if (roles.tmax && !cols.includes(roles.tmax)) cols.push(roles.tmax);
-    if (roles.tmin && !cols.includes(roles.tmin)) cols.push(roles.tmin);
-    this.elementColumns.set(cols);
   }
 
   toggleElement(colName: string): void {
@@ -194,21 +196,5 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
 
   isValid(): boolean {
     return !!(this.selectedDataframe() && this.dateColumn() && this.elementColumns().length > 0);
-  }
-
-  protected override getCurrentDefaults(): Record<string, unknown> {
-    return {
-      dateColumn: this.dateColumn(),
-      stationColumn: this.stationColumn(),
-      elementColumns: this.elementColumns(),
-      level: this.level(),
-    };
-  }
-
-  protected override applyDefaults(defaults: Record<string, unknown>): void {
-    if (defaults['dateColumn']) this.dateColumn.set(defaults['dateColumn'] as string);
-    if (defaults['stationColumn']) this.stationColumn.set(defaults['stationColumn'] as string);
-    if (defaults['elementColumns']) this.elementColumns.set(defaults['elementColumns'] as string[]);
-    if (defaults['level']) this.level.set(defaults['level'] as 'annual' | 'monthly' | 'overall');
   }
 }

@@ -129,7 +129,7 @@ export class BarChartDialogComponent extends DialogBase implements OnInit {
 
     // Set up effect to rebuild R code whenever dialog state changes
     // This must be after initializeCodeManager so the builder is set
-    effect(() => {
+    this.createEffect(() => {
       // Read all signals to establish dependencies
       this.selectedDataframe();
       this.xVariable();

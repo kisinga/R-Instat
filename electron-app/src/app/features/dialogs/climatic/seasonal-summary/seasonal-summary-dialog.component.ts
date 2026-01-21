@@ -14,6 +14,7 @@ import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
 import { buildSeasonalSummary, SeasonalSummaryOptions } from '../utils/climatic-r-builders';
 import { rSyntax } from '../../../../core/r-codegen';
+import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 
 @Component({
   selector: 'app-seasonal-summary-dialog',
@@ -103,6 +104,28 @@ export class SeasonalSummaryDialogComponent extends DialogBase implements OnInit
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      dateColumn: this.dateColumn,
+      elementColumn: this.elementColumn,
+      stationColumn: this.stationColumn,
+      summaryFunction: this.summaryFunction,
+    });
+
+    // Register auto-population source from climatic roles
+    this.registerAutoPopulateSource(() => {
+      const df = this.selectedDataframe();
+      if (!df) return null;
+      return mapClimaticRolesToFields(
+        this.climaticService.getRoles(df),
+        {
+          dateColumn: 'date',
+          elementColumn: (r) => r.rain || r.element,
+          stationColumn: 'station',
+        }
+      );
+    });
+
     // Initialize code manager with builder
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();
@@ -121,7 +144,7 @@ export class SeasonalSummaryDialogComponent extends DialogBase implements OnInit
     });
 
     // Reactive updates
-    effect(() => {
+    this.createEffect(() => {
       this.selectedDataframe();
       this.dateColumn();
       this.elementColumn();
@@ -129,26 +152,6 @@ export class SeasonalSummaryDialogComponent extends DialogBase implements OnInit
       this.summaryFunction();
       this.rebuildRCode();
     });
-  }
-
-  override onDataframeChanged(): void {
-    this.autoFillFromRoles();
-  }
-
-  override async onDataframeChange(name: string): Promise<void> {
-    this.dateColumn.set('');
-    this.elementColumn.set('');
-    this.stationColumn.set('');
-    await super.onDataframeChange(name);
-  }
-
-  private autoFillFromRoles(): void {
-    const df = this.selectedDataframe();
-    if (!df) return;
-    const roles = this.climaticService.getRoles(df);
-    if (roles.date && !this.dateColumn()) this.dateColumn.set(roles.date);
-    if (roles.rain && !this.elementColumn()) this.elementColumn.set(roles.rain);
-    if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
   }
 
   // Enhanced date column detection (includes character columns with date-like names)
@@ -164,21 +167,5 @@ export class SeasonalSummaryDialogComponent extends DialogBase implements OnInit
 
   isValid(): boolean {
     return !!(this.selectedDataframe() && this.dateColumn() && this.elementColumn());
-  }
-
-  protected override getCurrentDefaults(): Record<string, unknown> {
-    return {
-      dateColumn: this.dateColumn(),
-      elementColumn: this.elementColumn(),
-      stationColumn: this.stationColumn(),
-      summaryFunction: this.summaryFunction(),
-    };
-  }
-
-  protected override applyDefaults(defaults: Record<string, unknown>): void {
-    if (defaults['dateColumn']) this.dateColumn.set(defaults['dateColumn'] as string);
-    if (defaults['elementColumn']) this.elementColumn.set(defaults['elementColumn'] as string);
-    if (defaults['stationColumn']) this.stationColumn.set(defaults['stationColumn'] as string);
-    if (defaults['summaryFunction']) this.summaryFunction.set(defaults['summaryFunction'] as 'sum' | 'mean' | 'max' | 'min');
   }
 }

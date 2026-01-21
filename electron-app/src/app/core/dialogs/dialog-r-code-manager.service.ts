@@ -21,7 +21,7 @@ import { RService } from '../services/r.service';
 import { RResult } from '../models/r.model';
 import { DialogBuilder } from './builders/types';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class DialogRCodeManager {
   // RSyntax state
   private readonly _syntax = signal<RSyntax | null>(null);
@@ -46,10 +46,13 @@ export class DialogRCodeManager {
    * It should return an RSyntax instance based on current dialog state.
    *
    * @param builder - DialogBuilder function that builds RSyntax from dialog state
+   * @param skipInitialRebuild - If true, skip the initial rebuild (useful when effect will handle it)
    */
-  initialize(builder: DialogBuilder): void {
+  initialize(builder: DialogBuilder, skipInitialRebuild: boolean = false): void {
     this._builder.set(builder);
-    this.rebuild();
+    if (!skipInitialRebuild) {
+      this.rebuild();
+    }
   }
 
   /**
@@ -126,7 +129,23 @@ export class DialogRCodeManager {
    */
   async execute(rService: RService): Promise<RResult> {
     const script = this.code();
-    if (!script || script.trim().startsWith('#')) {
+    if (!script || !script.trim()) {
+      return {
+        success: false,
+        error: 'No valid R code to execute',
+      };
+    }
+
+    // Strip metadata comments for validation (metadata is in comments, so R will ignore it)
+    // But we still need to check if there's actual executable code
+    const lines = script.split('\n');
+    const executableLines = lines.filter(line => {
+      const trimmed = line.trim();
+      // Skip empty lines and comment-only lines (including metadata)
+      return trimmed && !trimmed.startsWith('#');
+    });
+
+    if (executableLines.length === 0) {
       return {
         success: false,
         error: 'No valid R code to execute',

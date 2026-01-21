@@ -104,7 +104,7 @@ export class RenameDialogComponent extends DialogBase implements OnInit {
     );
 
     // Set up effect to rebuild R code whenever dialog state changes
-    effect(() => {
+    this.createEffect(() => {
       // Read all signals to establish dependencies
       this.selectedDataframe();
       this.oldName();

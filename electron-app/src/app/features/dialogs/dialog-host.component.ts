@@ -40,6 +40,7 @@ import { StackDialogComponent } from './stack/stack-dialog.component';
 import { UnstackDialogComponent } from './unstack/unstack-dialog.component';
 import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component';
 import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
+import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
 
 // Dialog registry
 const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
@@ -120,6 +121,7 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
     UnstackDialogComponent,
     LinePlotDialogComponent,
     DotPlotDialogComponent,
+    RestoreFromCodeDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -227,6 +229,9 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
           @case ('dot-plot') {
             <app-dot-plot-dialog (close)="closeDialog()" />
           }
+          @case ('restore-from-code') {
+            <app-restore-from-code-dialog (close)="closeDialog()" />
+          }
         }
       </div>
     }
@@ -240,10 +245,13 @@ export class DialogHostComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.subscription = this.rService.dialog$.subscribe(({ action, dialog }) => {
+      console.log('[DialogHost] Dialog action:', action, 'dialog:', dialog);
       if (action === 'open') {
         this.activeDialog.set(dialog);
+        console.log('[DialogHost] Active dialog set to:', dialog);
       } else if (action === 'close') {
         this.activeDialog.set(null);
+        console.log('[DialogHost] Active dialog cleared');
       }
     });
 

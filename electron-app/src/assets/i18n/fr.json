@@ -24,6 +24,7 @@
     "CHANGE_DOMAIN": "Changer de domaine...",
     "IMPORT": "Importer des données",
     "EXPORT": "Exporter des données",
+    "RESTORE_FROM_CODE": "Restaurer depuis le code",
     "SAVE": "Enregistrer",
     "FILTER": "Filtrer",
     "SORT": "Trier",

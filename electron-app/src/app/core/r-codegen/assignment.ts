@@ -6,20 +6,7 @@
 
 import { Assignment, ColumnAssignOptions, DataframeAssignOptions, ObjectAssignOptions, RFunction } from './types';
 import { toScript } from './core';
-
-/**
- * Escape R string with double quotes
- */
-function rStr(s: string): string {
-  return `"${s.replace(/"/g, '\\"')}"`;
-}
-
-/**
- * Convert boolean to R boolean literal
- */
-function rBool(b: boolean): string {
-  return b ? 'TRUE' : 'FALSE';
-}
+import { rStr, rBool } from './builders';
 
 /**
  * Generate assignment code for an expression

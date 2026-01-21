@@ -150,7 +150,8 @@ export class ToolbarComponent {
       icon: '📂',
       items: [
         { labelKey: 'TOOLBAR.IMPORT', action: 'import', shortcut: 'Ctrl+I' },
-        { labelKey: 'TOOLBAR.EXPORT', action: 'export', dividerAfter: true },
+        { labelKey: 'TOOLBAR.EXPORT', action: 'export' },
+        { labelKey: 'TOOLBAR.RESTORE_FROM_CODE', action: 'restore-from-code', dividerAfter: true },
         { labelKey: 'TOOLBAR.FILTER', action: 'filter' },
         { labelKey: 'TOOLBAR.SORT', action: 'sort', dividerAfter: true },
         { labelKey: 'TOOLBAR.CALCULATE', action: 'calculate' },

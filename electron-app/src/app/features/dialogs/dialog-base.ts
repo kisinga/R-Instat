@@ -1,4 +1,4 @@
-import { inject, signal, computed, OnInit, Output, EventEmitter, Directive } from '@angular/core';
+import { inject, signal, computed, OnInit, Output, EventEmitter, Directive, Injector, runInInjectionContext, effect, WritableSignal } from '@angular/core';
 import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -6,6 +6,9 @@ import { ColumnInfo } from '../../core/models/r.model';
 import { DialogRCodeManager } from '../../core/dialogs/dialog-r-code-manager.service';
 import { RSyntax } from '../../core/r-codegen/syntax';
 import { DialogBuilder } from '../../core/dialogs/builders/types';
+import { DialogMetadata } from '../../core/r-codegen/dialog-metadata';
+import { stripMetadata } from '../../core/r-codegen/metadata-parser';
+import { DialogRestoreService } from '../../core/services/dialog-restore.service';
 
 /**
  * Base class for all statistical dialogs
@@ -25,6 +28,8 @@ export abstract class DialogBase implements OnInit {
   protected readonly rService = inject(RService);
   protected readonly toastService = inject(ToastService);
   protected readonly codeManager = inject(DialogRCodeManager);
+  protected readonly injector = inject(Injector);
+  protected readonly dialogRestoreService = inject(DialogRestoreService);
 
   // Dataframes from global state (single source of truth)
   readonly dataframes = this.appState.dataframes;
@@ -34,6 +39,10 @@ export abstract class DialogBase implements OnInit {
   columns = signal<ColumnInfo[]>([]);
   isLoading = signal(false);
   showCodePreview = signal(false);
+
+  // Form field registry for automatic save/restore/auto-population
+  private formFields = new Map<string, WritableSignal<any>>();
+  private autoPopulateSources: Array<() => Record<string, any> | null> = [];
 
   // Abstract properties
   abstract readonly dialogTitle: string;
@@ -72,8 +81,27 @@ export abstract class DialogBase implements OnInit {
       await this.loadColumns();
     }
 
-    // Restore saved preferences
+    // Restore saved preferences (uses registry if available, otherwise fallback to override)
     this.restoreDefaults();
+    
+    // Auto-populate from registered sources (after restore, so roles override preferences)
+    this.autoPopulateFromSources();
+
+    // Check for restoration data from restore-from-code dialog
+    // Use setTimeout to ensure this runs after the dialog is fully initialized
+    setTimeout(async () => {
+      const restoreData = this.dialogRestoreService.getRestoreData();
+      if (restoreData && restoreData.dialogId === this.dialogId) {
+        console.log('[DialogBase] Found restore data, restoring state:', restoreData);
+        const success = await this.restoreFromMetadata(restoreData);
+        if (success) {
+          this.dialogRestoreService.clearRestoreData();
+          console.log('[DialogBase] State restored successfully');
+        } else {
+          console.warn('[DialogBase] Failed to restore state');
+        }
+      }
+    }, 0);
   }
 
   /**
@@ -102,6 +130,8 @@ export abstract class DialogBase implements OnInit {
     this.selectedDataframe.set(name);
     await this.loadColumns();
     this.onDataframeChanged();
+    // Auto-populate after dataframe change (e.g., for climatic roles)
+    this.autoPopulateFromSources();
   }
 
   /**
@@ -215,21 +245,218 @@ export abstract class DialogBase implements OnInit {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PREFERENCE SAVE/RESTORE
+  // FORM FIELD REGISTRY & AUTO-POPULATION
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Override to return current dialog settings for persistence
+   * Register form fields for automatic save/restore/auto-population.
+   * Once registered, fields are automatically saved on execute() and restored on init.
+   * 
+   * @param fields - Object mapping field names to their signal instances
+   * 
+   * @example
+   * this.registerFormFields({
+   *   dateColumn: this.dateColumn,
+   *   elementColumn: this.elementColumn,
+   *   stationColumn: this.stationColumn,
+   * });
+   */
+  protected registerFormFields(fields: Record<string, WritableSignal<any>>): void {
+    for (const [name, signal] of Object.entries(fields)) {
+      this.formFields.set(name, signal);
+    }
+  }
+
+  /**
+   * Register an auto-population source that provides values for form fields.
+   * Sources are called after restoreDefaults() and on dataframe changes.
+   * Multiple sources can be registered; they are applied in registration order.
+   * 
+   * @param source - Function that returns field values or null
+   * 
+   * @example
+   * this.registerAutoPopulateSource(() => {
+   *   const df = this.selectedDataframe();
+   *   if (!df) return null;
+   *   const roles = this.climaticService.getRoles(df);
+   *   return {
+   *     dateColumn: roles.date,
+   *     elementColumn: roles.rain,
+   *   };
+   * });
+   */
+  protected registerAutoPopulateSource(
+    source: () => Record<string, any> | null
+  ): void {
+    this.autoPopulateSources.push(source);
+  }
+
+  /**
+   * Get current form state from registered fields
+   */
+  private getFormState(): Record<string, unknown> {
+    const state: Record<string, unknown> = {};
+    for (const [name, signal] of this.formFields) {
+      state[name] = signal();
+    }
+    return state;
+  }
+
+  /**
+   * Apply form state to registered fields
+   */
+  private applyFormState(state: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(state)) {
+      const signal = this.formFields.get(name);
+      if (signal && value !== undefined) {
+        signal.set(value);
+      }
+    }
+  }
+
+  /**
+   * Auto-populate fields from all registered sources
+   */
+  private autoPopulateFromSources(): void {
+    for (const source of this.autoPopulateSources) {
+      const values = source();
+      if (values) {
+        this.applyFormState(values);
+      }
+    }
+  }
+
+  /**
+   * Get dialog metadata for embedding in R code
+   * Returns null if feature flag is disabled or no form fields are registered
+   */
+  protected getDialogMetadata(): DialogMetadata | null {
+    // Check feature flag
+    const featureEnabled = this.appState.includeCodeMetadata();
+    if (!featureEnabled) {
+      console.log('[DialogBase] Metadata disabled by feature flag');
+      return null;
+    }
+
+    // Always include dataframe in state if available (even without form fields)
+    const df = this.selectedDataframe();
+    const state: Record<string, any> = {};
+    
+    if (df) {
+      state['dataframe'] = df;
+    }
+    
+    // Add form field state if registered
+    if (this.formFields.size > 0) {
+      const formState = this.getFormState();
+      Object.assign(state, formState);
+    }
+    
+    // Generate metadata if we have at least a dataframe
+    if (!df && Object.keys(state).length === 0) {
+      console.log('[DialogBase] No dataframe and no form state');
+      return null;
+    }
+
+    // Get component type from constructor name
+    const componentType = this.constructor.name;
+
+    const metadata: DialogMetadata = {
+      dialogId: this.dialogId,
+      componentType,
+      version: '1.0',
+      state,
+      timestamp: new Date().toISOString(),
+    };
+    
+    console.log('[DialogBase] Generated metadata:', metadata);
+    return metadata;
+  }
+
+  /**
+   * Get code for display (metadata stripped for readability)
+   */
+  protected getCodeForDisplay(): string {
+    const code = this.codeManager.code();
+    if (!code) return '';
+    return stripMetadata(code);
+  }
+
+  /**
+   * Get code for copying (always includes metadata if present)
+   */
+  protected getCodeForCopy(): string {
+    return this.codeManager.code();
+  }
+
+  /**
+   * Restore dialog state from metadata
+   * 
+   * Called automatically if restoration data is found in DialogRestoreService.
+   * Sets dataframe, loads columns, and applies state using form field registry.
+   */
+  protected async restoreFromMetadata(metadata: DialogMetadata): Promise<boolean> {
+    try {
+      // Validate dialog ID matches
+      if (metadata.dialogId !== this.dialogId) {
+        console.warn(`Dialog ID mismatch: expected ${this.dialogId}, got ${metadata.dialogId}`);
+        return false;
+      }
+
+      // Set dataframe if provided and exists
+      if (metadata.state['dataframe']) {
+        const dataframes = this.dataframes();
+        if (dataframes.includes(metadata.state['dataframe'] as string)) {
+          this.selectedDataframe.set(metadata.state['dataframe'] as string);
+          await this.loadColumns();
+        } else {
+          console.warn(`Dataframe "${metadata.state['dataframe']}" not found`);
+          // Continue with restoration anyway - user might have different dataframe names
+        }
+      }
+
+      // Apply state using form field registry
+      if (this.formFields.size > 0) {
+        this.applyFormState(metadata.state);
+      } else {
+        // Fallback for dialogs without registry
+        this.applyDefaults(metadata.state);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to restore from metadata:', error);
+      return false;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PREFERENCE SAVE/RESTORE (Backward Compatible)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Override to return current dialog settings for persistence.
+   * If form fields are registered, this is automatically handled.
+   * Override only if you need custom behavior beyond the registry.
    */
   protected getCurrentDefaults(): Record<string, unknown> {
+    // Use registry if available, otherwise return empty (backward compatible)
+    if (this.formFields.size > 0) {
+      return this.getFormState();
+    }
     return {};
   }
 
   /**
-   * Override to apply restored defaults to dialog fields
+   * Override to apply restored defaults to dialog fields.
+   * If form fields are registered, this is automatically handled.
+   * Override only if you need custom behavior beyond the registry.
    */
-  protected applyDefaults(_defaults: Record<string, unknown>): void {
-    // Override in subclass
+  protected applyDefaults(defaults: Record<string, unknown>): void {
+    // Use registry if available, otherwise do nothing (backward compatible)
+    if (this.formFields.size > 0) {
+      this.applyFormState(defaults);
+    }
   }
 
   /**
@@ -265,7 +492,10 @@ export abstract class DialogBase implements OnInit {
    * The code manager will automatically rebuild whenever rebuild() is called,
    * and provides a computed `code` signal that components can use.
    *
+   * Metadata is automatically attached if feature flag is enabled and form fields are registered.
+   *
    * @param builder - DialogBuilder function that builds RSyntax from dialog state
+   * @param skipInitialRebuild - If true, skip initial rebuild (effect will handle it)
    *
    * @example
    * ngOnInit(): void {
@@ -277,8 +507,22 @@ export abstract class DialogBase implements OnInit {
    *   );
    * }
    */
-  protected initializeCodeManager(builder: DialogBuilder): void {
-    this.codeManager.initialize(builder);
+  protected initializeCodeManager(builder: DialogBuilder, skipInitialRebuild: boolean = false): void {
+    this.codeManager.initialize(() => {
+      const syntax = builder();
+      const metadata = this.getDialogMetadata();
+      if (metadata) {
+        console.log('[DialogBase] Attaching metadata:', metadata);
+        return syntax.setMetadata(metadata);
+      } else {
+        console.log('[DialogBase] No metadata generated:', {
+          featureFlag: this.appState.includeCodeMetadata(),
+          formFieldsCount: this.formFields.size,
+          dataframe: this.selectedDataframe(),
+        });
+        return syntax;
+      }
+    }, skipInitialRebuild);
   }
 
   /**
@@ -308,5 +552,12 @@ export abstract class DialogBase implements OnInit {
    */
   protected rebuildRCode(): void {
     this.codeManager.rebuild();
+  }
+
+  /**
+   * Create effect in proper injection context (required for ngOnInit)
+   */
+  protected createEffect(effectFn: () => void): void {
+    runInInjectionContext(this.injector, () => effect(effectFn));
   }
 }

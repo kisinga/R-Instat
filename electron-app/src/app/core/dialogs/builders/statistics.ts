@@ -11,7 +11,7 @@
  * - T-Test: One-sample, two-sample, or paired t-test
  */
 
-import { RSyntax, rSyntax, rFn, rStr, rDf, rAssign } from '../../r-codegen';
+import { RSyntax, rSyntax, rFn, rStr, rDf, rAssign, rOp, rPipe, toScript, RCode } from '../../r-codegen';
 
 // ============================================================================
 // Type Definitions
@@ -122,30 +122,48 @@ export function buildRegression(options: RegressionOptions): RSyntax {
   }
 
   const modelName = options.modelName || 'model';
-  const formula = `${options.responseVar} ~ ${options.predictorVars.join(' + ')}`;
+  
+  // Build formula using rOp for ~ and + operators
+  const predictors = options.predictorVars.reduce<RCode | string>((acc, pred, idx) => {
+    if (idx === 0) return pred;
+    const accCode: RCode | string = acc;
+    return rOp('+', accCode, pred);
+  }, '' as RCode | string);
+  
+  const formula = rOp('~', options.responseVar, predictors);
+  const formulaStr = toScript(formula);
 
-  // Base: create the model
-  const baseCode = `# Linear Regression
-${modelName} <- lm(${formula}, data = ${rDf(options.dataframe)})`;
+  // Base: create the model using rFn and rOp for assignment
+  const lmCall = rFn('lm', {
+    formula: formulaStr,
+    data: rDf(options.dataframe),
+  });
+  const assignment = rOp('<-', modelName, lmCall, { spaceAround: false });
+  const baseCode = `# Linear Regression\n${toScript(assignment)}`;
 
   let syntax = rSyntax().setBase(baseCode);
 
   // Add summary if requested
   if (options.showSummary) {
-    syntax = syntax.addAfter(`# Model Summary\nsummary(${modelName})`);
+    const summaryCall = rFn('summary', { x: modelName });
+    syntax = syntax.addAfter(`# Model Summary\n${toScript(summaryCall)}`);
   }
 
   // Add ANOVA if requested
   if (options.showAnova) {
-    syntax = syntax.addAfter(`# ANOVA Table\nanova(${modelName})`);
+    const anovaCall = rFn('anova', { object: modelName });
+    syntax = syntax.addAfter(`# ANOVA Table\n${toScript(anovaCall)}`);
   }
 
   // Add diagnostic plots if requested
   if (options.plotDiagnostics) {
+    const par1 = rFn('par', { mfrow: 'c(2, 2)' });
+    const plotCall = rFn('plot', { x: modelName });
+    const par2 = rFn('par', { mfrow: 'c(1, 1)' });
     syntax = syntax.addAfter(`# Diagnostic Plots
-par(mfrow = c(2, 2))
-plot(${modelName})
-par(mfrow = c(1, 1))`);
+${toScript(par1)}
+${toScript(plotCall)}
+${toScript(par2)}`);
   }
 
   // Set assignment if model name is provided
@@ -179,28 +197,51 @@ export function buildCorrelation(options: CorrelationOptions): RSyntax {
   }
 
   const method = options.method || 'pearson';
-  const varsStr = options.selectedVars.map(v => rStr(v)).join(', ');
+  
+  // Build select - dplyr::select takes column names as arguments
+  // We'll build the select call with column names
+  const selectArgs = options.selectedVars.map(v => v).join(', ');
+  const selectCall = `dplyr::select(${selectArgs})`;
+  
+  // Build pipeline using rPipe
+  const pipeline = rPipe(
+    rDf(options.dataframe),
+    selectCall
+  );
+  
+  // Build assignment and correlation calls using rOp and rFn
+  const corDataAssign = rOp('<-', 'cor_data', pipeline, { spaceAround: false });
+  const corCall = rFn('cor', {
+    x: 'cor_data',
+    use: rStr('pairwise.complete.obs'),
+    method: rStr(method),
+  });
+  const corMatrixAssign = rOp('<-', 'cor_matrix', corCall, { spaceAround: false });
+  const printCall = rFn('print', { x: 'round(cor_matrix, 3)' });
 
-  // Base: select data and compute correlation
   let baseCode = `# Correlation matrix
-cor_data <- ${rDf(options.dataframe)} %>%
-  dplyr::select(${varsStr})
+${toScript(corDataAssign)}
+${toScript(corMatrixAssign)}
+${toScript(printCall)}`;
 
-cor_matrix <- cor(cor_data, use = "pairwise.complete.obs", method = ${rStr(method)})
-print(round(cor_matrix, 3))`;
-
-  // Add p-values if requested
+  // Add p-values if requested - complex loops use string format
   if (options.showPValues) {
+    const corTestCall = rFn('cor.test', {
+      x: 'cor_data[[i]]',
+      y: 'cor_data[[j]]',
+      method: rStr(method),
+    });
+    
     baseCode += `
 
 # P-values using cor.test
-cat("\\nP-values:\\n")
+cat(${rStr('\\nP-values:\\n')})
 n <- ncol(cor_data)
 p_matrix <- matrix(NA, n, n)
 colnames(p_matrix) <- rownames(p_matrix) <- names(cor_data)
 for (i in 1:(n-1)) {
   for (j in (i+1):n) {
-    test <- cor.test(cor_data[[i]], cor_data[[j]], method = ${rStr(method)})
+    test <- ${toScript(corTestCall)}
     p_matrix[i,j] <- p_matrix[j,i] <- test$p.value
   }
 }
@@ -237,15 +278,19 @@ export function buildTTest(options: TTestOptions): RSyntax {
         return rSyntax().setBase('# Enter hypothesized mean (mu)');
       }
 
-      const code = `# One Sample t-test
-t.test(
-  ${rDf(options.dataframe)}$${options.variable1},
-  mu = ${options.mu},
-  alternative = ${rStr(alternative)},
-  conf.level = ${confLevel}
-)`;
+      // Build column access using rOp for $
+      const colAccess = rOp('$', rDf(options.dataframe), options.variable1, { spaceAround: false });
+      const colAccessStr = toScript(colAccess);
+      
+      // Build t.test call using rFn
+      const tTestCall = rFn('t.test', {
+        x: colAccessStr,
+        mu: options.mu,
+        alternative: rStr(alternative),
+        'conf.level': confLevel,
+      });
 
-      return rSyntax().setBase(code);
+      return rSyntax().setBase(`# One Sample t-test\n${toScript(tTestCall)}`);
     }
 
     case 'two': {
@@ -253,15 +298,19 @@ t.test(
         return rSyntax().setBase('# Select a grouping variable');
       }
 
-      const code = `# Two Sample t-test
-t.test(
-  ${options.variable1} ~ ${options.groupVar},
-  data = ${rDf(options.dataframe)},
-  alternative = ${rStr(alternative)},
-  conf.level = ${confLevel}
-)`;
+      // Build formula using rOp for ~
+      const formula = rOp('~', options.variable1, options.groupVar);
+      const formulaStr = toScript(formula);
+      
+      // Build t.test call using rFn
+      const tTestCall = rFn('t.test', {
+        formula: formulaStr,
+        data: rDf(options.dataframe),
+        alternative: rStr(alternative),
+        'conf.level': confLevel,
+      });
 
-      return rSyntax().setBase(code);
+      return rSyntax().setBase(`# Two Sample t-test\n${toScript(tTestCall)}`);
     }
 
     case 'paired': {
@@ -269,16 +318,22 @@ t.test(
         return rSyntax().setBase('# Select a second variable for paired test');
       }
 
-      const code = `# Paired t-test
-t.test(
-  ${rDf(options.dataframe)}$${options.variable1},
-  ${rDf(options.dataframe)}$${options.variable2},
-  paired = TRUE,
-  alternative = ${rStr(alternative)},
-  conf.level = ${confLevel}
-)`;
+      // Build column accesses using rOp for $
+      const colAccess1 = rOp('$', rDf(options.dataframe), options.variable1, { spaceAround: false });
+      const colAccess2 = rOp('$', rDf(options.dataframe), options.variable2, { spaceAround: false });
+      const colAccess1Str = toScript(colAccess1);
+      const colAccess2Str = toScript(colAccess2);
+      
+      // Build t.test call using rFn
+      const tTestCall = rFn('t.test', {
+        x: colAccess1Str,
+        y: colAccess2Str,
+        paired: 'TRUE',
+        alternative: rStr(alternative),
+        'conf.level': confLevel,
+      });
 
-      return rSyntax().setBase(code);
+      return rSyntax().setBase(`# Paired t-test\n${toScript(tTestCall)}`);
     }
   }
 }

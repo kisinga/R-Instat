@@ -11,7 +11,7 @@
  * - Sort: Sort rows by columns (arrange)
  */
 
-import { RSyntax, rSyntax, rFn, rStr, rPipe, rDf, rAssign } from '../../r-codegen';
+import { RSyntax, rSyntax, rFn, rStr, rPipe, rDf, rAssign, rOp, toScript, RCode } from '../../r-codegen';
 
 // ============================================================================
 // Type Definitions
@@ -112,29 +112,36 @@ export interface SortOptions {
 // ============================================================================
 
 /**
- * Build dplyr pipeline with assignment
+ * Build dplyr pipeline with assignment and add_dataframe call
  *
  * Common pattern for data manipulation: mutate/rename/arrange + add_dataframe
+ * Uses r-codegen primitives for composability.
  *
  * @param dataframe - Dataframe name
- * @param pipeline - The dplyr pipeline string
- * @param resultVar - Variable name for the result (default: based on operation)
- * @returns RSyntax with assignment
+ * @param pipeline - The dplyr pipeline (RCode or string)
+ * @param resultVar - Variable name for the result (default: 'updated_data')
+ * @returns RSyntax with assignment and add_dataframe call
  */
 function buildDataManipulationPipeline(
   dataframe: string,
-  pipeline: string,
+  pipeline: RCode | string,
   resultVar: string = 'updated_data'
 ): RSyntax {
-  // Extract the result variable name from pipeline if it contains <-
-  const match = pipeline.match(/^(\w+)\s*<-/);
-  const varName = match ? match[1] : resultVar;
-
-  const code = `${varName} <- ${pipeline.replace(/^\w+\s*<-\s*/, '')}
-
-add_dataframe(${rStr(dataframe)}, ${varName})`;
-
-  return rSyntax().setBase(code);
+  const pipelineStr = typeof pipeline === 'string' ? pipeline : toScript(pipeline);
+  
+  // Build assignment: resultVar <- pipeline using rOp
+  const assignment = rOp('<-', resultVar, pipelineStr, { spaceAround: false });
+  const assignmentStr = toScript(assignment);
+  
+  // Build add_dataframe call using rFn
+  const addDataframeCall = rFn('add_dataframe', {
+    name: rStr(dataframe),
+    df: resultVar,
+  });
+  
+  return rSyntax()
+    .setBase(assignmentStr)
+    .addAfter(addDataframeCall);
 }
 
 // ============================================================================
@@ -160,7 +167,7 @@ export function buildCalculate(options: CalculateOptions): RSyntax {
   }
 
   // Build expression based on calculation type
-  let expression = '';
+  let expression: RCode | string = '';
 
   switch (options.calcType) {
     case 'formula':
@@ -168,28 +175,40 @@ export function buildCalculate(options: CalculateOptions): RSyntax {
       break;
     case 'sum':
       if (options.selectedCols && options.selectedCols.length > 0) {
-        expression = options.selectedCols.join(' + ');
+        // Build sum using rOp for each addition
+        expression = options.selectedCols.reduce<RCode | string>((acc, col, idx) => {
+          if (idx === 0) return col;
+          const accCode: RCode | string = acc;
+          return rOp('+', accCode, col);
+        }, '' as RCode | string);
       } else {
         return rSyntax().setBase('# Select columns to sum');
       }
       break;
     case 'mean':
       if (options.selectedCols && options.selectedCols.length > 0) {
-        expression = `(${options.selectedCols.join(' + ')}) / ${options.selectedCols.length}`;
+        // Build sum, then divide by count
+        const sum = options.selectedCols.reduce<RCode | string>((acc, col, idx) => {
+          if (idx === 0) return col;
+          const accCode: RCode | string = acc;
+          return rOp('+', accCode, col);
+        }, '' as RCode | string);
+        const sumStr = typeof sum === 'string' ? sum : toScript(sum);
+        expression = `(${sumStr}) / ${options.selectedCols.length}`;
       } else {
         return rSyntax().setBase('# Select columns to average');
       }
       break;
     case 'diff':
       if (options.columnA && options.columnB) {
-        expression = `${options.columnA} - ${options.columnB}`;
+        expression = rOp('-', options.columnA, options.columnB);
       } else {
         return rSyntax().setBase('# Select both columns for difference');
       }
       break;
     case 'ratio':
       if (options.columnA && options.columnB) {
-        expression = `${options.columnA} / ${options.columnB}`;
+        expression = rOp('/', options.columnA, options.columnB);
       } else {
         return rSyntax().setBase('# Select both columns for ratio');
       }
@@ -200,10 +219,11 @@ export function buildCalculate(options: CalculateOptions): RSyntax {
     return rSyntax().setBase('# Please specify the calculation');
   }
 
-  // Build dplyr pipeline
+  // Build dplyr pipeline using rFn
+  const expressionStr = typeof expression === 'string' ? expression : toScript(expression);
   const pipeline = rPipe(
     rDf(options.dataframe),
-    `dplyr::mutate(${options.newColumnName} = ${expression})`
+    rFn('mutate', { [options.newColumnName]: expressionStr }, 'dplyr')
   );
 
   return buildDataManipulationPipeline(options.dataframe, pipeline, 'updated_data');
@@ -227,10 +247,10 @@ export function buildRename(options: RenameOptions): RSyntax {
     return rSyntax().setBase('# Select column and enter new name');
   }
 
-  // Build dplyr pipeline
+  // Build dplyr pipeline using rFn
   const pipeline = rPipe(
     rDf(options.dataframe),
-    `dplyr::rename(${options.newName} = ${options.oldName})`
+    rFn('rename', { [options.newName]: options.oldName }, 'dplyr')
   );
 
   return buildDataManipulationPipeline(options.dataframe, pipeline, 'renamed_data');
@@ -260,14 +280,19 @@ export function buildRecode(options: RecodeOptions): RSyntax {
     return rSyntax().setBase('# Add at least one recode mapping');
   }
 
-  // Build case_when expressions
-  const caseWhens = validMappings.map(m => {
+  // Build case_when expressions using rOp for equality checks
+  const caseWhenConditions: string[] = [];
+  for (const m of validMappings) {
     const isFromNumeric = !isNaN(Number(m.from));
     const isToNumeric = !isNaN(Number(m.to));
     const fromVal = isFromNumeric ? m.from : rStr(m.from);
     const toVal = isToNumeric ? m.to : rStr(m.to);
-    return `${options.sourceColumn} == ${fromVal} ~ ${toVal}`;
-  });
+    
+    // Build: sourceColumn == fromVal ~ toVal using rOp for equality
+    const equality = rOp('==', options.sourceColumn, fromVal);
+    const condition = `${toScript(equality)} ~ ${toVal}`;
+    caseWhenConditions.push(condition);
+  }
 
   // Add default
   let defaultExpr = options.sourceColumn; // Keep original
@@ -275,16 +300,18 @@ export function buildRecode(options: RecodeOptions): RSyntax {
     const isNumeric = !isNaN(Number(options.defaultValue));
     defaultExpr = isNumeric ? options.defaultValue : rStr(options.defaultValue);
   }
-  caseWhens.push(`TRUE ~ ${defaultExpr}`);
+  caseWhenConditions.push(`TRUE ~ ${defaultExpr}`);
 
+  // Build case_when call - case_when has special syntax with multiple conditions
+  // We build the string representation but use r-codegen for the mutate wrapper
   const targetCol = options.newColumnName || options.sourceColumn;
-  const caseWhenExpr = `dplyr::case_when(\n      ${caseWhens.join(',\n      ')}\n    )`;
+  const caseWhenStr = `dplyr::case_when(\n      ${caseWhenConditions.join(',\n      ')}\n    )`;
 
-  // Build dplyr pipeline
-  const pipeline = `${rDf(options.dataframe)} %>%
-  dplyr::mutate(
-    ${targetCol} = ${caseWhenExpr}
-  )`;
+  // Build dplyr pipeline using rFn for mutate
+  const pipeline = rPipe(
+    rDf(options.dataframe),
+    rFn('mutate', { [targetCol]: caseWhenStr }, 'dplyr')
+  );
 
   return buildDataManipulationPipeline(options.dataframe, pipeline, 'recoded_data');
 }
@@ -303,19 +330,23 @@ export function buildSort(options: SortOptions): RSyntax {
     return rSyntax().setBase('# Select a dataframe first');
   }
 
-  const sortExprs = options.sortColumns
-    .filter(s => s.column)
-    .map(s => s.descending ? `desc(${s.column})` : s.column);
-
-  if (sortExprs.length === 0) {
+  const validColumns = options.sortColumns.filter(s => s.column);
+  
+  if (validColumns.length === 0) {
     return rSyntax().setBase('# Select columns to sort by');
   }
 
-  // Build dplyr pipeline
-  const arrangeArgs = sortExprs.join(', ');
+  // Build arrange arguments - desc() calls for descending, column names for ascending
+  // arrange() takes positional arguments, so we build the string representation
+  const arrangeArgs = validColumns.map(col => 
+    col.descending ? `desc(${col.column})` : col.column
+  ).join(', ');
+
+  // Build dplyr pipeline - use rPipe for structure, string for arrange (positional args)
+  const arrangeCall = `dplyr::arrange(${arrangeArgs})`;
   const pipeline = rPipe(
     rDf(options.dataframe),
-    `dplyr::arrange(${arrangeArgs})`
+    arrangeCall
   );
 
   return buildDataManipulationPipeline(options.dataframe, pipeline, 'sorted_data');

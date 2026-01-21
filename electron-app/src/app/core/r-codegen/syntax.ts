@@ -8,6 +8,7 @@
 import { RCode, Assignment, Parameter } from './types';
 import { toScript } from './core';
 import { generateAssignment } from './assignment';
+import { DialogMetadata } from './dialog-metadata';
 
 /**
  * RSyntax - Container for composable R code
@@ -23,6 +24,7 @@ export class RSyntax {
   before: Array<{ code: RCode; position: number }> = [];
   after: Array<{ code: RCode; position: number }> = [];
   assignment?: Assignment;
+  metadata?: DialogMetadata;
 
   constructor(base?: RCode, assignment?: Assignment) {
     this.base = base;
@@ -66,6 +68,15 @@ export class RSyntax {
   }
 
   /**
+   * Set metadata for dialog state restoration
+   */
+  setMetadata(metadata: DialogMetadata): RSyntax {
+    const newSyntax = this.clone();
+    newSyntax.metadata = metadata;
+    return newSyntax;
+  }
+
+  /**
    * Sort code list by position (-1 goes to end)
    */
   private sortByPosition(
@@ -89,6 +100,20 @@ export class RSyntax {
   toScript(): string {
     const lines: string[] = [];
     let script = '';
+
+    // Add metadata comment block at the top if present
+    if (this.metadata) {
+      console.log('[RSyntax] Including metadata in toScript():', this.metadata);
+      lines.push('# R-Instat Dialog Metadata');
+      lines.push('# DO NOT EDIT - Used for dialog state restoration');
+      const metadataJson = JSON.stringify(this.metadata, null, 2);
+      metadataJson.split('\n').forEach(line => {
+        lines.push(`# ${line}`);
+      });
+      lines.push(''); // Empty line separator
+    } else {
+      console.log('[RSyntax] No metadata to include');
+    }
 
     // Before code
     const sortedBefore = this.sortByPosition(this.before);
@@ -187,6 +212,7 @@ export class RSyntax {
     const newSyntax = new RSyntax(this.base, this.assignment);
     newSyntax.before = [...this.before];
     newSyntax.after = [...this.after];
+    newSyntax.metadata = this.metadata;
     return newSyntax;
   }
 }

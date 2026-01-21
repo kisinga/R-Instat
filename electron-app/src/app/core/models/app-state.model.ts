@@ -54,6 +54,8 @@ export interface PreferencesState {
   summary: SummaryPreferences;
   // Dialog-specific defaults stored by dialog ID
   dialogDefaults: Record<string, Record<string, unknown>>;
+  // Feature flags
+  includeCodeMetadata?: boolean; // Default true
 }
 
 /**
@@ -78,4 +80,5 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     level: 'annual',
   },
   dialogDefaults: {},
+  includeCodeMetadata: true, // Default true
 };
