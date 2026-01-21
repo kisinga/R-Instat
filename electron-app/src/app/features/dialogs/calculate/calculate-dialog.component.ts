@@ -148,6 +148,16 @@ export class CalculateDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      newColumnName: this.newColumnName,
+      calcType: this.calcType,
+      formula: this.formula,
+      selectedCols: this.selectedCols,
+      columnA: this.columnA,
+      columnB: this.columnB,
+    });
+
     // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildCalculate({

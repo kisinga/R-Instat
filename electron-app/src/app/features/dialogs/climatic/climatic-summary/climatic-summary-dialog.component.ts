@@ -12,6 +12,7 @@ import { DialogBase } from '../../dialog-base';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../../shared/components/code-preview/code-preview.component';
 import {
   ClimaticSummaryOptions,
   SummaryLevel,
@@ -27,7 +28,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 @Component({
   selector: 'app-climatic-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content climatic-summary-dialog" (click)="$event.stopPropagation()">
       <!-- Header -->
@@ -141,26 +142,19 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
         </div>
 
         <!-- Code Preview -->
-        <div class="code-preview-section mt-4">
-          <button 
-            class="btn btn-ghost btn-xs gap-1"
-            (click)="showCodePreview.set(!showCodePreview())"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
-          </button>
-          
-          @if (showCodePreview()) {
-            <pre class="code-block mt-2">{{ rCode() }}</pre>
-          }
-        </div>
+        @if (showCodePreview()) {
+          <div class="form-group mt-4">
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
+          </div>
+        }
       </div>
 
       <!-- Footer -->
       <div class="dialog-footer">
         <button class="btn btn-ghost btn-sm" (click)="reset()">{{ 'DIALOG.RESET' | translate }}</button>
+        <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
+          {{ (showCodePreview() ? 'DIALOG.HIDE_CODE' : 'DIALOG.SHOW_CODE') | translate }}
+        </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
@@ -178,7 +172,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
   `,
   styles: [`
     .climatic-summary-dialog {
-      width: 600px;
       max-width: 90vw;
     }
 

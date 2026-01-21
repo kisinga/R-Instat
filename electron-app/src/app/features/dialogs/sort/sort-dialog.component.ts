@@ -130,6 +130,11 @@ export class SortDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      sortColumns: this.sortColumns,
+    });
+
     // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildSort({

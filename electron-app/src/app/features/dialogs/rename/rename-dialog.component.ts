@@ -94,6 +94,12 @@ export class RenameDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      oldName: this.oldName,
+      newName: this.newName,
+    });
+
     // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildRename({

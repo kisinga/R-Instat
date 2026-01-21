@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { LanguageService } from '../../../core/services/language.service';
 import { 
   buildSummaryCode, 
@@ -33,7 +34,7 @@ interface StatisticOption {
 @Component({
   selector: 'app-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule],
+  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -155,8 +156,7 @@ interface StatisticOption {
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
-            <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block text-xs bg-base-200 p-3 rounded-lg overflow-x-auto">{{ rCode() }}</pre>
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
           </div>
         }
       </div>
@@ -235,6 +235,15 @@ export class SummaryDialogComponent extends DialogBase implements OnInit {
 
   override ngOnInit(): void {
     super.ngOnInit();
+
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      selectedColumns: this.selectedColumns,
+      groupByColumn: this.groupByColumn,
+      summaryMode: this.summaryMode,
+      selectedStatistics: this.selectedStatistics,
+      omitMissing: this.omitMissing,
+    });
 
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();

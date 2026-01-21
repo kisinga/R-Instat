@@ -113,6 +113,14 @@ export class BarChartDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      xVariable: this.xVariable,
+      fillVariable: this.fillVariable,
+      position: this.position,
+      horizontal: this.horizontal,
+    });
+
     // Initialize code manager with builder function
     // The builder will be called whenever rebuild() is invoked
     this.initializeCodeManager(() =>

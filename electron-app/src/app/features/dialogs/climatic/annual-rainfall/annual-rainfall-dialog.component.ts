@@ -29,7 +29,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
       </div>
 
       <div class="dialog-body">
-        <!-- Dataframe Selection -->
         <div class="form-group">
           <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
           @if (dataframes().length === 0) {
@@ -47,7 +46,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           }
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
             <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
@@ -63,11 +62,17 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
         </div>
 
-        <!-- Code Preview -->
-        <app-code-preview [code]="rCode()" [collapsible]="true" />
+        @if (showCodePreview()) {
+          <div class="form-group mt-4">
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
+          </div>
+        }
       </div>
 
       <div class="dialog-footer">
+        <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
+          {{ (showCodePreview() ? 'DIALOG.HIDE_CODE' : 'DIALOG.SHOW_CODE') | translate }}
+        </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button class="btn btn-primary" (click)="execute()" [disabled]="!isValid() || isLoading()">
@@ -78,9 +83,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
     </div>
   `,
   styles: [`
-    .climatic-dialog { width: 500px; max-width: 90vw; }
-    .code-block { background: hsl(var(--b2)); border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; overflow-x: auto; max-height: 120px; white-space: pre-wrap; }
-    .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
+    .climatic-dialog { max-width: 90vw; }
   `]
 })
 export class AnnualRainfallDialogComponent extends DialogBase implements OnInit {

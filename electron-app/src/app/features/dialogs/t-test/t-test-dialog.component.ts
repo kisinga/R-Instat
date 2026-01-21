@@ -163,6 +163,17 @@ export class TTestDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      testType: this.testType,
+      variable1: this.variable1,
+      variable2: this.variable2,
+      groupVar: this.groupVar,
+      mu: this.mu,
+      alternative: this.alternative,
+      confLevel: this.confLevel,
+    });
+
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();
       if (!df) {

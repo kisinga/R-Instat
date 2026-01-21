@@ -177,6 +177,12 @@ export class FilterDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      conditions: this.conditions,
+      combineLogic: this.combineLogic,
+    });
+
     this.initializeCodeManager(() => {
       const code = buildFilter({
         dataframe: this.selectedDataframe() || '',

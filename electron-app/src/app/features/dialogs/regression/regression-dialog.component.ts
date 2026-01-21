@@ -131,6 +131,16 @@ export class RegressionDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      responseVar: this.responseVar,
+      predictorVars: this.predictorVars,
+      modelName: this.modelName,
+      showSummary: this.showSummary,
+      showAnova: this.showAnova,
+      plotDiagnostics: this.plotDiagnostics,
+    });
+
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();
       if (!df) {

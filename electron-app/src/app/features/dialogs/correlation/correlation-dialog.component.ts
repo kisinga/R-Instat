@@ -116,6 +116,13 @@ export class CorrelationDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      selectedVars: this.selectedVars,
+      method: this.method,
+      showPValues: this.showPValues,
+    });
+
     this.initializeCodeManager(() => {
       const df = this.selectedDataframe();
       if (!df) {

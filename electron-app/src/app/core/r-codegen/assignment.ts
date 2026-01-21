@@ -47,12 +47,27 @@ export function generateAssignment(
  * Generate simple variable assignment: name <- expr
  */
 function generateVariableAssignment(expr: string, name: string, script: string): string {
-  // For multi-line expressions, assign to last line
+  // For multi-line expressions, check if it's a chain (ends with + or %>%)
   const lines = expr.split('\n');
   if (lines.length > 1) {
-    const lastLine = lines[lines.length - 1];
-    const beforeLines = lines.slice(0, -1);
-    return `${beforeLines.join('\n')}\n${name} <- ${lastLine}`;
+    // Check if the expression is a chain (ggplot, dplyr pipe, etc.)
+    // If any line (except the last) ends with + or %>% (with optional whitespace),
+    // it's a chain and we need to wrap the entire expression
+    const isChain = lines.some((line, index) => {
+      if (index === lines.length - 1) return false; // Skip last line
+      const trimmed = line.trimEnd();
+      return trimmed.endsWith('+') || trimmed.endsWith('%>%');
+    });
+    
+    if (isChain) {
+      // For chains, wrap the entire expression in parentheses
+      return `${name} <- (${expr})`;
+    } else {
+      // For non-chains, assign to last line (original behavior)
+      const lastLine = lines[lines.length - 1];
+      const beforeLines = lines.slice(0, -1);
+      return `${beforeLines.join('\n')}\n${name} <- ${lastLine}`;
+    }
   }
   
   return `${name} <- ${expr}`;
@@ -169,7 +184,8 @@ function generateObjectAssignment(
   // First: assign expression to temp variable
   const assignLine = generateVariableAssignment(expr, tempVar, script);
   
-  // Build add_object call
+  // Build add_object call (only if data_book is available)
+  // In electron app context, plots are auto-detected, so this is optional
   const params: Record<string, any> = {
     object_name: rStr(objectName),
     object_type_label: rStr(objectType),
@@ -180,9 +196,9 @@ function generateObjectAssignment(
     params['data_name'] = rStr(options.dataframe);
   }
   
-  // For graphs, wrap in check_graph
+  // For graphs, wrap in check_graph if instatExtras is available
   if (objectType === 'graph') {
-    params['object'] = `instatExtras::check_graph(${tempVar})`;
+    params['object'] = `if (requireNamespace("instatExtras", quietly = TRUE)) instatExtras::check_graph(${tempVar}) else ${tempVar}`;
   } else {
     params['object'] = tempVar;
   }
@@ -197,6 +213,11 @@ function generateObjectAssignment(
     })),
   });
   
-  // Return multi-line: assignment + add call
-  return `${assignLine}\n${addCall}`;
+  // Try to add to data_book if available, but always return the plot
+  // This allows the code to work in both desktop (with databook) and electron (without) contexts
+  // The plot will be automatically detected and displayed by the R backend
+  const conditionalAddCall = `# Try to add object to data_book if available\nif (exists("data_book")) {\n  ${addCall}\n}\n# Return the plot so it gets displayed\n${tempVar}`;
+  
+  // Return multi-line: assignment + conditional add call + plot return
+  return `${assignLine}\n${conditionalAddCall}`;
 }

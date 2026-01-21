@@ -12,6 +12,7 @@ import { DialogBase } from '../../dialog-base';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
+import { CodePreviewComponent } from '../../../../shared/components/code-preview/code-preview.component';
 import { buildTemperatureSummary, TemperatureSummaryOptions } from '../utils/climatic-r-builders';
 import { rSyntax } from '../../../../core/r-codegen';
 import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
@@ -19,7 +20,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 @Component({
   selector: 'app-temperature-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content climatic-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -39,7 +40,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           }
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
             <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
@@ -50,7 +51,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.TMAX_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
             <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="tmaxColumn()" (selectedColumnChange)="tmaxColumn.set($event)" />
@@ -75,15 +76,17 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           </div>
         </div>
 
-        <div class="code-preview-section mt-4">
-          <button class="btn btn-ghost btn-xs gap-1" (click)="toggleCodePreview()">
-            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
-          </button>
-          @if (showCodePreview()) { <pre class="code-block mt-2">{{ rCode() }}</pre> }
-        </div>
+        @if (showCodePreview()) {
+          <div class="form-group mt-4">
+            <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
+          </div>
+        }
       </div>
 
       <div class="dialog-footer">
+        <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
+          {{ (showCodePreview() ? 'DIALOG.HIDE_CODE' : 'DIALOG.SHOW_CODE') | translate }}
+        </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button class="btn btn-primary" (click)="execute()" [disabled]="!isValid() || isLoading()">
@@ -94,9 +97,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
     </div>
   `,
   styles: [`
-    .climatic-dialog { width: 500px; max-width: 90vw; }
-    .code-block { background: hsl(var(--b2)); border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.7rem; overflow-x: auto; max-height: 150px; white-space: pre-wrap; }
-    .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
+    .climatic-dialog { max-width: 90vw; }
   `]
 })
 export class TemperatureSummaryDialogComponent extends DialogBase implements OnInit {

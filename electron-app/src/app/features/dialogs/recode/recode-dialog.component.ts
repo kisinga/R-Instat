@@ -164,6 +164,14 @@ export class RecodeDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
+    // Register form fields for automatic save/restore/auto-population
+    this.registerFormFields({
+      sourceColumn: this.sourceColumn,
+      newColumnName: this.newColumnName,
+      mappings: this.mappings,
+      defaultValue: this.defaultValue,
+    });
+
     // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildRecode({
