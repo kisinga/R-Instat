@@ -5,7 +5,7 @@
  * Uses the core r-codegen module for composable R code generation.
  */
 
-import { rStr, rDf, rBool, rPipe, rPlus, rFn, rIf } from '../../../../core/r-codegen';
+import { rStr, rDf, rBool, rPipe, rPlus, rFn, rIf, rOp, toScript, ComparisonOperator } from '../../../../core/r-codegen';
 import {
   ClimaticSummaryOptions,
   InventoryPlotOptions,
@@ -319,7 +319,7 @@ export interface DayCountOptions {
   elementColumn: string;
   stationColumn?: string;
   threshold: number;
-  operator: '>=' | '>' | '<=' | '<';
+  operator: ComparisonOperator;
 }
 
 export function buildDayCount(opts: DayCountOptions): string {
@@ -330,7 +330,8 @@ export function buildDayCount(opts: DayCountOptions): string {
   }
 
   const groupCols = stationColumn ? [stationColumn, 'year'] : ['year'];
-  const condition = `${elementColumn} ${operator} ${threshold}`;
+  // Construct comparison operator dynamically using rOp
+  const condition = toScript(rOp(operator, elementColumn, threshold));
 
   return rPipe(
     rDf(dataframe),
@@ -363,7 +364,10 @@ export function buildSpellLengths(opts: SpellLengthsOptions): string {
   }
 
   const groupCols = stationColumn ? [stationColumn, 'year'] : ['year'];
-  const condition = spellType === 'wet' ? `${elementColumn} >= ${threshold}` : `${elementColumn} < ${threshold}`;
+  // Construct comparison operator dynamically using rOp
+  const condition = toScript(
+    rOp(spellType === 'wet' ? '>=' : '<', elementColumn, threshold)
+  );
 
   const spellLabel = `${spellType}_spell`;
 

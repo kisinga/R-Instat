@@ -5,7 +5,7 @@
  * Separated from the Describe dialog for clearer UX.
  */
 
-import { Component, signal, computed, inject } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -17,6 +17,7 @@ import {
   SummaryMode, 
   SummaryStatistic 
 } from '../describe/utils/r-code-builders';
+import { rSyntax } from '../../../core/r-codegen';
 
 interface SummaryModeOption {
   value: SummaryMode;
@@ -62,12 +63,12 @@ interface StatisticOption {
             <div class="form-group">
               <div class="flex items-center gap-2">
                 <label class="form-label">{{ 'SUMMARY.VARIABLES' | translate }}</label>
-                <span class="text-xs text-base-content/60">({{ selectedColumns.length }}/{{ columns().length }})</span>
+                <span class="text-xs text-base-content/60">({{ selectedColumns().length }}/{{ columns().length }})</span>
               </div>
               <app-column-picker
                 [columns]="columns()"
                 [multiple]="true"
-                [(selectedColumns)]="selectedColumns"
+                [(selectedColumns)]="selectedColumnsArray"
               />
             </div>
 
@@ -79,7 +80,8 @@ interface StatisticOption {
               </div>
               <select 
                 class="select select-bordered w-full select-sm"
-                [(ngModel)]="groupByColumn"
+                [ngModel]="groupByColumn()"
+                (ngModelChange)="groupByColumn.set($event)"
               >
                 <option value="">{{ 'DIALOG.NONE' | translate }}</option>
                 @for (col of getFactorColumns(); track col.name) {
@@ -154,7 +156,7 @@ interface StatisticOption {
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block text-xs bg-base-200 p-3 rounded-lg overflow-x-auto">{{ buildRCode() }}</pre>
+            <pre class="code-block text-xs bg-base-200 p-3 rounded-lg overflow-x-auto">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -179,13 +181,13 @@ interface StatisticOption {
     </div>
   `,
 })
-export class SummaryDialogComponent extends DialogBase {
+export class SummaryDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Summary Statistics';
   private readonly languageService = inject(LanguageService);
 
   // Column selection
-  selectedColumns: string[] = [];
-  groupByColumn = '';
+  selectedColumns = signal<string[]>([]);
+  groupByColumn = signal('');
 
   // Summary options
   summaryMode = signal<SummaryMode>('default');
@@ -212,6 +214,15 @@ export class SummaryDialogComponent extends DialogBase {
     { value: 'iqr', labelKey: 'SUMMARY.STAT_IQR' },
   ];
 
+  // Getter/setter for ColumnPickerComponent two-way binding
+  get selectedColumnsArray(): string[] {
+    return this.selectedColumns();
+  }
+
+  set selectedColumnsArray(value: string[]) {
+    this.selectedColumns.set(value);
+  }
+
   toggleStatistic(stat: SummaryStatistic): void {
     const current = this.selectedStatistics();
     const index = current.indexOf(stat);
@@ -222,42 +233,62 @@ export class SummaryDialogComponent extends DialogBase {
     }
   }
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) {
-      return '# Select a dataframe first';
-    }
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    // Use all columns if none selected
-    const cols = this.selectedColumns.length > 0 
-      ? this.selectedColumns 
-      : this.columns().map(c => c.name);
+    this.initializeCodeManager(() => {
+      const df = this.selectedDataframe();
+      if (!df) {
+        return rSyntax().setBase('# Select a dataframe first');
+      }
 
-    if (cols.length === 0) {
-      return '# No columns available';
-    }
+      // Use all columns if none selected
+      const cols = this.selectedColumns().length > 0 
+        ? this.selectedColumns() 
+        : this.columns().map(c => c.name);
 
-    return buildSummaryCode({
-      dataframe: df,
-      columns: cols,
-      mode: this.summaryMode(),
-      statistics: this.selectedStatistics(),
-      omitMissing: this.omitMissing(),
-      groupBy: this.groupByColumn || undefined,
+      if (cols.length === 0) {
+        return rSyntax().setBase('# No columns available');
+      }
+
+      const code = buildSummaryCode({
+        dataframe: df,
+        columns: cols,
+        mode: this.summaryMode(),
+        statistics: this.selectedStatistics(),
+        omitMissing: this.omitMissing(),
+        groupBy: this.groupByColumn() || undefined,
+      });
+
+      return rSyntax().setBase(code);
+    });
+
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.selectedColumns();
+      this.groupByColumn();
+      this.summaryMode();
+      this.selectedStatistics();
+      this.omitMissing();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
     });
   }
 
   isValid(): boolean {
     const hasDataframe = !!this.selectedDataframe();
-    const hasColumns = this.selectedColumns.length > 0 || this.columns().length > 0;
+    const hasColumns = this.selectedColumns().length > 0 || this.columns().length > 0;
     const hasStatistics = this.summaryMode() !== 'customised' || this.selectedStatistics().length > 0;
     return hasDataframe && hasColumns && hasStatistics;
   }
 
   protected override onDataframeChanged(): void {
     // Clear selections when dataframe changes
-    this.selectedColumns = [];
-    this.groupByColumn = '';
+    this.selectedColumns.set([]);
+    this.groupByColumn.set('');
   }
 
   protected override getCurrentDefaults(): Record<string, unknown> {

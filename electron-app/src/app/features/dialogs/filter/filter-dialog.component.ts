@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +10,7 @@ import {
   buildFilter,
   isConditionValid,
 } from './filter-r-builders';
+import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
   selector: 'app-filter-dialog',
@@ -41,11 +42,12 @@ import {
         <div class="form-group">
           <label class="form-label">{{ 'FILTER.CONDITIONS' | translate }}</label>
           
-          @for (condition of conditions; track $index; let i = $index) {
+          @for (condition of conditions(); track $index; let i = $index) {
             <div class="flex gap-2 mb-2 items-end">
               <select 
                 class="select select-bordered select-sm flex-1"
-                [(ngModel)]="condition.column"
+                [ngModel]="condition.column"
+                (ngModelChange)="updateCondition(i, 'column', $event)"
               >
                 <option value="">{{ 'DIALOG.SELECT_COLUMN' | translate }}</option>
                 @for (col of columns(); track col.name) {
@@ -55,7 +57,8 @@ import {
 
               <select 
                 class="select select-bordered select-sm w-24"
-                [(ngModel)]="condition.operator"
+                [ngModel]="condition.operator"
+                (ngModelChange)="updateCondition(i, 'operator', $event)"
               >
                 <option value="==">{{ 'FILTER.EQUALS' | translate }}</option>
                 <option value="!=">{{ 'FILTER.NOT_EQUALS' | translate }}</option>
@@ -73,14 +76,15 @@ import {
                   type="text"
                   class="input input-bordered input-sm flex-1"
                   [placeholder]="'DIALOG.VALUE' | translate"
-                  [(ngModel)]="condition.value"
+                  [ngModel]="condition.value"
+                  (ngModelChange)="updateCondition(i, 'value', $event)"
                 />
               }
 
               <button 
                 class="btn btn-ghost btn-sm btn-square"
                 (click)="removeCondition(i)"
-                [disabled]="conditions.length === 1"
+                [disabled]="conditions().length === 1"
               >
                 ✕
               </button>
@@ -97,11 +101,23 @@ import {
           <label class="form-label">{{ 'FILTER.COMBINE_WITH' | translate }}</label>
           <div class="flex gap-4">
             <label class="label cursor-pointer gap-2">
-              <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="&" />
+              <input 
+                type="radio" 
+                class="radio radio-primary" 
+                [value]="'&'"
+                [checked]="combineLogic() === '&'"
+                (change)="combineLogic.set('&')"
+              />
               <span>{{ 'FILTER.AND' | translate }}</span>
             </label>
             <label class="label cursor-pointer gap-2">
-              <input type="radio" class="radio radio-primary" [(ngModel)]="combineLogic" value="|" />
+              <input 
+                type="radio" 
+                class="radio radio-primary" 
+                [value]="'|'"
+                [checked]="combineLogic() === '|'"
+                (change)="combineLogic.set('|')"
+              />
               <span>{{ 'FILTER.OR' | translate }}</span>
             </label>
           </div>
@@ -111,7 +127,7 @@ import {
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -136,29 +152,53 @@ import {
     </div>
   `,
 })
-export class FilterDialogComponent extends DialogBase {
+export class FilterDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Filter Rows';
 
-  conditions: FilterCondition[] = [{ column: '', operator: '==', value: '' }];
-  combineLogic: CombineLogic = '&';
+  conditions = signal<FilterCondition[]>([{ column: '', operator: '==', value: '' }]);
+  combineLogic = signal<CombineLogic>('&');
 
   addCondition(): void {
-    this.conditions = [...this.conditions, { column: '', operator: '==', value: '' }];
+    this.conditions.update(c => [...c, { column: '', operator: '==', value: '' }]);
   }
 
   removeCondition(index: number): void {
-    this.conditions = this.conditions.filter((_, i) => i !== index);
+    this.conditions.update(c => c.filter((_, i) => i !== index));
   }
 
-  buildRCode(): string {
-    return buildFilter({
-      dataframe: this.selectedDataframe() || '',
-      conditions: this.conditions,
-      combineLogic: this.combineLogic,
+  updateCondition(index: number, field: 'column' | 'operator' | 'value', value: string): void {
+    this.conditions.update(c => {
+      const updated = [...c];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }
+
+  override ngOnInit(): void {
+    super.ngOnInit();
+
+    this.initializeCodeManager(() => {
+      const code = buildFilter({
+        dataframe: this.selectedDataframe() || '',
+        conditions: this.conditions(),
+        combineLogic: this.combineLogic(),
+      });
+      return rSyntax().setBase(code);
+    });
+
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.conditions();
+      this.combineLogic();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
     });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && this.conditions.some(isConditionValid);
+    return !!this.selectedDataframe() && this.conditions().some(isConditionValid);
   }
 }

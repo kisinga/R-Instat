@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildScatter } from '../../../core/dialogs/builders/graphs';
 
 @Component({
   selector: 'app-scatter-dialog',
@@ -37,7 +38,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getNumericColumns()"
             [multiple]="false"
-            [(selectedColumn)]="xVariable"
+            [selectedColumn]="xVariable()"
+            (selectedColumnChange)="xVariable.set($event)"
           />
         </div>
 
@@ -47,14 +49,15 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getNumericColumns()"
             [multiple]="false"
-            [(selectedColumn)]="yVariable"
+            [selectedColumn]="yVariable()"
+            (selectedColumnChange)="yVariable.set($event)"
           />
         </div>
 
         <!-- Color Variable -->
         <div class="form-group">
           <label class="form-label">{{ 'SCATTER.COLOR_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="colorVariable">
+          <select class="select select-bordered w-full" [ngModel]="colorVariable()" (ngModelChange)="colorVariable.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -65,7 +68,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Options -->
         <div class="form-group">
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="addTrendLine" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="addTrendLine()" (ngModelChange)="addTrendLine.set($event)" />
             <span>{{ 'SCATTER.SHOW_REGRESSION' | translate }}</span>
           </label>
         </div>
@@ -74,7 +77,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -99,40 +102,45 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class ScatterDialogComponent extends DialogBase {
+export class ScatterDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Scatter Plot';
 
-  xVariable = '';
-  yVariable = '';
-  colorVariable = '';
-  addTrendLine = false;
+  // Dialog state using signals for reactivity
+  xVariable = signal('');
+  yVariable = signal('');
+  colorVariable = signal('');
+  addTrendLine = signal(false);
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.xVariable || !this.yVariable) return '# Select X and Y variables';
-    
-    let aesArgs = `x = ${this.xVariable}, y = ${this.yVariable}`;
-    if (this.colorVariable) {
-      aesArgs += `, color = ${this.colorVariable}`;
-    }
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    let code = `ggplot(get_dataframe("${df}"), aes(${aesArgs})) +
-  geom_point(alpha = 0.7, size = 2)`;
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildScatter({
+        dataframe: this.selectedDataframe(),
+        xVariable: this.xVariable(),
+        yVariable: this.yVariable(),
+        colorVariable: this.colorVariable() || undefined,
+        addTrendLine: this.addTrendLine(),
+        title: `${this.yVariable()} vs ${this.xVariable()}`,
+      })
+    );
 
-    if (this.addTrendLine) {
-      code += ` +
-  geom_smooth(method = "lm", se = TRUE, alpha = 0.2)`;
-    }
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.xVariable();
+      this.yVariable();
+      this.colorVariable();
+      this.addTrendLine();
 
-    code += ` +
-  theme_minimal() +
-  labs(title = "${this.yVariable} vs ${this.xVariable}", x = "${this.xVariable}", y = "${this.yVariable}")`;
-
-    return code;
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.xVariable && !!this.yVariable;
+    return !!this.selectedDataframe() && !!this.xVariable() && !!this.yVariable();
   }
 }

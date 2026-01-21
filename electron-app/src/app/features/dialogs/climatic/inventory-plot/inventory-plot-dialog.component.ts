@@ -4,18 +4,17 @@
  * Dialog for creating data availability inventory plots (heatmaps).
  */
 
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { RService } from '../../../../core/services/r.service';
-import { ToastService } from '../../../../core/services/toast.service';
-import { LanguageService } from '../../../../core/services/language.service';
+import { DialogBase } from '../../dialog-base';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
 import { InventoryPlotOptions, DEFAULT_INVENTORY_OPTIONS } from '../utils/climatic-types';
 import { buildInventoryPlot } from '../utils/climatic-r-builders';
+import { rSyntax, rAssign } from '../../../../core/r-codegen';
 
 @Component({
   selector: 'app-inventory-plot-dialog',
@@ -26,7 +25,7 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
       <!-- Header -->
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'CLIMATIC.INVENTORY_PLOT' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <!-- Body -->
@@ -99,7 +98,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
               <input 
                 type="text" 
                 class="input input-bordered w-full input-sm" 
-                [(ngModel)]="plotTitle"
+                [ngModel]="plotTitle()"
+                (ngModelChange)="plotTitle.set($event)"
                 [placeholder]="'Data Availability Inventory'"
               />
             </div>
@@ -110,7 +110,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
                 <input 
                   type="checkbox" 
                   class="checkbox checkbox-sm checkbox-primary" 
-                  [(ngModel)]="facetByStation"
+                  [checked]="facetByStation()"
+                  (change)="facetByStation.set($any($event.target).checked)"
                   [disabled]="!stationColumn()"
                 />
                 <span class="text-sm">{{ 'CLIMATIC.FACET_BY_STATION' | translate }}</span>
@@ -123,7 +124,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
                 <input 
                   type="checkbox" 
                   class="checkbox checkbox-sm checkbox-primary" 
-                  [(ngModel)]="flipCoords"
+                  [checked]="flipCoords()"
+                  (change)="flipCoords.set($any($event.target).checked)"
                 />
                 <span class="text-sm">{{ 'CLIMATIC.FLIP_COORDS' | translate }}</span>
               </label>
@@ -137,7 +139,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
                   <input 
                     type="color" 
                     class="w-8 h-8 rounded cursor-pointer"
-                    [(ngModel)]="presentColor"
+                    [ngModel]="presentColor()"
+                    (ngModelChange)="presentColor.set($event)"
                   />
                   <span class="text-xs">{{ 'CLIMATIC.PRESENT' | translate }}</span>
                 </div>
@@ -145,7 +148,8 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
                   <input 
                     type="color" 
                     class="w-8 h-8 rounded cursor-pointer"
-                    [(ngModel)]="missingColor"
+                    [ngModel]="missingColor()"
+                    (ngModelChange)="missingColor.set($event)"
                   />
                   <span class="text-xs">{{ 'CLIMATIC.MISSING' | translate }}</span>
                 </div>
@@ -176,7 +180,7 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
       <div class="dialog-footer">
         <button class="btn btn-ghost btn-sm" (click)="reset()">{{ 'DIALOG.RESET' | translate }}</button>
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
@@ -233,92 +237,77 @@ import { buildInventoryPlot } from '../utils/climatic-r-builders';
     }
   `]
 })
-export class InventoryPlotDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class InventoryPlotDialogComponent extends DialogBase implements OnInit {
+  readonly dialogTitle = 'Inventory Plot';
 
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
   private readonly climaticService = inject(ClimaticDataService);
 
-  // Data
-  dataframes = signal<string[]>([]);
-  selectedDataframe = signal<string>('');
-  columns = signal<ColumnInfo[]>([]);
-
-  // Form state (signals for reactivity with computed)
+  // Form state (signals for reactivity)
   dateColumn = signal('');
   elementColumn = signal('');
   stationColumn = signal('');
-  plotTitle = '';
-  facetByStation = DEFAULT_INVENTORY_OPTIONS.facetByStation!;
-  flipCoords = DEFAULT_INVENTORY_OPTIONS.flipCoords!;
-  presentColor = DEFAULT_INVENTORY_OPTIONS.presentColor!;
-  missingColor = DEFAULT_INVENTORY_OPTIONS.missingColor!;
+  plotTitle = signal('');
+  facetByStation = signal(DEFAULT_INVENTORY_OPTIONS.facetByStation!);
+  flipCoords = signal(DEFAULT_INVENTORY_OPTIONS.flipCoords!);
+  presentColor = signal(DEFAULT_INVENTORY_OPTIONS.presentColor!);
+  missingColor = signal(DEFAULT_INVENTORY_OPTIONS.missingColor!);
 
-  // UI state
-  isLoading = signal(false);
-  showCodePreview = signal(false);
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  // Computed
-  rCode = computed(() => {
-    const opts: InventoryPlotOptions = {
-      dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn(),
-      elementColumn: this.elementColumn(),
-      stationColumn: this.stationColumn() || undefined,
-      facetByStation: this.facetByStation && !!this.stationColumn(),
-      flipCoords: this.flipCoords,
-      title: this.plotTitle || undefined,
-      presentColor: this.presentColor,
-      missingColor: this.missingColor,
-    };
-    return buildInventoryPlot(opts);
-  });
+    // Initialize code manager with builder
+    this.initializeCodeManager(() => {
+      const df = this.selectedDataframe();
+      if (!df) {
+        return rSyntax().setBase('# Select a dataframe first');
+      }
 
-  isValid = computed(() => {
-    return !!(
-      this.selectedDataframe() &&
-      this.dateColumn() &&
-      this.elementColumn()
-    );
-  });
-
-  async ngOnInit(): Promise<void> {
-    await this.loadDataframes();
-  }
-
-  private async loadDataframes(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-
-    const active = this.rService.activeDataframe();
-    if (active && dfs.includes(active)) {
-      this.selectedDataframe.set(active);
-      await this.loadColumns();
-    } else if (dfs.length > 0) {
-      this.selectedDataframe.set(dfs[0]);
-      await this.loadColumns();
-    }
-  }
-
-  private async loadColumns(): Promise<void> {
-    const df = this.selectedDataframe();
-    if (!df) {
-      this.columns.set([]);
-      return;
-    }
-
-    try {
-      const columnInfo = await this.rService.getColumnInfo(df);
-      this.columns.set(columnInfo);
+      const opts: InventoryPlotOptions = {
+        dataframe: df,
+        dateColumn: this.dateColumn(),
+        elementColumn: this.elementColumn(),
+        stationColumn: this.stationColumn() || undefined,
+        facetByStation: this.facetByStation() && !!this.stationColumn(),
+        flipCoords: this.flipCoords(),
+        title: this.plotTitle() || undefined,
+        presentColor: this.presentColor(),
+        missingColor: this.missingColor(),
+      };
       
-      // Auto-fill from saved climatic roles
-      this.autoFillFromRoles();
-    } catch (error) {
-      console.error('Failed to load columns:', error);
-      this.columns.set([]);
-    }
+      const syntax = rSyntax().setBase(buildInventoryPlot(opts));
+      
+      // Set assignment for graph output
+      return syntax.setAssignment(
+        rAssign('graph', 'inventory_plot', {
+          format: 'text',
+        })
+      );
+    });
+
+    // Reactive updates
+    effect(() => {
+      this.selectedDataframe();
+      this.dateColumn();
+      this.elementColumn();
+      this.stationColumn();
+      this.plotTitle();
+      this.facetByStation();
+      this.flipCoords();
+      this.presentColor();
+      this.missingColor();
+      this.rebuildRCode();
+    });
+  }
+
+  override onDataframeChanged(): void {
+    this.autoFillFromRoles();
+  }
+
+  override async onDataframeChange(name: string): Promise<void> {
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
+    await super.onDataframeChange(name);
   }
 
   private autoFillFromRoles(): void {
@@ -337,16 +326,8 @@ export class InventoryPlotDialogComponent implements OnInit {
     }
   }
 
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe.set(name);
-    this.dateColumn.set('');
-    this.elementColumn.set('');
-    this.stationColumn.set('');
-    await this.loadColumns();
-  }
-
-  getDateColumns(): ColumnInfo[] {
-    // Include Date types directly, and character columns that look like dates
+  // Enhanced date column detection (includes character columns with date-like names)
+  override getDateColumns(): ColumnInfo[] {
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
       const name = c.name.toLowerCase();
@@ -365,54 +346,46 @@ export class InventoryPlotDialogComponent implements OnInit {
     });
   }
 
-  getNumericColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('numeric') || t.includes('integer') || t.includes('double');
-    });
-  }
-
-  getFactorColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('factor') || t.includes('character');
-    });
-  }
-
   reset(): void {
     this.dateColumn.set('');
     this.elementColumn.set('');
     this.stationColumn.set('');
-    this.plotTitle = '';
-    this.facetByStation = DEFAULT_INVENTORY_OPTIONS.facetByStation!;
-    this.flipCoords = DEFAULT_INVENTORY_OPTIONS.flipCoords!;
-    this.presentColor = DEFAULT_INVENTORY_OPTIONS.presentColor!;
-    this.missingColor = DEFAULT_INVENTORY_OPTIONS.missingColor!;
+    this.plotTitle.set('');
+    this.facetByStation.set(DEFAULT_INVENTORY_OPTIONS.facetByStation!);
+    this.flipCoords.set(DEFAULT_INVENTORY_OPTIONS.flipCoords!);
+    this.presentColor.set(DEFAULT_INVENTORY_OPTIONS.presentColor!);
+    this.missingColor.set(DEFAULT_INVENTORY_OPTIONS.missingColor!);
   }
 
-  async execute(): Promise<void> {
-    if (!this.isValid()) {
-      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
-      return;
-    }
+  isValid(): boolean {
+    return !!(
+      this.selectedDataframe() &&
+      this.dateColumn() &&
+      this.elementColumn()
+    );
+  }
 
-    this.isLoading.set(true);
+  protected override getCurrentDefaults(): Record<string, unknown> {
+    return {
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn(),
+      plotTitle: this.plotTitle(),
+      facetByStation: this.facetByStation(),
+      flipCoords: this.flipCoords(),
+      presentColor: this.presentColor(),
+      missingColor: this.missingColor(),
+    };
+  }
 
-    try {
-      const result = await this.rService.execute(this.rCode());
-
-      if (result.success) {
-        this.toastService.success(this.languageService.instant('TOAST.COMMAND_SUCCESS'));
-        this.close.emit();
-      } else {
-        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
-      }
-    } catch (error) {
-      this.toastService.error(
-        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
-      );
-    } finally {
-      this.isLoading.set(false);
-    }
+  protected override applyDefaults(defaults: Record<string, unknown>): void {
+    if (defaults['dateColumn']) this.dateColumn.set(defaults['dateColumn'] as string);
+    if (defaults['elementColumn']) this.elementColumn.set(defaults['elementColumn'] as string);
+    if (defaults['stationColumn']) this.stationColumn.set(defaults['stationColumn'] as string);
+    if (defaults['plotTitle']) this.plotTitle.set(defaults['plotTitle'] as string);
+    if (defaults['facetByStation'] !== undefined) this.facetByStation.set(defaults['facetByStation'] as boolean);
+    if (defaults['flipCoords'] !== undefined) this.flipCoords.set(defaults['flipCoords'] as boolean);
+    if (defaults['presentColor']) this.presentColor.set(defaults['presentColor'] as string);
+    if (defaults['missingColor']) this.missingColor.set(defaults['missingColor'] as string);
   }
 }

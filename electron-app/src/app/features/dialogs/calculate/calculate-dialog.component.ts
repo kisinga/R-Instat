@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildCalculate } from '../../../core/dialogs/builders/data-manipulation';
 
 @Component({
   selector: 'app-calculate-dialog',
@@ -37,14 +38,15 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             type="text"
             class="input input-bordered w-full"
             placeholder="e.g., total_score"
-            [(ngModel)]="newColumnName"
+            [ngModel]="newColumnName()"
+            (ngModelChange)="newColumnName.set($event)"
           />
         </div>
 
         <!-- Calculation Type -->
         <div class="form-group">
           <label class="form-label">Calculation Type</label>
-          <select class="select select-bordered w-full" [(ngModel)]="calcType">
+          <select class="select select-bordered w-full" [ngModel]="calcType()" (ngModelChange)="calcType.set($event)">
             <option value="formula">Custom Formula</option>
             <option value="sum">Sum of Columns</option>
             <option value="mean">Mean of Columns</option>
@@ -53,31 +55,32 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           </select>
         </div>
 
-        @if (calcType === 'formula') {
+        @if (calcType() === 'formula') {
           <div class="form-group">
             <label class="form-label">Formula</label>
             <textarea
               class="textarea textarea-bordered w-full font-mono"
               rows="3"
               placeholder="e.g., column_a + column_b * 2"
-              [(ngModel)]="formula"
+              [ngModel]="formula()"
+              (ngModelChange)="formula.set($event)"
             ></textarea>
             <p class="form-hint">Use column names directly. Available functions: log, sqrt, abs, round, etc.</p>
           </div>
-        } @else if (calcType === 'sum' || calcType === 'mean') {
+        } @else if (calcType() === 'sum' || calcType() === 'mean') {
           <div class="form-group">
-            <label class="form-label">Columns to {{ calcType === 'sum' ? 'Sum' : 'Average' }}</label>
+            <label class="form-label">Columns to {{ calcType() === 'sum' ? 'Sum' : 'Average' }}</label>
             <app-column-picker
               [columns]="getNumericColumns()"
               [multiple]="true"
-              [(selectedColumns)]="selectedCols"
+              [(selectedColumns)]="selectedColsArray"
             />
           </div>
         } @else {
           <div class="grid grid-cols-2 gap-4">
             <div class="form-group">
               <label class="form-label">Column A</label>
-              <select class="select select-bordered w-full" [(ngModel)]="columnA">
+              <select class="select select-bordered w-full" [ngModel]="columnA()" (ngModelChange)="columnA.set($event)">
                 @for (col of getNumericColumns(); track col.name) {
                   <option [value]="col.name">{{ col.name }}</option>
                 }
@@ -85,7 +88,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             </div>
             <div class="form-group">
               <label class="form-label">Column B</label>
-              <select class="select select-bordered w-full" [(ngModel)]="columnB">
+              <select class="select select-bordered w-full" [ngModel]="columnB()" (ngModelChange)="columnB.set($event)">
                 @for (col of getNumericColumns(); track col.name) {
                   <option [value]="col.name">{{ col.name }}</option>
                 }
@@ -98,7 +101,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -123,74 +126,71 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class CalculateDialogComponent extends DialogBase {
+export class CalculateDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Calculate New Column';
 
-  newColumnName = '';
-  calcType = 'formula';
-  formula = '';
-  selectedCols: string[] = [];
-  columnA = '';
-  columnB = '';
+  // Dialog state using signals for reactivity
+  newColumnName = signal('');
+  calcType = signal<'formula' | 'sum' | 'mean' | 'diff' | 'ratio'>('formula');
+  formula = signal('');
+  selectedCols = signal<string[]>([]);
+  columnA = signal('');
+  columnB = signal('');
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    
-    const colName = this.newColumnName || 'new_column';
-    
-    let expression = '';
-    
-    switch (this.calcType) {
-      case 'formula':
-        expression = this.formula || '0';
-        break;
-      case 'sum':
-        if (this.selectedCols.length > 0) {
-          expression = this.selectedCols.join(' + ');
-        }
-        break;
-      case 'mean':
-        if (this.selectedCols.length > 0) {
-          expression = `(${this.selectedCols.join(' + ')}) / ${this.selectedCols.length}`;
-        }
-        break;
-      case 'diff':
-        if (this.columnA && this.columnB) {
-          expression = `${this.columnA} - ${this.columnB}`;
-        }
-        break;
-      case 'ratio':
-        if (this.columnA && this.columnB) {
-          expression = `${this.columnA} / ${this.columnB}`;
-        }
-        break;
-    }
+  // Property for two-way binding with column picker (syncs with signal)
+  get selectedColsArray(): string[] {
+    return this.selectedCols();
+  }
+  set selectedColsArray(value: string[]) {
+    this.selectedCols.set(value);
+  }
 
-    if (!expression) {
-      return `# Please specify the calculation`;
-    }
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    return `updated_data <- get_dataframe("${df}") %>%
-  dplyr::mutate(${colName} = ${expression})
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildCalculate({
+        dataframe: this.selectedDataframe(),
+        newColumnName: this.newColumnName() || 'new_column',
+        calcType: this.calcType(),
+        formula: this.formula() || undefined,
+        selectedCols: this.selectedCols().length > 0 ? this.selectedCols() : undefined,
+        columnA: this.columnA() || undefined,
+        columnB: this.columnB() || undefined,
+      })
+    );
 
-add_dataframe("${df}", updated_data)`;
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.newColumnName();
+      this.calcType();
+      this.formula();
+      this.selectedCols();
+      this.columnA();
+      this.columnB();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    if (!this.selectedDataframe() || !this.newColumnName) {
+    if (!this.selectedDataframe() || !this.newColumnName()) {
       return false;
     }
 
-    switch (this.calcType) {
+    switch (this.calcType()) {
       case 'formula':
-        return !!this.formula;
+        return !!this.formula();
       case 'sum':
       case 'mean':
-        return this.selectedCols.length > 0;
+        return this.selectedCols().length > 0;
       case 'diff':
       case 'ratio':
-        return !!this.columnA && !!this.columnB;
+        return !!this.columnA() && !!this.columnB();
       default:
         return false;
     }

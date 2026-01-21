@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildRename } from '../../../core/dialogs/builders/data-manipulation';
 
 @Component({
   selector: 'app-rename-dialog',
@@ -36,7 +37,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="columns()"
             [multiple]="false"
-            [(selectedColumn)]="oldName"
+            [selectedColumn]="oldName()"
+            (selectedColumnChange)="oldName.set($event)"
           />
         </div>
 
@@ -47,7 +49,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             type="text"
             class="input input-bordered w-full"
             placeholder="Enter new column name..."
-            [(ngModel)]="newName"
+            [ngModel]="newName()"
+            (ngModelChange)="newName.set($event)"
           />
           <p class="form-hint">Use letters, numbers, and underscores. Start with a letter.</p>
         </div>
@@ -56,7 +59,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -81,28 +84,42 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class RenameDialogComponent extends DialogBase {
+export class RenameDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Rename Column';
 
-  oldName = '';
-  newName = '';
+  // Dialog state using signals for reactivity
+  oldName = signal('');
+  newName = signal('');
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.oldName || !this.newName) return '# Select column and enter new name';
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    return `renamed_data <- get_dataframe("${df}") %>%
-  dplyr::rename(${this.newName} = ${this.oldName})
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildRename({
+        dataframe: this.selectedDataframe(),
+        oldName: this.oldName(),
+        newName: this.newName(),
+      })
+    );
 
-add_dataframe("${df}", renamed_data)`;
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.oldName();
+      this.newName();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    if (!this.selectedDataframe() || !this.oldName || !this.newName) {
+    if (!this.selectedDataframe() || !this.oldName() || !this.newName()) {
       return false;
     }
     // Check valid R column name
-    return /^[a-zA-Z][a-zA-Z0-9_.]*$/.test(this.newName);
+    return /^[a-zA-Z][a-zA-Z0-9_.]*$/.test(this.newName());
   }
 }

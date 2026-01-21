@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildRecode } from '../../../core/dialogs/builders/data-manipulation';
 
 interface RecodeMapping {
   from: string;
@@ -41,7 +42,8 @@ interface RecodeMapping {
           <app-column-picker
             [columns]="columns()"
             [multiple]="false"
-            [(selectedColumn)]="sourceColumn"
+            [selectedColumn]="sourceColumn()"
+            (selectedColumnChange)="sourceColumn.set($event)"
           />
         </div>
 
@@ -52,7 +54,8 @@ interface RecodeMapping {
             type="text"
             class="input input-bordered w-full"
             placeholder="Leave empty to overwrite original"
-            [(ngModel)]="newColumnName"
+            [ngModel]="newColumnName()"
+            (ngModelChange)="newColumnName.set($event)"
           />
         </div>
 
@@ -60,25 +63,27 @@ interface RecodeMapping {
         <div class="form-group">
           <label class="form-label">Recode Values</label>
           
-          @for (mapping of mappings; track $index; let i = $index) {
+          @for (mapping of mappings(); track $index; let i = $index) {
             <div class="flex gap-2 mb-2 items-center">
               <input
                 type="text"
                 class="input input-bordered input-sm flex-1"
                 placeholder="From value..."
-                [(ngModel)]="mapping.from"
+                [ngModel]="mapping.from"
+                (ngModelChange)="updateMapping(i, 'from', $event)"
               />
               <span class="text-base-content/50">→</span>
               <input
                 type="text"
                 class="input input-bordered input-sm flex-1"
                 placeholder="To value..."
-                [(ngModel)]="mapping.to"
+                [ngModel]="mapping.to"
+                (ngModelChange)="updateMapping(i, 'to', $event)"
               />
               <button 
                 class="btn btn-ghost btn-sm btn-square"
                 (click)="removeMapping(i)"
-                [disabled]="mappings.length === 1"
+                [disabled]="mappings().length === 1"
               >
                 ✕
               </button>
@@ -97,7 +102,8 @@ interface RecodeMapping {
             type="text"
             class="input input-bordered w-full"
             placeholder="Leave empty to keep original value"
-            [(ngModel)]="defaultValue"
+            [ngModel]="defaultValue()"
+            (ngModelChange)="defaultValue.set($event)"
           />
         </div>
 
@@ -105,7 +111,7 @@ interface RecodeMapping {
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -130,66 +136,62 @@ interface RecodeMapping {
     </div>
   `,
 })
-export class RecodeDialogComponent extends DialogBase {
+export class RecodeDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Recode Values';
 
-  sourceColumn = '';
-  newColumnName = '';
-  mappings: RecodeMapping[] = [
-    { from: '', to: '' }
-  ];
-  defaultValue = '';
+  // Dialog state using signals for reactivity
+  sourceColumn = signal('');
+  newColumnName = signal('');
+  mappings = signal<RecodeMapping[]>([{ from: '', to: '' }]);
+  defaultValue = signal('');
 
   addMapping(): void {
-    this.mappings = [...this.mappings, { from: '', to: '' }];
+    this.mappings.update(m => [...m, { from: '', to: '' }]);
   }
 
   removeMapping(index: number): void {
-    this.mappings = this.mappings.filter((_, i) => i !== index);
+    this.mappings.update(m => m.filter((_, i) => i !== index));
   }
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.sourceColumn) return '# Select a source column';
-    
-    const targetCol = this.newColumnName || this.sourceColumn;
-    
-    const validMappings = this.mappings.filter(m => m.from && m.to);
-    
-    if (validMappings.length === 0) {
-      return '# Add at least one recode mapping';
-    }
-
-    const caseWhens = validMappings.map(m => {
-      const isFromNumeric = !isNaN(Number(m.from));
-      const isToNumeric = !isNaN(Number(m.to));
-      const fromVal = isFromNumeric ? m.from : `"${m.from}"`;
-      const toVal = isToNumeric ? m.to : `"${m.to}"`;
-      return `${this.sourceColumn} == ${fromVal} ~ ${toVal}`;
+  updateMapping(index: number, field: 'from' | 'to', value: string): void {
+    this.mappings.update(m => {
+      const updated = [...m];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
     });
+  }
 
-    // Add default
-    let defaultExpr = this.sourceColumn; // Keep original
-    if (this.defaultValue) {
-      const isNumeric = !isNaN(Number(this.defaultValue));
-      defaultExpr = isNumeric ? this.defaultValue : `"${this.defaultValue}"`;
-    }
-    caseWhens.push(`TRUE ~ ${defaultExpr}`);
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    return `recoded_data <- get_dataframe("${df}") %>%
-  dplyr::mutate(
-    ${targetCol} = dplyr::case_when(
-      ${caseWhens.join(',\n      ')}
-    )
-  )
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildRecode({
+        dataframe: this.selectedDataframe(),
+        sourceColumn: this.sourceColumn(),
+        newColumnName: this.newColumnName() || undefined,
+        mappings: this.mappings(),
+        defaultValue: this.defaultValue() || undefined,
+      })
+    );
 
-add_dataframe("${df}", recoded_data)`;
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.sourceColumn();
+      this.newColumnName();
+      this.mappings();
+      this.defaultValue();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
     return !!this.selectedDataframe() && 
-      !!this.sourceColumn && 
-      this.mappings.some(m => m.from && m.to);
+      !!this.sourceColumn() && 
+      this.mappings().some(m => m.from && m.to);
   }
 }

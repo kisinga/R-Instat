@@ -1,9 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildHistogram } from '../../../core/dialogs/builders/graphs';
 
 @Component({
   selector: 'app-histogram-dialog',
@@ -37,7 +38,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getNumericColumns()"
             [multiple]="false"
-            [(selectedColumn)]="variable"
+            [selectedColumn]="variable()"
+            (selectedColumnChange)="variable.set($event)"
           />
         </div>
 
@@ -48,7 +50,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             <input
               type="number"
               class="input input-bordered w-full"
-              [(ngModel)]="bins"
+              [ngModel]="bins()"
+              (ngModelChange)="bins.set($event)"
               min="5"
               max="100"
             />
@@ -59,7 +62,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             <input
               type="color"
               class="w-full h-10 rounded cursor-pointer"
-              [(ngModel)]="fillColor"
+              [ngModel]="fillColor()"
+              (ngModelChange)="fillColor.set($event)"
             />
           </div>
         </div>
@@ -67,7 +71,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Facet Option -->
         <div class="form-group">
           <label class="form-label">{{ 'HISTOGRAM.FACET_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="facetBy">
+          <select class="select select-bordered w-full" [ngModel]="facetBy()" (ngModelChange)="facetBy.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -79,7 +83,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -104,33 +108,45 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class HistogramDialogComponent extends DialogBase {
+export class HistogramDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Histogram';
 
-  variable = '';
-  bins = 30;
-  fillColor = '#6366f1';
-  facetBy = '';
+  // Dialog state using signals for reactivity
+  variable = signal('');
+  bins = signal(30);
+  fillColor = signal('#6366f1');
+  facetBy = signal('');
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.variable) return '# Select a variable first';
-    
-    let code = `ggplot(get_dataframe("${df}"), aes(x = ${this.variable})) +
-  geom_histogram(bins = ${this.bins}, fill = "${this.fillColor}", color = "white", alpha = 0.8) +
-  theme_minimal() +
-  labs(title = "Histogram of ${this.variable}", x = "${this.variable}", y = "Count")`;
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    if (this.facetBy) {
-      code += ` +
-  facet_wrap(~ ${this.facetBy})`;
-    }
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildHistogram({
+        dataframe: this.selectedDataframe(),
+        variable: this.variable(),
+        bins: this.bins(),
+        fillColor: this.fillColor(),
+        facetBy: this.facetBy() || undefined,
+        title: `Histogram of ${this.variable()}`,
+      })
+    );
 
-    return code;
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.variable();
+      this.bins();
+      this.fillColor();
+      this.facetBy();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.variable;
+    return !!this.selectedDataframe() && !!this.variable();
   }
 }

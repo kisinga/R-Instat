@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
 
 @Component({
   selector: 'app-boxplot-dialog',
@@ -37,14 +38,15 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getNumericColumns()"
             [multiple]="false"
-            [(selectedColumn)]="yVariable"
+            [selectedColumn]="yVariable()"
+            (selectedColumnChange)="yVariable.set($event)"
           />
         </div>
 
         <!-- X Variable (grouping) -->
         <div class="form-group">
           <label class="form-label">{{ 'BOXPLOT.X_VARIABLE' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="xVariable">
+          <select class="select select-bordered w-full" [ngModel]="xVariable()" (ngModelChange)="xVariable.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -55,7 +57,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Fill Variable -->
         <div class="form-group">
           <label class="form-label">{{ 'BOXPLOT.FILL_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="fillVariable">
+          <select class="select select-bordered w-full" [ngModel]="fillVariable()" (ngModelChange)="fillVariable.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -66,7 +68,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Options -->
         <div class="form-group">
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="showPoints" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="showPoints()" (ngModelChange)="showPoints.set($event)" />
             <span>{{ 'BOXPLOT.SHOW_POINTS' | translate }}</span>
           </label>
         </div>
@@ -75,7 +77,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -100,44 +102,45 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class BoxplotDialogComponent extends DialogBase {
+export class BoxplotDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Box Plot';
 
-  yVariable = '';
-  xVariable = '';
-  fillVariable = '';
-  showPoints = false;
+  // Dialog state using signals for reactivity
+  yVariable = signal('');
+  xVariable = signal('');
+  fillVariable = signal('');
+  showPoints = signal(false);
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.yVariable) return '# Select a Y variable';
-    
-    // Build aes string
-    let aesArgs = `y = ${this.yVariable}`;
-    if (this.xVariable) {
-      aesArgs = `x = ${this.xVariable}, ${aesArgs}`;
-    }
-    if (this.fillVariable) {
-      aesArgs += `, fill = ${this.fillVariable}`;
-    }
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    let code = `ggplot(get_dataframe("${df}"), aes(${aesArgs})) +
-  geom_boxplot(alpha = 0.7)`;
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildBoxplot({
+        dataframe: this.selectedDataframe(),
+        yVariable: this.yVariable(),
+        xVariable: this.xVariable() || undefined,
+        fillVariable: this.fillVariable() || undefined,
+        showPoints: this.showPoints(),
+        title: `Box Plot of ${this.yVariable()}`,
+      })
+    );
 
-    if (this.showPoints) {
-      code += ` +
-  geom_jitter(width = 0.2, alpha = 0.5, size = 1)`;
-    }
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.yVariable();
+      this.xVariable();
+      this.fillVariable();
+      this.showPoints();
 
-    code += ` +
-  theme_minimal() +
-  labs(title = "Box Plot of ${this.yVariable}"${this.xVariable ? `, x = "${this.xVariable}"` : ''}, y = "${this.yVariable}")`;
-
-    return code;
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.yVariable;
+    return !!this.selectedDataframe() && !!this.yVariable();
   }
 }

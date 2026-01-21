@@ -55,6 +55,12 @@ export interface ROperator {
 export type RCode = RFunction | ROperator | string;
 
 /**
+ * Comparison operators for R expressions
+ * These are the standard comparison operators used in R code generation.
+ */
+export type ComparisonOperator = '>=' | '>' | '<=' | '<';
+
+/**
  * Assignment target types
  */
 export type AssignTarget = 'variable' | 'column' | 'dataframe' | 'model' | 'graph' | 'table';

@@ -4,14 +4,11 @@
  * Dialog for computing climatic summaries (annual/monthly totals, means, etc.)
  */
 
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { AppStateService } from '../../../../core/services/app-state.service';
-import { RService } from '../../../../core/services/r.service';
-import { ToastService } from '../../../../core/services/toast.service';
-import { LanguageService } from '../../../../core/services/language.service';
+import { DialogBase } from '../../dialog-base';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
@@ -24,6 +21,7 @@ import {
   DEFAULT_SUMMARY_OPTIONS,
 } from '../utils/climatic-types';
 import { buildClimaticSummary } from '../utils/climatic-r-builders';
+import { rSyntax } from '../../../../core/r-codegen';
 
 @Component({
   selector: 'app-climatic-summary-dialog',
@@ -34,7 +32,7 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
       <!-- Header -->
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'CLIMATIC.SUMMARY' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <!-- Body -->
@@ -112,7 +110,8 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
                       name="level"
                       class="radio radio-sm radio-primary"
                       [value]="level.value"
-                      [(ngModel)]="summaryLevel"
+                      [checked]="summaryLevel() === level.value"
+                      (change)="summaryLevel.set(level.value)"
                     />
                     <span class="text-sm">{{ level.labelKey | translate }}</span>
                   </label>
@@ -123,7 +122,7 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
             <!-- Summary Function -->
             <div class="form-group">
               <label class="form-label">{{ 'CLIMATIC.SUMMARY_FUNCTION' | translate }}</label>
-              <select class="select select-bordered w-full select-sm" [(ngModel)]="summaryFunction">
+              <select class="select select-bordered w-full select-sm" [ngModel]="summaryFunction()" (ngModelChange)="summaryFunction.set($event)">
                 @for (func of summaryFunctions; track func.value) {
                   <option [value]="func.value">{{ func.labelKey | translate }}</option>
                 }
@@ -133,7 +132,7 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
             <!-- Omit Missing -->
             <div class="form-group">
               <label class="cursor-pointer flex items-center gap-2">
-                <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" [(ngModel)]="omitMissing" />
+                <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" [checked]="omitMissing()" (change)="omitMissing.set($any($event.target).checked)" />
                 <span class="text-sm">{{ 'CLIMATIC.OMIT_MISSING' | translate }}</span>
               </label>
             </div>
@@ -162,7 +161,7 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
       <div class="dialog-footer">
         <button class="btn btn-ghost btn-sm" (click)="reset()">{{ 'DIALOG.RESET' | translate }}</button>
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
@@ -219,92 +218,67 @@ import { buildClimaticSummary } from '../utils/climatic-r-builders';
     }
   `]
 })
-export class ClimaticSummaryDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class ClimaticSummaryDialogComponent extends DialogBase implements OnInit {
+  readonly dialogTitle = 'Climatic Summary';
 
-  private readonly appState = inject(AppStateService);
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
   private readonly climaticService = inject(ClimaticDataService);
 
-  // Data (from AppStateService - single source of truth)
-  readonly dataframes = this.appState.dataframes;
-  selectedDataframe = signal<string>('');
-  columns = signal<ColumnInfo[]>([]);
-
-  // Form state (signals for reactivity with computed)
+  // Form state (signals for reactivity)
   dateColumn = signal('');
   elementColumn = signal('');
   stationColumn = signal('');
-  summaryLevel: SummaryLevel = DEFAULT_SUMMARY_OPTIONS.level!;
-  summaryFunction: ClimaticSummaryFunction = DEFAULT_SUMMARY_OPTIONS.summaryFunction!;
-  omitMissing = DEFAULT_SUMMARY_OPTIONS.omitMissing!;
-
-  // UI state
-  isLoading = signal(false);
-  showCodePreview = signal(false);
+  summaryLevel = signal<SummaryLevel>(DEFAULT_SUMMARY_OPTIONS.level!);
+  summaryFunction = signal<ClimaticSummaryFunction>(DEFAULT_SUMMARY_OPTIONS.summaryFunction!);
+  omitMissing = signal(DEFAULT_SUMMARY_OPTIONS.omitMissing!);
 
   // Constants
   readonly summaryLevels = SUMMARY_LEVELS;
   readonly summaryFunctions = SUMMARY_FUNCTIONS;
 
-  // Computed
-  rCode = computed(() => {
-    const opts: ClimaticSummaryOptions = {
-      dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn(),
-      elementColumn: this.elementColumn(),
-      stationColumn: this.stationColumn() || undefined,
-      level: this.summaryLevel,
-      summaryFunction: this.summaryFunction,
-      omitMissing: this.omitMissing,
-    };
-    return buildClimaticSummary(opts);
-  });
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  isValid = computed(() => {
-    return !!(
-      this.selectedDataframe() &&
-      this.dateColumn() &&
-      this.elementColumn()
-    );
-  });
+    // Initialize code manager with builder
+    this.initializeCodeManager(() => {
+      const df = this.selectedDataframe();
+      if (!df) {
+        return rSyntax().setBase('# Select a dataframe first');
+      }
 
-  async ngOnInit(): Promise<void> {
-    await this.loadDataframes();
+      const opts: ClimaticSummaryOptions = {
+        dataframe: df,
+        dateColumn: this.dateColumn(),
+        elementColumn: this.elementColumn(),
+        stationColumn: this.stationColumn() || undefined,
+        level: this.summaryLevel(),
+        summaryFunction: this.summaryFunction(),
+        omitMissing: this.omitMissing(),
+      };
+      return rSyntax().setBase(buildClimaticSummary(opts));
+    });
+
+    // Reactive updates
+    effect(() => {
+      this.selectedDataframe();
+      this.dateColumn();
+      this.elementColumn();
+      this.stationColumn();
+      this.summaryLevel();
+      this.summaryFunction();
+      this.omitMissing();
+      this.rebuildRCode();
+    });
   }
 
-  private async loadDataframes(): Promise<void> {
-    const dfs = this.dataframes();
-    const active = this.appState.activeDataframe();
-    
-    if (active && dfs.includes(active)) {
-      this.selectedDataframe.set(active);
-      await this.loadColumns();
-    } else if (dfs.length > 0) {
-      this.selectedDataframe.set(dfs[0]);
-      await this.loadColumns();
-    }
+  override onDataframeChanged(): void {
+    this.autoFillFromRoles();
   }
 
-  private async loadColumns(): Promise<void> {
-    const df = this.selectedDataframe();
-    if (!df) {
-      this.columns.set([]);
-      return;
-    }
-
-    try {
-      const columnInfo = await this.rService.getColumnInfo(df);
-      this.columns.set(columnInfo);
-      
-      // Auto-fill from saved climatic roles
-      this.autoFillFromRoles();
-    } catch (error) {
-      console.error('Failed to load columns:', error);
-      this.columns.set([]);
-    }
+  override async onDataframeChange(name: string): Promise<void> {
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
+    await super.onDataframeChange(name);
   }
 
   private autoFillFromRoles(): void {
@@ -323,16 +297,8 @@ export class ClimaticSummaryDialogComponent implements OnInit {
     }
   }
 
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe.set(name);
-    this.dateColumn.set('');
-    this.elementColumn.set('');
-    this.stationColumn.set('');
-    await this.loadColumns();
-  }
-
-  getDateColumns(): ColumnInfo[] {
-    // Include Date types directly, and character columns that look like dates
+  // Enhanced date column detection (includes character columns with date-like names)
+  override getDateColumns(): ColumnInfo[] {
     return this.columns().filter(c => {
       const t = c.type.toLowerCase();
       const name = c.name.toLowerCase();
@@ -344,52 +310,40 @@ export class ClimaticSummaryDialogComponent implements OnInit {
     });
   }
 
-  getNumericColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('numeric') || t.includes('integer') || t.includes('double');
-    });
-  }
-
-  getFactorColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('factor') || t.includes('character');
-    });
-  }
-
   reset(): void {
     this.dateColumn.set('');
     this.elementColumn.set('');
     this.stationColumn.set('');
-    this.summaryLevel = DEFAULT_SUMMARY_OPTIONS.level!;
-    this.summaryFunction = DEFAULT_SUMMARY_OPTIONS.summaryFunction!;
-    this.omitMissing = DEFAULT_SUMMARY_OPTIONS.omitMissing!;
+    this.summaryLevel.set(DEFAULT_SUMMARY_OPTIONS.level!);
+    this.summaryFunction.set(DEFAULT_SUMMARY_OPTIONS.summaryFunction!);
+    this.omitMissing.set(DEFAULT_SUMMARY_OPTIONS.omitMissing!);
   }
 
-  async execute(): Promise<void> {
-    if (!this.isValid()) {
-      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
-      return;
-    }
+  isValid(): boolean {
+    return !!(
+      this.selectedDataframe() &&
+      this.dateColumn() &&
+      this.elementColumn()
+    );
+  }
 
-    this.isLoading.set(true);
+  protected override getCurrentDefaults(): Record<string, unknown> {
+    return {
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn(),
+      summaryLevel: this.summaryLevel(),
+      summaryFunction: this.summaryFunction(),
+      omitMissing: this.omitMissing(),
+    };
+  }
 
-    try {
-      const result = await this.rService.execute(this.rCode());
-
-      if (result.success) {
-        this.toastService.success(this.languageService.instant('TOAST.COMMAND_SUCCESS'));
-        this.close.emit();
-      } else {
-        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
-      }
-    } catch (error) {
-      this.toastService.error(
-        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
-      );
-    } finally {
-      this.isLoading.set(false);
-    }
+  protected override applyDefaults(defaults: Record<string, unknown>): void {
+    if (defaults['dateColumn']) this.dateColumn.set(defaults['dateColumn'] as string);
+    if (defaults['elementColumn']) this.elementColumn.set(defaults['elementColumn'] as string);
+    if (defaults['stationColumn']) this.stationColumn.set(defaults['stationColumn'] as string);
+    if (defaults['summaryLevel']) this.summaryLevel.set(defaults['summaryLevel'] as SummaryLevel);
+    if (defaults['summaryFunction']) this.summaryFunction.set(defaults['summaryFunction'] as ClimaticSummaryFunction);
+    if (defaults['omitMissing'] !== undefined) this.omitMissing.set(defaults['omitMissing'] as boolean);
   }
 }

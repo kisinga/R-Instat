@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { buildRegression } from '../../../core/dialogs/builders/statistics';
 
 @Component({
   selector: 'app-regression-dialog',
@@ -36,7 +37,8 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getNumericColumns()"
             [multiple]="false"
-            [(selectedColumn)]="responseVar"
+            [selectedColumn]="responseVar()"
+            (selectedColumnChange)="responseVar.set($event)"
           />
         </div>
 
@@ -46,7 +48,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="columns()"
             [multiple]="true"
-            [(selectedColumns)]="predictorVars"
+            [(selectedColumns)]="predictorVarsArray"
           />
         </div>
 
@@ -57,22 +59,23 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
             type="text"
             class="input input-bordered w-full"
             placeholder="e.g., my_model"
-            [(ngModel)]="modelName"
+            [ngModel]="modelName()"
+            (ngModelChange)="modelName.set($event)"
           />
         </div>
 
         <!-- Options -->
         <div class="form-group">
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="showSummary" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="showSummary()" (ngModelChange)="showSummary.set($event)" />
             <span>Show model summary</span>
           </label>
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="showAnova" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="showAnova()" (ngModelChange)="showAnova.set($event)" />
             <span>Show ANOVA table</span>
           </label>
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="plotDiagnostics" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="plotDiagnostics()" (ngModelChange)="plotDiagnostics.set($event)" />
             <span>Plot diagnostics</span>
           </label>
         </div>
@@ -81,7 +84,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -106,61 +109,68 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class RegressionDialogComponent extends DialogBase {
+export class RegressionDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Linear Regression';
 
-  responseVar = '';
-  predictorVars: string[] = [];
-  modelName = 'model';
-  showSummary = true;
-  showAnova = false;
-  plotDiagnostics = false;
+  responseVar = signal('');
+  predictorVars = signal<string[]>([]);
+  modelName = signal('model');
+  showSummary = signal(true);
+  showAnova = signal(false);
+  plotDiagnostics = signal(false);
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.responseVar) return '# Select a response variable';
-    
-    const name = this.modelName || 'model';
-    
-    if (this.predictorVars.length === 0) {
-      return '# Select at least one predictor variable';
-    }
+  // Getter/setter for ColumnPickerComponent two-way binding
+  get predictorVarsArray(): string[] {
+    return this.predictorVars();
+  }
 
-    const formula = `${this.responseVar} ~ ${this.predictorVars.join(' + ')}`;
+  set predictorVarsArray(value: string[]) {
+    this.predictorVars.set(value);
+  }
 
-    let code = `# Linear Regression
-${name} <- lm(${formula}, data = get_dataframe("${df}"))`;
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    if (this.showSummary) {
-      code += `
+    this.initializeCodeManager(() => {
+      const df = this.selectedDataframe();
+      if (!df) {
+        return buildRegression({
+          dataframe: '',
+          responseVar: '',
+          predictorVars: [],
+        });
+      }
 
-# Model Summary
-summary(${name})`;
-    }
+      return buildRegression({
+        dataframe: df,
+        responseVar: this.responseVar(),
+        predictorVars: this.predictorVars(),
+        modelName: this.modelName(),
+        showSummary: this.showSummary(),
+        showAnova: this.showAnova(),
+        plotDiagnostics: this.plotDiagnostics(),
+      });
+    });
 
-    if (this.showAnova) {
-      code += `
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.responseVar();
+      this.predictorVars();
+      this.modelName();
+      this.showSummary();
+      this.showAnova();
+      this.plotDiagnostics();
 
-# ANOVA Table
-anova(${name})`;
-    }
-
-    if (this.plotDiagnostics) {
-      code += `
-
-# Diagnostic Plots
-par(mfrow = c(2, 2))
-plot(${name})
-par(mfrow = c(1, 1))`;
-    }
-
-    return code;
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
     return !!this.selectedDataframe() && 
-      !!this.responseVar && 
-      this.predictorVars.length > 0;
+      !!this.responseVar() && 
+      this.predictorVars().length > 0;
   }
 }

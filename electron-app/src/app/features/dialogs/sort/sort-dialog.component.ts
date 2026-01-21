@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
+import { buildSort } from '../../../core/dialogs/builders/data-manipulation';
 
 interface SortColumn {
   column: string;
@@ -38,11 +39,12 @@ interface SortColumn {
         <div class="form-group">
           <label class="form-label">Sort By</label>
           
-          @for (sort of sortColumns; track $index; let i = $index) {
+          @for (sort of sortColumns(); track $index; let i = $index) {
             <div class="flex gap-2 mb-2 items-center">
               <select 
                 class="select select-bordered select-sm flex-1"
-                [(ngModel)]="sort.column"
+                [ngModel]="sort.column"
+                (ngModelChange)="updateSortColumn(i, 'column', $event)"
               >
                 <option value="">Select column...</option>
                 @for (col of columns(); track col.name) {
@@ -52,7 +54,8 @@ interface SortColumn {
 
               <select 
                 class="select select-bordered select-sm w-32"
-                [(ngModel)]="sort.descending"
+                [ngModel]="sort.descending"
+                (ngModelChange)="updateSortColumn(i, 'descending', $event)"
               >
                 <option [ngValue]="false">Ascending ↑</option>
                 <option [ngValue]="true">Descending ↓</option>
@@ -61,7 +64,7 @@ interface SortColumn {
               <button 
                 class="btn btn-ghost btn-sm btn-square"
                 (click)="removeSortColumn(i)"
-                [disabled]="sortColumns.length === 1"
+                [disabled]="sortColumns().length === 1"
               >
                 ✕
               </button>
@@ -77,7 +80,7 @@ interface SortColumn {
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">R Code Preview</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -102,40 +105,51 @@ interface SortColumn {
     </div>
   `,
 })
-export class SortDialogComponent extends DialogBase {
+export class SortDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Sort Data';
 
-  sortColumns: SortColumn[] = [
-    { column: '', descending: false }
-  ];
+  // Dialog state using signals for reactivity
+  sortColumns = signal<SortColumn[]>([{ column: '', descending: false }]);
 
   addSortColumn(): void {
-    this.sortColumns = [...this.sortColumns, { column: '', descending: false }];
+    this.sortColumns.update(s => [...s, { column: '', descending: false }]);
   }
 
   removeSortColumn(index: number): void {
-    this.sortColumns = this.sortColumns.filter((_, i) => i !== index);
+    this.sortColumns.update(s => s.filter((_, i) => i !== index));
   }
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    
-    const sortExprs = this.sortColumns
-      .filter(s => s.column)
-      .map(s => s.descending ? `desc(${s.column})` : s.column);
+  updateSortColumn(index: number, field: 'column' | 'descending', value: string | boolean): void {
+    this.sortColumns.update(s => {
+      const updated = [...s];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }
 
-    if (sortExprs.length === 0) {
-      return '# Select columns to sort by';
-    }
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    return `sorted_data <- get_dataframe("${df}") %>%
-  dplyr::arrange(${sortExprs.join(', ')})
+    // Initialize code manager with builder function
+    this.initializeCodeManager(() =>
+      buildSort({
+        dataframe: this.selectedDataframe(),
+        sortColumns: this.sortColumns(),
+      })
+    );
 
-add_dataframe("${df}", sorted_data)`;
+    // Set up effect to rebuild R code whenever dialog state changes
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.sortColumns();
+
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && this.sortColumns.some(s => s.column);
+    return !!this.selectedDataframe() && this.sortColumns().some(s => s.column);
   }
 }

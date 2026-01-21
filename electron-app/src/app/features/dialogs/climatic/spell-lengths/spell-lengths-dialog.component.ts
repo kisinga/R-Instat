@@ -4,17 +4,16 @@
  * Dialog for wet/dry spell analysis using run-length encoding.
  */
 
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { RService } from '../../../../core/services/r.service';
-import { ToastService } from '../../../../core/services/toast.service';
-import { LanguageService } from '../../../../core/services/language.service';
+import { DialogBase } from '../../dialog-base';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
 import { buildSpellLengths, SpellLengthsOptions } from '../utils/climatic-r-builders';
+import { rSyntax } from '../../../../core/r-codegen';
 
 @Component({
   selector: 'app-spell-lengths-dialog',
@@ -24,7 +23,7 @@ import { buildSpellLengths, SpellLengthsOptions } from '../utils/climatic-r-buil
     <div class="dialog-content climatic-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'CLIMATIC.SPELL_LENGTHS' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
@@ -58,18 +57,18 @@ import { buildSpellLengths, SpellLengthsOptions } from '../utils/climatic-r-buil
         <div class="grid grid-cols-3 gap-4 mt-4">
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.SPELL_TYPE' | translate }}</label>
-            <select class="select select-bordered w-full select-sm" [(ngModel)]="spellType">
+            <select class="select select-bordered w-full select-sm" [ngModel]="spellType()" (ngModelChange)="spellType.set($event)">
               <option value="wet">{{ 'CLIMATIC.WET_SPELL' | translate }}</option>
               <option value="dry">{{ 'CLIMATIC.DRY_SPELL' | translate }}</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.THRESHOLD' | translate }}</label>
-            <input type="number" class="input input-bordered w-full input-sm" [(ngModel)]="threshold" step="0.1" />
+            <input type="number" class="input input-bordered w-full input-sm" [ngModel]="threshold()" (ngModelChange)="threshold.set(+$event)" step="0.1" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ 'CLIMATIC.STATISTIC' | translate }}</label>
-            <select class="select select-bordered w-full select-sm" [(ngModel)]="statistic">
+            <select class="select select-bordered w-full select-sm" [ngModel]="statistic()" (ngModelChange)="statistic.set($event)">
               <option value="max">{{ 'CLIMATIC.MAXIMUM' | translate }}</option>
               <option value="mean">{{ 'CLIMATIC.MEAN' | translate }}</option>
               <option value="count">{{ 'CLIMATIC.COUNT' | translate }}</option>
@@ -78,16 +77,16 @@ import { buildSpellLengths, SpellLengthsOptions } from '../utils/climatic-r-buil
         </div>
 
         <div class="code-preview-section mt-4">
-          <button class="btn btn-ghost btn-xs gap-1" (click)="showCode.set(!showCode())">
-            {{ showCode() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
+          <button class="btn btn-ghost btn-xs gap-1" (click)="toggleCodePreview()">
+            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
           </button>
-          @if (showCode()) { <pre class="code-block mt-2">{{ rCode() }}</pre> }
+          @if (showCodePreview()) { <pre class="code-block mt-2">{{ rCode() }}</pre> }
         </div>
       </div>
 
       <div class="dialog-footer">
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button class="btn btn-primary" (click)="execute()" [disabled]="!isValid() || isLoading()">
           @if (isLoading()) { <span class="loading loading-spinner loading-sm"></span> }
           {{ 'DIALOG.OK' | translate }}
@@ -101,57 +100,63 @@ import { buildSpellLengths, SpellLengthsOptions } from '../utils/climatic-r-buil
     .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
   `]
 })
-export class SpellLengthsDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class SpellLengthsDialogComponent extends DialogBase implements OnInit {
+  readonly dialogTitle = 'Spell Lengths';
 
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
   private readonly climaticService = inject(ClimaticDataService);
 
-  dataframes = signal<string[]>([]);
-  selectedDataframe = signal<string>('');
-  columns = signal<ColumnInfo[]>([]);
-  
-  // Form state (signals for reactivity with computed)
+  // Form state (signals for reactivity)
   dateColumn = signal('');
   elementColumn = signal('');
   stationColumn = signal('');
-  spellType: 'wet' | 'dry' = 'wet';
-  threshold = 1;
-  statistic: 'max' | 'mean' | 'count' = 'max';
-  
-  isLoading = signal(false);
-  showCode = signal(false);
+  spellType = signal<'wet' | 'dry'>('wet');
+  threshold = signal(1);
+  statistic = signal<'max' | 'mean' | 'count'>('max');
 
-  rCode = computed(() => {
-    const opts: SpellLengthsOptions = {
-      dataframe: this.selectedDataframe(),
-      dateColumn: this.dateColumn(),
-      elementColumn: this.elementColumn(),
-      stationColumn: this.stationColumn() || undefined,
-      spellType: this.spellType,
-      threshold: this.threshold,
-      statistic: this.statistic,
-    };
-    return buildSpellLengths(opts);
-  });
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  isValid = computed(() => !!(this.selectedDataframe() && this.dateColumn() && this.elementColumn()));
+    // Initialize code manager with builder
+    this.initializeCodeManager(() => {
+      const df = this.selectedDataframe();
+      if (!df) {
+        return rSyntax().setBase('# Select a dataframe first');
+      }
 
-  async ngOnInit(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-    const active = this.rService.activeDataframe();
-    if (active && dfs.includes(active)) { this.selectedDataframe.set(active); await this.loadColumns(); }
-    else if (dfs.length > 0) { this.selectedDataframe.set(dfs[0]); await this.loadColumns(); }
+      const opts: SpellLengthsOptions = {
+        dataframe: df,
+        dateColumn: this.dateColumn(),
+        elementColumn: this.elementColumn(),
+        stationColumn: this.stationColumn() || undefined,
+        spellType: this.spellType(),
+        threshold: this.threshold(),
+        statistic: this.statistic(),
+      };
+      return rSyntax().setBase(buildSpellLengths(opts));
+    });
+
+    // Reactive updates
+    effect(() => {
+      this.selectedDataframe();
+      this.dateColumn();
+      this.elementColumn();
+      this.stationColumn();
+      this.spellType();
+      this.threshold();
+      this.statistic();
+      this.rebuildRCode();
+    });
   }
 
-  private async loadColumns(): Promise<void> {
-    const df = this.selectedDataframe();
-    if (!df) { this.columns.set([]); return; }
-    try { const columnInfo = await this.rService.getColumnInfo(df); this.columns.set(columnInfo); this.autoFillFromRoles(); }
-    catch { this.columns.set([]); }
+  override onDataframeChanged(): void {
+    this.autoFillFromRoles();
+  }
+
+  override async onDataframeChange(name: string): Promise<void> {
+    this.dateColumn.set('');
+    this.elementColumn.set('');
+    this.stationColumn.set('');
+    await super.onDataframeChange(name);
   }
 
   private autoFillFromRoles(): void {
@@ -163,24 +168,38 @@ export class SpellLengthsDialogComponent implements OnInit {
     if (roles.station && !this.stationColumn()) this.stationColumn.set(roles.station);
   }
 
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe.set(name);
-    this.dateColumn.set(''); this.elementColumn.set(''); this.stationColumn.set('');
-    await this.loadColumns();
+  // Enhanced date column detection (includes character columns with date-like names)
+  override getDateColumns(): ColumnInfo[] {
+    return this.columns().filter(c => {
+      const t = c.type.toLowerCase();
+      const n = c.name.toLowerCase();
+      if (t.includes('date') || t.includes('posix')) return true;
+      if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day';
+      return false;
+    });
   }
 
-  getDateColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); const n = c.name.toLowerCase(); if (t.includes('date') || t.includes('posix')) return true; if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day'; return false; }); }
-  getNumericColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('numeric') || t.includes('integer') || t.includes('double'); }); }
-  getFactorColumns(): ColumnInfo[] { return this.columns().filter(c => { const t = c.type.toLowerCase(); return t.includes('factor') || t.includes('character'); }); }
+  isValid(): boolean {
+    return !!(this.selectedDataframe() && this.dateColumn() && this.elementColumn());
+  }
 
-  async execute(): Promise<void> {
-    if (!this.isValid()) { this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE')); return; }
-    this.isLoading.set(true);
-    try {
-      const result = await this.rService.execute(this.rCode());
-      if (result.success) { this.toastService.success(this.languageService.instant('TOAST.COMMAND_SUCCESS')); this.close.emit(); }
-      else { this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED')); }
-    } catch (error) { this.toastService.error(error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')); }
-    finally { this.isLoading.set(false); }
+  protected override getCurrentDefaults(): Record<string, unknown> {
+    return {
+      dateColumn: this.dateColumn(),
+      elementColumn: this.elementColumn(),
+      stationColumn: this.stationColumn(),
+      spellType: this.spellType(),
+      threshold: this.threshold(),
+      statistic: this.statistic(),
+    };
+  }
+
+  protected override applyDefaults(defaults: Record<string, unknown>): void {
+    if (defaults['dateColumn']) this.dateColumn.set(defaults['dateColumn'] as string);
+    if (defaults['elementColumn']) this.elementColumn.set(defaults['elementColumn'] as string);
+    if (defaults['stationColumn']) this.stationColumn.set(defaults['stationColumn'] as string);
+    if (defaults['spellType']) this.spellType.set(defaults['spellType'] as 'wet' | 'dry');
+    if (defaults['threshold'] !== undefined) this.threshold.set(defaults['threshold'] as number);
+    if (defaults['statistic']) this.statistic.set(defaults['statistic'] as 'max' | 'mean' | 'count');
   }
 }
