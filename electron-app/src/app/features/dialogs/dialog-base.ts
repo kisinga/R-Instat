@@ -106,7 +106,6 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
     setTimeout(async () => {
       const restoreData = this.dialogRestoreService.getRestoreData();
       if (restoreData && restoreData.dialogId === this.dialogId) {
-        console.log('[DialogBase] Found restore data in ngAfterViewInit, restoring state:', restoreData);
         const success = await this.restoreFromMetadata(restoreData);
         if (success) {
           this.dialogRestoreService.clearRestoreData();
@@ -313,9 +312,7 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
     for (const [name, signal] of this.formFields) {
       const value = signal();
       state[name] = value;
-      console.log(`[DialogBase] Form field ${name} =`, value);
     }
-    console.log('[DialogBase] Complete form state:', state);
     return state;
   }
 
@@ -381,7 +378,6 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
           state[key] = value;
         }
       }
-      console.log('[DialogBase] State after adding form fields:', state);
     } else {
       console.log('[DialogBase] No form fields registered');
     }
@@ -543,19 +539,11 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
    */
   protected initializeCodeManager(builder: DialogBuilder, skipInitialRebuild: boolean = false): void {
     this.codeManager.initialize(() => {
-      console.log('[DialogBase] Builder called, reading signals for R code generation');
       const syntax = builder();
-      console.log('[DialogBase] R code generated, now generating metadata');
       const metadata = this.getDialogMetadata();
       if (metadata) {
-        console.log('[DialogBase] Attaching metadata:', metadata);
         return syntax.setMetadata(metadata);
       } else {
-        console.log('[DialogBase] No metadata generated:', {
-          featureFlag: this.appState.includeCodeMetadata(),
-          formFieldsCount: this.formFields.size,
-          dataframe: this.selectedDataframe(),
-        });
         return syntax;
       }
     }, skipInitialRebuild);
