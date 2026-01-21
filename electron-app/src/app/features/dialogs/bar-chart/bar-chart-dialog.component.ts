@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, computed, OnInit, inject, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { DialogBuilderService } from '../../../core/dialogs/builders/dialog-builder.service';
 
 @Component({
   selector: 'app-bar-chart-dialog',
@@ -37,14 +38,15 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <app-column-picker
             [columns]="getFactorColumns()"
             [multiple]="false"
-            [(selectedColumn)]="xVariable"
+            [selectedColumn]="xVariable()"
+            (selectedColumnChange)="xVariable.set($event)"
           />
         </div>
 
         <!-- Fill Variable -->
         <div class="form-group">
           <label class="form-label">{{ 'BAR_CHART.FILL_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="fillVariable">
+          <select class="select select-bordered w-full" [ngModel]="fillVariable()" (ngModelChange)="fillVariable.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -55,7 +57,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Position -->
         <div class="form-group">
           <label class="form-label">{{ 'BAR_CHART.POSITION' | translate }}</label>
-          <select class="select select-bordered w-full" [(ngModel)]="position">
+          <select class="select select-bordered w-full" [ngModel]="position()" (ngModelChange)="position.set($event)">
             <option value="stack">{{ 'BAR_CHART.POSITION_STACK' | translate }}</option>
             <option value="dodge">{{ 'BAR_CHART.POSITION_DODGE' | translate }}</option>
             <option value="fill">{{ 'BAR_CHART.POSITION_FILL' | translate }}</option>
@@ -65,7 +67,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Orientation -->
         <div class="form-group">
           <label class="label cursor-pointer justify-start gap-2">
-            <input type="checkbox" class="checkbox checkbox-primary" [(ngModel)]="horizontal" />
+            <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="horizontal()" (ngModelChange)="horizontal.set($event)" />
             <span>{{ 'BAR_CHART.SHOW_LABELS' | translate }}</span>
           </label>
         </div>
@@ -74,7 +76,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <label class="form-label">{{ 'DIALOG.CODE_PREVIEW' | translate }}</label>
-            <pre class="code-block">{{ buildRCode() }}</pre>
+            <pre class="code-block">{{ rCode() }}</pre>
           </div>
         }
       </div>
@@ -99,40 +101,50 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     </div>
   `,
 })
-export class BarChartDialogComponent extends DialogBase {
+export class BarChartDialogComponent extends DialogBase implements OnInit {
   readonly dialogTitle = 'Bar Chart';
 
-  xVariable = '';
-  fillVariable = '';
-  position = 'stack';
-  horizontal = false;
+  private readonly builder = inject(DialogBuilderService);
 
-  buildRCode(): string {
-    const df = this.selectedDataframe();
-    if (!df) return '# Select a dataframe first';
-    if (!this.xVariable) return '# Select an X variable';
-    
-    let aesArgs = `x = ${this.xVariable}`;
-    if (this.fillVariable) {
-      aesArgs += `, fill = ${this.fillVariable}`;
-    }
+  // Dialog state using signals for reactivity
+  xVariable = signal('');
+  fillVariable = signal('');
+  position = signal<'stack' | 'dodge' | 'fill'>('stack');
+  horizontal = signal(false);
 
-    let code = `ggplot(get_dataframe("${df}"), aes(${aesArgs})) +
-  geom_bar(position = "${this.position}", alpha = 0.8)`;
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-    if (this.horizontal) {
-      code += ` +
-  coord_flip()`;
-    }
+    // Initialize code manager with builder function
+    // The builder will be called whenever rebuild() is invoked
+    this.initializeCodeManager(() =>
+      this.builder.buildBarChart({
+        dataframe: this.selectedDataframe(),
+        xVariable: this.xVariable(),
+        fillVariable: this.fillVariable() || undefined,
+        position: this.position(),
+        horizontal: this.horizontal(),
+        title: `Bar Chart of ${this.xVariable()}`,
+      })
+    );
 
-    code += ` +
-  theme_minimal() +
-  labs(title = "Bar Chart of ${this.xVariable}", x = "${this.xVariable}", y = "Count")`;
+    // Set up effect to rebuild R code whenever dialog state changes
+    // This must be after initializeCodeManager so the builder is set
+    effect(() => {
+      // Read all signals to establish dependencies
+      this.selectedDataframe();
+      this.xVariable();
+      this.fillVariable();
+      this.position();
+      this.horizontal();
 
-    return code;
+      // Rebuild when any dependency changes
+      this.rebuildRCode();
+    });
   }
 
+
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.xVariable;
+    return !!this.selectedDataframe() && !!this.xVariable();
   }
 }

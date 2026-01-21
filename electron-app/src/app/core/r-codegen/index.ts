@@ -1,17 +1,64 @@
 /**
  * R Code Generation Module
  *
- * Composable pure functions for building R code strings.
+ * Composable primitives for building R code structures with support for
+ * functions, operators, assignments, and before/after code execution.
  *
  * @example
- * import { rDf, rFn, rPipe, rStr, rIf } from '@core/r-codegen';
+ * import { rFn, rOp, rSyntax, rAssign, toScript } from '@core/r-codegen';
  *
- * const code = rPipe(
- *   rDf('mydata'),
- *   rFn('filter', { x: '> 0' }),
- *   rFn('summarise', { mean_x: 'mean(x, na.rm = TRUE)' })
- * );
+ * const code = rSyntax()
+ *   .addBefore(rFn('library', { package: 'dplyr' }))
+ *   .setBase(rFn('summarise', { n: 'n()' }))
+ *   .setAssignment(rAssign('column', 'count', { dataframe: 'df' }));
+ *
+ * const script = code.toScript();
  */
 
-export * from './primitives';
-export * from './compose';
+// Types
+export * from './types';
+
+// Core implementation
+export { toScript, formatParameter, sortParameters } from './core';
+
+// Assignment generation
+export { generateAssignment } from './assignment';
+
+// RSyntax class
+export { RSyntax } from './syntax';
+
+// Builder functions
+export {
+  rFn,
+  rFnStr,
+  rOp,
+  rSyntax,
+  rAssign,
+  rParam,
+  rStr,
+  rBool,
+  rNull,
+  rNA,
+  rVec,
+  rDf,
+  rCol,
+  // Expression chain helpers
+  rPipe,
+  rPlus,
+  rAnd,
+  rOr,
+  rIf,
+  rParams,
+  rWrap,
+  type MaybeExpr,
+} from './builders';
+
+// ggplot2 helpers
+export {
+  ggAes,
+  ggBase,
+  ggFacet,
+  ggFlip,
+  ggTheme,
+  ggLabs,
+} from './ggplot-helpers';

@@ -3,6 +3,8 @@ import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ColumnInfo } from '../../core/models/r.model';
+import { DialogRCodeManager } from '../../core/dialogs/dialog-r-code-manager.service';
+import { RSyntax } from '../../core/r-codegen/syntax';
 
 /**
  * Base class for all statistical dialogs
@@ -21,6 +23,7 @@ export abstract class DialogBase implements OnInit {
   protected readonly appState = inject(AppStateService);
   protected readonly rService = inject(RService);
   protected readonly toastService = inject(ToastService);
+  protected readonly codeManager = inject(DialogRCodeManager);
 
   // Dataframes from global state (single source of truth)
   readonly dataframes = this.appState.dataframes;
@@ -108,9 +111,19 @@ export abstract class DialogBase implements OnInit {
   }
 
   /**
-   * Build R code - must be implemented by subclasses
+   * Build R code - can be overridden by subclasses
+   * 
+   * Default implementation uses codeManager if initialized, otherwise returns empty string.
+   * Subclasses can override this if they need custom logic or aren't using codeManager.
    */
-  abstract buildRCode(): string;
+  buildRCode(): string {
+    // Use code manager if initialized (new pattern)
+    if (this.codeManager.getSyntax() !== null) {
+      return this.codeManager.code();
+    }
+    // Fallback for dialogs not yet migrated to codeManager
+    return '';
+  }
 
   /**
    * Check if the dialog form is valid
@@ -119,6 +132,8 @@ export abstract class DialogBase implements OnInit {
 
   /**
    * Execute the R code
+   * 
+   * Uses code manager if initialized, otherwise falls back to buildRCode()
    */
   async execute(): Promise<void> {
     if (!this.isValid()) {
@@ -126,11 +141,13 @@ export abstract class DialogBase implements OnInit {
       return;
     }
 
-    const code = this.buildRCode();
     this.isLoading.set(true);
 
     try {
-      const result = await this.rService.execute(code);
+      // Use code manager if available, otherwise use buildRCode()
+      const result = this.codeManager.getSyntax()
+        ? await this.codeManager.execute(this.rService)
+        : await this.rService.execute(this.buildRCode());
       
       if (!result.success) {
         this.toastService.error(result.error || 'R command failed');
@@ -232,5 +249,63 @@ export abstract class DialogBase implements OnInit {
     if (defaults) {
       this.applyDefaults(defaults);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // R CODE MANAGER INTEGRATION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Initialize the R code manager with a builder function
+   *
+   * This helper method sets up reactive R code generation. The builder function
+   * should return an RSyntax instance based on current dialog state.
+   *
+   * The code manager will automatically rebuild whenever rebuild() is called,
+   * and provides a computed `code` signal that components can use.
+   *
+   * @param builder - Function that builds RSyntax from dialog state
+   *
+   * @example
+   * ngOnInit(): void {
+   *   this.initializeCodeManager(() =>
+   *     this.builder.buildBarChart({
+   *       dataframe: this.selectedDataframe(),
+   *       xVariable: this.xVariable(),
+   *     })
+   *   );
+   * }
+   */
+  protected initializeCodeManager(builder: () => RSyntax): void {
+    this.codeManager.initialize(builder);
+  }
+
+  /**
+   * Get the current R code as a computed signal
+   *
+   * This provides reactive access to the generated R code string.
+   * The code updates automatically whenever the code manager rebuilds.
+   *
+   * @returns Computed signal containing the R code string
+   */
+  protected getRCode(): string {
+    return this.codeManager.code();
+  }
+
+  /**
+   * Computed signal for reactive R code access
+   * 
+   * Subclasses can use this in templates: {{ rCode() }}
+   * Automatically updates when codeManager rebuilds.
+   */
+  readonly rCode = computed(() => this.codeManager.code());
+
+  /**
+   * Rebuild R code from current dialog state
+   *
+   * Call this whenever dialog state changes that affect R code generation.
+   */
+  protected rebuildRCode(): void {
+    this.codeManager.rebuild();
   }
 }
