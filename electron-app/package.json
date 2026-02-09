@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "description": "R-Instat - Cross-platform statistical analysis powered by R",
   "main": "dist-electron/main.js",
-  "author": "IDEMS International",
+  "author": "IDEMS International <info@r-instat.org>",
+  "homepage": "https://r-instat.org",
   "license": "GPL-3.0",
   "private": true,
   "scripts": {
@@ -15,6 +16,10 @@
     "test": "ng test",
     "electron:dev": "npm run build:electron && concurrently \"ng serve\" \"wait-on http://localhost:4200 && electron .\"",
     "electron:build": "ng build --configuration production && npm run build:electron && electron-builder",
+    "electron:build:all": "ng build --configuration production && npm run build:electron && electron-builder --linux --win",
+    "electron:build:linux": "ng build --configuration production && npm run build:electron && electron-builder --linux",
+    "electron:build:win": "ng build --configuration production && npm run build:electron && electron-builder --win",
+    "electron:build:mac": "ng build --configuration production && npm run build:electron && electron-builder --mac",
     "electron:start": "npm run build:electron && electron .",
     "postinstall": "electron-builder install-app-deps"
   },
