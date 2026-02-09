@@ -1,109 +1,192 @@
 # R-Instat Architecture Documentation
 
+## R-Instat in Three Bands: From Simple to Technical
+
+Every part of R-Instat fits into three bands: **Data** (what is loaded and stored), **Processing** (R code and how it is prepared and run), and **Presentation** (UI and how results are shown). The diagrams below start from this literal view and add detail until they match the technical architecture.
+
+### Level 1 – Literal
+
+The simplest view: data flows from storage through R code to the user interface.
+
+```mermaid
+flowchart LR
+    Data["Data - loaded via df"]
+    Processing["Processing - R code"]
+    Presentation["Presentation - UI"]
+    Data --> Processing
+    Processing --> Presentation
+```
+
+### Level 2 – Conceptual
+
+The same three bands with the main concepts: prefetch and load into R, cleaning and sending to R, description; then loading R results, modals, and state sync in the UI.
+
+```mermaid
+flowchart LR
+    subgraph DataBand[Data]
+        DataFrames["DataFrames"]
+        LoadedViaDf["loaded via df"]
+    end
+
+    subgraph ProcessingBand[Processing]
+        Prefetch["Prefetch"]
+        LoadIntoR["Load into R"]
+        Cleaning["Cleaning"]
+        SendToR["Send to R"]
+        Description["Description"]
+        Prefetch --> LoadIntoR
+        LoadIntoR --> Cleaning
+        Cleaning --> SendToR
+        SendToR --> Description
+    end
+
+    subgraph PresentationBand[Presentation]
+        LoadResults["Load R results"]
+        Modals["Modals and Dialogs"]
+        StateSync["State sync"]
+    end
+
+    DataFrames --> Prefetch
+    Description --> LoadResults
+    LoadResults --> Modals
+    Modals --> StateSync
+```
+
+### Level 3 – Electron Technical
+
+The same frame with actual Electron app components: data_store and AppState in Data; CodeManager, Builders, RService, bridge.R in Processing; Shell, DataView, Dialogs, Output and AppState signals in Presentation.
+
+```mermaid
+flowchart LR
+    subgraph DataBand3[Data]
+        DataStore["data_store"]
+        AppStateData["AppState - dataframe list and column cache"]
+    end
+
+    subgraph ProcessingBand3[Processing]
+        CodeManager["CodeManager"]
+        Builders["Builders"]
+        RSyntax["RSyntax"]
+        CoreGen["CoreGen"]
+        RService["RService"]
+        PreloadAPI["PreloadAPI"]
+        RBridgeTS["RBridgeTS"]
+        BridgeR["bridge.R"]
+        RPackages["RPackages"]
+        CodeManager --> Builders
+        Builders --> RSyntax
+        RSyntax --> CoreGen
+        CodeManager --> RService
+        RService --> PreloadAPI
+        PreloadAPI --> RBridgeTS
+        RBridgeTS --> BridgeR
+        BridgeR --> RPackages
+        BridgeR --> DataStore
+    end
+
+    subgraph PresentationBand3[Presentation]
+        Shell["Shell"]
+        DataView["DataView"]
+        Dialogs["Dialogs"]
+        Output["Output"]
+    end
+
+    DataView --> RService
+    Dialogs --> CodeManager
+    RService --> AppStateData
+    RService --> Output
+    AppStateData --> DataView
+    AppStateData --> Dialogs
+    Shell --> DataView
+    Shell --> Dialogs
+```
+
+Note: DataView requests data via RService (getDataPreview, getColumnTypes); results and state flow back into Presentation via AppState and Output.
+
+### Level 4 – Full Technical View
+
+The same Data, Processing, and Presentation frame is preserved in the full architecture diagram below, which adds **process boundaries** (Electron Main, Renderer, R child process) and **full component names** for every layer. See **Complete System Architecture (Data Flow Integrated)** below for that view.
+
 ## Electron App Architecture with Integrated Data Flow
 
 ### Complete System Architecture (Data Flow Integrated)
 
 ```mermaid
-graph TB
-    subgraph ElectronMain["Electron Main Process (Node.js)"]
-        MainTS[main.ts<br/>Window Management<br/>IPC Handlers<br/>Menu System]
-        PreloadTS[preload.ts<br/>Context Bridge<br/>Secure API Exposure<br/>Type Definitions]
-        RBridgeTS[r-bridge.ts<br/>R Process Manager<br/>Child Process Spawn<br/>JSON stdio Protocol<br/>Health Monitoring<br/>Command Queue]
+flowchart TB
+    subgraph ElectronMain["Electron Main Process - Node.js"]
+        MainTS["main.ts - Window Management - IPC Handlers - Menu System"]
+        PreloadTS["preload.ts - Context Bridge - Secure API Exposure - Type Definitions"]
+        PreloadAPI["PreloadAPI - window.electronAPI - IPC invoke to main"]
+        RBridgeTS["r-bridge.ts - R Process Manager - Child Process Spawn - JSON stdio Protocol - Health Monitoring - Command Queue"]
     end
-    
-    subgraph Renderer["Renderer Process (Chromium + Angular)"]
+
+    subgraph Renderer["Renderer Process - Chromium and Angular"]
         subgraph Presentation["Presentation Layer"]
-            Shell[Shell Component<br/>Layout Container]
-            Menubar[Menubar<br/>Menu Items]
-            Toolbar[Toolbar<br/>Dialog Triggers]
-            Statusbar[Statusbar<br/>R Health Status]
+            Shell["Shell Component - Layout Container"]
+            Menubar["Menubar - Menu Items"]
+            Toolbar["Toolbar - Dialog Triggers"]
+            Statusbar["Statusbar - R Health Status"]
         end
-        
+
         subgraph Features["Feature Layer"]
-            DataView[Data View Component<br/>AG Grid Integration<br/>Pagination<br/>Column Type Icons]
-            Dialogs[32 Dialog Components<br/>DialogBase Inheritance<br/>Form Controls<br/>Code Preview]
-            Output[Output Panel<br/>Text Output<br/>Plot Display<br/>History Tracking]
+            DataView["Data View Component - AG Grid Integration - Pagination - Column Type Icons"]
+            Dialogs["32 Dialog Components - DialogBase Inheritance - Form Controls - Code Preview"]
+            Output["Output Panel - Text Output - Plot Display - History Tracking"]
         end
-        
+
         subgraph Services["Service Layer"]
-            AppState[AppStateService<br/>Global State Manager<br/>Dataframe List Signal<br/>Active Dataframe Signal<br/>Column Cache Map<br/>Selection State<br/>Preferences]
-            RService[RService<br/>R Communication Facade<br/>Health Status Tracking<br/>Output History<br/>Data Refresh Orchestration]
-            CodeManager[DialogRCodeManager<br/>RSyntax State Signal<br/>Builder Function Pattern<br/>Reactive Code Generation<br/>Execution Orchestration]
-            Builders[Dialog Builders<br/>Domain-Specific Functions<br/>Pure Functions<br/>Return RSyntax]
+            AppState["AppStateService - Global State Manager - Dataframe List Signal - Active Dataframe Signal - Column Cache Map - Selection State - Preferences"]
+            RService["RService - R Communication Facade - Health Status Tracking - Output History - Data Refresh Orchestration"]
+            CodeManager["DialogRCodeManager - RSyntax State Signal - Builder Function Pattern - Reactive Code Generation - Execution Orchestration"]
+            Builders["Dialog Builders - Domain-Specific Functions - Pure Functions - Return RSyntax"]
         end
-        
+
         subgraph Codegen["R Code Generation Layer"]
-            RSyntax[RSyntax Class<br/>AST Container<br/>Before/Base/After Code<br/>Assignment Support<br/>Metadata Embedding]
-            CoreGen[R Codegen Core<br/>toScript Function<br/>Parameter Formatting<br/>Function/Operator Rendering]
-            Types[R Code Types<br/>RFunction<br/>ROperator<br/>Parameter<br/>Assignment]
+            RSyntax["RSyntax Class - AST Container - Before/Base/After Code - Assignment Support - Metadata Embedding"]
+            CoreGen["R Codegen Core - toScript Function - Parameter Formatting - Function/Operator Rendering"]
         end
     end
-    
-    subgraph IPC["IPC Communication Layer"]
-        ContextBridge[Context Bridge<br/>window.electronAPI<br/>Type-Safe API<br/>Promise-Based]
-        IPCChannels[IPC Channels<br/>r:execute<br/>r:getDataframes<br/>r:getDataPreview<br/>r:status<br/>dialog:openFile]
+
+    subgraph RProcess["R Process - Child Process"]
+        BridgeR["bridge.R - JSON Command Parser - Command Router - Error Handler - Response Serializer"]
+        DataStore["Data Store Environment - Global data_store - DataFrame Storage - Metadata Management"]
+        RPackages["R Packages - dplyr, tidyr - ggplot2, sjPlot - sjmisc, skimr"]
     end
-    
-    subgraph RProcess["R Process (Child Process)"]
-        BridgeR[bridge.R<br/>JSON Command Parser<br/>Command Router<br/>Error Handler<br/>Response Serializer]
-        DataStore[Data Store Environment<br/>Global data_store<br/>DataFrame Storage<br/>Metadata Management]
-        RPackages[R Packages<br/>dplyr, tidyr<br/>ggplot2, sjPlot<br/>sjmisc, skimr]
-        RInstatObject[Instat Object<br/>Data Book Structure<br/>Metadata System]
-    end
-    
-    %% Process boundaries
+
     MainTS -.->|Spawns Child Process| RBridgeTS
     MainTS -.->|Injects| PreloadTS
-    PreloadTS -.->|Exposes via contextBridge| ContextBridge
-    
-    %% Presentation flow
+    PreloadTS -->|Exposes| PreloadAPI
+
     Shell --> Features
-    Shell --> Presentation
     Toolbar -->|Opens| Dialogs
     Statusbar -->|Reads| RService
-    
-    %% Feature to Service flow
+
     Dialogs -->|Injects| CodeManager
     Dialogs -->|Injects| RService
     Dialogs -->|Injects| AppState
     DataView -->|Reads| AppState
     DataView -->|Requests Data| RService
     Output -->|Reads| RService
-    
-    %% Code generation flow
+
     CodeManager -->|Calls| Builders
     Builders -->|Returns| RSyntax
-    RSyntax -->|Uses| CoreGen
-    CoreGen -->|Generates| Types
-    
-    %% R communication flow (with data flow annotations)
-    RService -->|"1. Invoke IPC"| ContextBridge
-    ContextBridge -->|"2. IPC Message"| IPCChannels
-    IPCChannels -->|"3. Handler Call"| RBridgeTS
-    RBridgeTS -->|"4. JSON Command stdin write"| BridgeR
-    BridgeR -->|"5. Parse & Route"| BridgeR
-    BridgeR -->|"6. Execute R Code"| RPackages
-    BridgeR -->|"7. Access/Modify"| DataStore
-    DataStore -->|"8. Store Results"| DataStore
-    BridgeR -->|"9. Serialize Response stdout write"| RBridgeTS
-    RBridgeTS -->|"10. Parse JSON"| RBridgeTS
-    RBridgeTS -->|"11. Resolve Promise"| IPCChannels
-    IPCChannels -->|"12. Return Result"| ContextBridge
-    ContextBridge -->|"13. Promise Resolve"| RService
-    RService -->|"14. Update State"| AppState
-    RService -->|"15. Emit Event"| Output
-    AppState -->|"16. Signal Update"| DataView
-    AppState -->|"17. Signal Update"| Dialogs
-    
-    %% State management flow
+    RSyntax -->|Uses toScript| CoreGen
+
+    RService -->|1. Invoke IPC| PreloadAPI
+    PreloadAPI -->|2. Handler Call| RBridgeTS
+    RBridgeTS -->|3. JSON stdin write| BridgeR
+    BridgeR -->|4. Parse route execute| RPackages
+    BridgeR -->|5. Access or Modify| DataStore
+    BridgeR -->|6. Serialize response stdout write| RBridgeTS
+    RBridgeTS -->|7. Parse JSON resolve Promise| PreloadAPI
+    PreloadAPI -->|8. Promise Resolve| RService
+    RService -->|9. Update State| AppState
+    RService -->|10. Emit Event| Output
+    AppState -->|11. Signal Update| DataView
+    AppState -->|12. Signal Update| Dialogs
+
     AppState -->|Reactive Updates| Features
     RService -->|State Delegation| AppState
-    
-    style ElectronMain fill:#e1f5ff
-    style Renderer fill:#fff4e1
-    style IPC fill:#f0e1ff
-    style RProcess fill:#ffe1e1
 ```
 
 **Architectural Layers Explained:**
@@ -172,40 +255,39 @@ graph TB
 ### Complete System Architecture (Data Flow Integrated)
 
 ```mermaid
-graph TB
-    subgraph WinFormsApp["Windows Forms Application (.NET Framework)"]
+flowchart TB
+    subgraph WinFormsApp["Windows Forms Application - .NET Framework"]
         subgraph Presentation["Presentation Layer"]
-            MainForm[frmMain<br/>Main Window Container<br/>Menu System<br/>Toolbar<br/>Status Bar<br/>Dialog Manager]
-            Dialogs[318 Dialog Forms<br/>dlg* Classes<br/>Modal Dialogs<br/>ShowDialog Pattern<br/>Form Inheritance]
-            Controls[ucr* User Controls<br/>Reusable Components<br/>ucrDataFrame<br/>ucrReceiver<br/>ucrInput<br/>ucrButtons]
+            MainForm["frmMain - Main Window Container - Menu System - Toolbar - Status Bar - Dialog Manager"]
+            Dialogs["318 Dialog Forms - dlg Classes - Modal Dialogs - ShowDialog Pattern - Form Inheritance"]
+            Controls["ucr User Controls - Reusable Components - ucrDataFrame - ucrReceiver - ucrInput - ucrButtons"]
         end
-        
+
         subgraph Model["Model Layer"]
-            DataBook[clsDataBook<br/>DataFrame Collection<br/>RefreshDataFrames<br/>GetDataFrameNamesFromR<br/>DataFrame Lifecycle]
-            DataFrame[clsDataFrame<br/>Single DataFrame<br/>RefreshData<br/>Column Metadata<br/>Filter/Selection State<br/>Grid Data Cache]
-            GridLink[clsGridLink<br/>ReoGrid Integration<br/>Grid Population<br/>Cell Formatting<br/>Data Binding]
-            OutputLogger[clsOutputLogger<br/>Output Window Manager<br/>Text Output<br/>Graph Display<br/>History Tracking]
+            DataBook["clsDataBook - DataFrame Collection - RefreshDataFrames - GetDataFrameNamesFromR - DataFrame Lifecycle"]
+            DataFrame["clsDataFrame - Single DataFrame - RefreshData - Column Metadata - Filter/Selection State - Grid Data Cache"]
+            GridLink["clsGridLink - ReoGrid Integration - Grid Population - Cell Formatting - Data Binding"]
+            OutputLogger["clsOutputLogger - Output Window Manager - Text Output - Graph Display - History Tracking"]
         end
-        
+
         subgraph RLink["R Link Layer"]
-            RLinkClass[clsRLink<br/>R.NET Wrapper<br/>REngine Management<br/>RunRStatement<br/>RunScript<br/>Evaluate<br/>GetFileOutput]
-            REngine[REngine Instance<br/>R.NET Library<br/>In-Process R<br/>Direct Memory Access<br/>Synchronous Execution]
-            RStatement[RStatement Class<br/>R Code Container<br/>Text Property<br/>IsAssignment Flag<br/>Comment Support]
+            RLinkClass["clsRLink - R.NET Wrapper - REngine Management - RunRStatement - RunScript - Evaluate - GetFileOutput"]
+            REngine["REngine Instance - R.NET Library - In-Process R - Direct Memory Access - Synchronous Execution"]
+            RStatement["RStatement Class - R Code Container - Text Property - IsAssignment Flag - Comment Support"]
         end
-        
+
         subgraph Threading["Threading Layer"]
-            RThread[Background Thread<br/>R Code Execution<br/>Wait Dialog Display<br/>Thread Synchronization<br/>bRCodeRunning Flag]
-            WaitDialog[Wait Dialog<br/>Optional Display<br/>Delay Timer<br/>Progress Indication]
+            RThread["Background Thread - R Code Execution - Wait Dialog Display - Thread Synchronization - bRCodeRunning Flag"]
+            WaitDialog["Wait Dialog - Optional Display - Delay Timer - Progress Indication"]
         end
     end
-    
-    subgraph RProcess["R Process (In-Process via R.NET)"]
-        RInstatObject[Instat Object<br/>data_book R Object<br/>DataFrame Storage<br/>Metadata System<br/>Object Hierarchy]
-        RPackages[R Packages<br/>instatExtras<br/>dplyr, ggplot2<br/>Domain Packages]
-        REnvironment[R Global Environment<br/>Variable Storage<br/>Function Definitions<br/>Package Namespaces]
+
+    subgraph RProcess["R Process - In-Process via R.NET"]
+        RInstatObject["Instat Object - data_book R Object - DataFrame Storage - Metadata System - Object Hierarchy"]
+        RPackages["R Packages - instatExtras - dplyr, ggplot2 - Domain Packages"]
+        REnvironment["R Global Environment - Variable Storage - Function Definitions - Package Namespaces"]
     end
-    
-    %% Presentation flow
+
     MainForm -->|Opens Modal| Dialogs
     MainForm -->|Manages| DataBook
     MainForm -->|Manages| GridLink
@@ -213,45 +295,36 @@ graph TB
     Dialogs -->|Uses| Controls
     Dialogs -->|Accesses| DataBook
     Dialogs -->|Executes via| RLinkClass
-    
-    %% Model flow
+
     DataBook -->|Contains| DataFrame
     DataBook -->|Refreshes via| RLinkClass
     DataFrame -->|Populates| GridLink
     GridLink -->|Requests Data| DataFrame
     GridLink -->|Displays in| MainForm
-    
-    %% R communication flow (with data flow annotations)
+
     RLinkClass -->|1. Creates| RStatement
-    RLinkClass -->|2. Checks| RThread
-    RThread -->|3. Waits if| RThread
-    RLinkClass -->|4. Sets Flag| RThread
-    RLinkClass -->|5. Spawns| RThread
-    RThread -->|6. Calls| REngine
-    REngine -->|7. Direct Call| RInstatObject
-    REngine -->|8. Evaluates| REnvironment
-    REnvironment -->|9. Executes| RPackages
-    RPackages -->|10. Modifies| RInstatObject
-    RInstatObject -->|11. Returns| REngine
-    REngine -->|12. Returns Result| RThread
-    RThread -->|13. Captures Output| RLinkClass
-    RLinkClass -->|14. Logs Script| RLinkClass
-    RLinkClass -->|15. Adds Output| OutputLogger
-    OutputLogger -->|16. Displays| MainForm
-    RLinkClass -->|17. Clears Flag| RThread
-    RLinkClass -->|18. Triggers| DataBook
-    DataBook -->|19. Refreshes| DataBook
-    DataBook -->|20. Calls R| RLinkClass
-    RLinkClass -->|21. Gets Names| RInstatObject
-    RInstatObject -->|22. Returns List| RLinkClass
-    RLinkClass -->|23. Returns| DataBook
-    DataBook -->|24. Updates| DataFrame
-    DataFrame -->|25. Refreshes| GridLink
-    GridLink -->|26. Updates| MainForm
-    
-    style WinFormsApp fill:#e1f5ff
-    style RProcess fill:#ffe1e1
-    style Threading fill:#fff4e1
+    RLinkClass -->|2. Checks or waits if busy| RThread
+    RLinkClass -->|3. Sets Flag| RThread
+    RLinkClass -->|4. Spawns| RThread
+    RThread -->|5. Calls| REngine
+    REngine -->|6. Direct Call| RInstatObject
+    REngine -->|7. Evaluates| REnvironment
+    REnvironment -->|8. Executes| RPackages
+    RPackages -->|9. Modifies| RInstatObject
+    RInstatObject -->|10. Returns| REngine
+    REngine -->|11. Returns Result| RThread
+    RThread -->|12. Captures Output| RLinkClass
+    RLinkClass -->|13. Logs script and adds output| OutputLogger
+    OutputLogger -->|14. Displays| MainForm
+    RLinkClass -->|15. Clears Flag| RThread
+    RLinkClass -->|16. Triggers| DataBook
+    DataBook -->|17. Refreshes then calls R| RLinkClass
+    RLinkClass -->|18. Gets Names| RInstatObject
+    RInstatObject -->|19. Returns List| RLinkClass
+    RLinkClass -->|20. Returns| DataBook
+    DataBook -->|21. Updates| DataFrame
+    DataFrame -->|22. Refreshes| GridLink
+    GridLink -->|23. Updates| MainForm
 ```
 
 **Architectural Layers Explained:**
