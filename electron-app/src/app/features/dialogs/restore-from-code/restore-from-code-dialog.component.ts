@@ -85,6 +85,7 @@ import { CodePreviewComponent } from '../../../shared/components/code-preview/co
   `]
 })
 export class RestoreFromCodeDialogComponent extends DialogBase {
+  static readonly dialogId = 'restore-from-code';
   readonly dialogTitle = 'Restore From Code';
 
   codeInput = signal('');

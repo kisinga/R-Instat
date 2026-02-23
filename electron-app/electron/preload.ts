@@ -120,6 +120,30 @@ const electronAPI = {
       ipcRenderer.invoke('app:setLanguage', lang),
   },
 
+  // AI provider APIs
+  ai: {
+    anthropicMessage: (request: {
+      apiKey: string;
+      system: string;
+      userMessage: string;
+      model?: string;
+      maxTokens?: number;
+      temperature?: number;
+      timeoutMs?: number;
+    }): Promise<{ ok: boolean; status: number; data: unknown }> =>
+      ipcRenderer.invoke('ai:anthropicMessage', request),
+    openaiChat: (request: {
+      apiKey: string;
+      system: string;
+      userMessage: string;
+      model?: string;
+      temperature?: number;
+      responseFormat?: 'json_object' | 'text';
+      timeoutMs?: number;
+    }): Promise<{ ok: boolean; status: number; data: unknown }> =>
+      ipcRenderer.invoke('ai:openaiChat', request),
+  },
+
   // File APIs for output export
   file: {
     writeText: (filePath: string, content: string): Promise<{ success: boolean; error?: string }> =>

@@ -1,18 +1,10 @@
-/**
- * Dot Plot Dialog Component
- * 
- * Dialog for creating dot plots using ggplot2 geom_dotplot.
- */
-
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { RService } from '../../../core/services/r.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { LanguageService } from '../../../core/services/language.service';
-import { ColumnInfo } from '../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { DialogBase } from '../dialog-base';
+import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
   selector: 'app-dot-plot-dialog',
@@ -22,7 +14,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     <div class="dialog-content dot-plot-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'DOT_PLOT.TITLE' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
@@ -34,7 +26,11 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
               {{ 'DIALOG.NO_DATA' | translate }}
             </div>
           } @else {
-            <select class="select select-bordered w-full select-sm" [(ngModel)]="selectedDataframe" (ngModelChange)="onDataframeChange($event)">
+            <select
+              class="select select-bordered w-full select-sm"
+              [ngModel]="selectedDataframe()"
+              (ngModelChange)="onDataframeChange($event)"
+            >
               @for (df of dataframes(); track df) {
                 <option [value]="df">{{ df }}</option>
               }
@@ -46,21 +42,31 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <!-- X Variable (Categorical) -->
           <div class="form-group">
             <label class="form-label">{{ 'DOT_PLOT.X_VARIABLE' | translate }}</label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="xVariable" />
+            <app-column-picker
+              [columns]="getFactorColumns()"
+              [multiple]="false"
+              [selectedColumn]="xVariable()"
+              (selectedColumnChange)="xVariable.set($event)"
+            />
             <p class="text-xs text-base-content/60 mt-1">{{ 'DOT_PLOT.X_HINT' | translate }}</p>
           </div>
 
           <!-- Y Variable (Numeric) -->
           <div class="form-group">
             <label class="form-label">{{ 'DOT_PLOT.Y_VARIABLE' | translate }}</label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="yVariable" />
+            <app-column-picker
+              [columns]="getNumericColumns()"
+              [multiple]="false"
+              [selectedColumn]="yVariable()"
+              (selectedColumnChange)="yVariable.set($event)"
+            />
           </div>
         </div>
 
         <!-- Fill By -->
         <div class="form-group mt-4">
           <label class="form-label">{{ 'DOT_PLOT.FILL_BY' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-          <select class="select select-bordered w-full select-sm" [(ngModel)]="fillBy">
+          <select class="select select-bordered w-full select-sm" [ngModel]="fillBy()" (ngModelChange)="fillBy.set($event)">
             <option value="">{{ 'DIALOG.NONE' | translate }}</option>
             @for (col of getFactorColumns(); track col.name) {
               <option [value]="col.name">{{ col.name }}</option>
@@ -70,8 +76,16 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
         <!-- Dot Size -->
         <div class="form-group mt-4">
-          <label class="form-label">{{ 'DOT_PLOT.DOT_SIZE' | translate }}: {{ dotSize }}</label>
-          <input type="range" class="range range-primary range-sm" min="0.1" max="2" step="0.1" [(ngModel)]="dotSize" />
+          <label class="form-label">{{ 'DOT_PLOT.DOT_SIZE' | translate }}: {{ dotSize() }}</label>
+          <input
+            type="range"
+            class="range range-primary range-sm"
+            min="0.1"
+            max="2"
+            step="0.1"
+            [ngModel]="dotSize()"
+            (ngModelChange)="dotSize.set(+$event)"
+          />
         </div>
 
         <!-- Stack Direction -->
@@ -79,15 +93,36 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <label class="form-label">{{ 'DOT_PLOT.STACK_DIRECTION' | translate }}</label>
           <div class="flex gap-4">
             <label class="cursor-pointer flex items-center gap-2">
-              <input type="radio" name="stackdir" class="radio radio-sm" value="center" [(ngModel)]="stackDirection" />
+              <input
+                type="radio"
+                name="stackdir"
+                class="radio radio-sm"
+                value="center"
+                [checked]="stackDirection() === 'center'"
+                (change)="stackDirection.set('center')"
+              />
               <span class="text-sm">{{ 'DOT_PLOT.CENTER' | translate }}</span>
             </label>
             <label class="cursor-pointer flex items-center gap-2">
-              <input type="radio" name="stackdir" class="radio radio-sm" value="up" [(ngModel)]="stackDirection" />
+              <input
+                type="radio"
+                name="stackdir"
+                class="radio radio-sm"
+                value="up"
+                [checked]="stackDirection() === 'up'"
+                (change)="stackDirection.set('up')"
+              />
               <span class="text-sm">{{ 'DOT_PLOT.UP' | translate }}</span>
             </label>
             <label class="cursor-pointer flex items-center gap-2">
-              <input type="radio" name="stackdir" class="radio radio-sm" value="down" [(ngModel)]="stackDirection" />
+              <input
+                type="radio"
+                name="stackdir"
+                class="radio radio-sm"
+                value="down"
+                [checked]="stackDirection() === 'down'"
+                (change)="stackDirection.set('down')"
+              />
               <span class="text-sm">{{ 'DOT_PLOT.DOWN' | translate }}</span>
             </label>
           </div>
@@ -95,10 +130,10 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
         <!-- Code Preview -->
         <div class="code-preview-section mt-4">
-          <button class="btn btn-ghost btn-xs gap-1" (click)="showCode.set(!showCode())">
-            {{ showCode() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
+          <button class="btn btn-ghost btn-xs gap-1" (click)="toggleCodePreview()">
+            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
           </button>
-          @if (showCode()) {
+          @if (showCodePreview()) {
             <pre class="code-block mt-2">{{ rCode() }}</pre>
           }
         </div>
@@ -106,11 +141,11 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
       <div class="dialog-footer">
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
-          [disabled]="!isValid || isLoading()"
+          [disabled]="!isValid() || isLoading()"
         >
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
@@ -135,119 +170,70 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
   `]
 })
-export class DotPlotDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class DotPlotDialogComponent extends DialogBase implements OnInit {
+  static readonly dialogId = 'dot-plot';
+  readonly dialogTitle = 'Dot Plot';
 
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
+  xVariable = signal('');
+  yVariable = signal('');
+  fillBy = signal('');
+  dotSize = signal(0.5);
+  stackDirection = signal<'center' | 'up' | 'down'>('center');
 
-  dataframes = signal<string[]>([]);
-  selectedDataframe = '';
-  columns = signal<ColumnInfo[]>([]);
-  xVariable = '';
-  yVariable = '';
-  fillBy = '';
-  dotSize = 0.5;
-  stackDirection: 'center' | 'up' | 'down' = 'center';
-  
-  isLoading = signal(false);
-  showCode = signal(false);
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  rCode = computed(() => {
-    if (!this.selectedDataframe || !this.xVariable || !this.yVariable) {
+    this.registerFormFields({
+      xVariable: this.xVariable,
+      yVariable: this.yVariable,
+      fillBy: this.fillBy,
+      dotSize: this.dotSize,
+      stackDirection: this.stackDirection,
+    });
+
+    this.initializeCodeManager(() => rSyntax().setBase(this.buildDotPlotCode()));
+
+    this.createEffect(() => {
+      this.selectedDataframe();
+      this.xVariable();
+      this.yVariable();
+      this.fillBy();
+      this.dotSize();
+      this.stackDirection();
+      this.rebuildRCode();
+    });
+  }
+
+  override async onDataframeChange(name: string): Promise<void> {
+    await super.onDataframeChange(name);
+    this.xVariable.set('');
+    this.yVariable.set('');
+    this.fillBy.set('');
+  }
+
+  isValid(): boolean {
+    return !!(this.selectedDataframe() && this.xVariable() && this.yVariable());
+  }
+
+  private buildDotPlotCode(): string {
+    if (!this.selectedDataframe() || !this.xVariable() || !this.yVariable()) {
       return '# Select dataframe, X and Y variables';
     }
-    
-    let aesStr = `aes(x = ${this.xVariable}, y = ${this.yVariable}`;
-    if (this.fillBy) {
-      aesStr += `, fill = ${this.fillBy}`;
+
+    let aesStr = `aes(x = ${this.xVariable()}, y = ${this.yVariable()}`;
+    if (this.fillBy()) {
+      aesStr += `, fill = ${this.fillBy()}`;
     }
     aesStr += ')';
-    
-    let code = `ggplot(get_dataframe("${this.selectedDataframe}"), ${aesStr}) +\n`;
-    code += `  geom_dotplot(\n`;
-    code += `    binaxis = "y",\n`;
-    code += `    stackdir = "${this.stackDirection}",\n`;
-    code += `    dotsize = ${this.dotSize}\n`;
-    code += `  ) +\n`;
-    code += `  theme_minimal() +\n`;
-    code += `  labs(x = "${this.xVariable}", y = "${this.yVariable}")`;
-    
+
+    let code = `ggplot(get_dataframe("${this.selectedDataframe()}"), ${aesStr}) +\n`;
+    code += '  geom_dotplot(\n';
+    code += '    binaxis = "y",\n';
+    code += `    stackdir = "${this.stackDirection()}",\n`;
+    code += `    dotsize = ${this.dotSize()}\n`;
+    code += '  ) +\n';
+    code += '  theme_minimal() +\n';
+    code += `  labs(x = "${this.xVariable()}", y = "${this.yVariable()}")`;
     return code;
-  });
-
-  get isValid(): boolean {
-    return !!(this.selectedDataframe && this.xVariable && this.yVariable);
-  }
-
-  async ngOnInit(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-    
-    const active = this.rService.activeDataframe();
-    if (active && dfs.includes(active)) {
-      this.selectedDataframe = active;
-      await this.loadColumns();
-    } else if (dfs.length > 0) {
-      this.selectedDataframe = dfs[0];
-      await this.loadColumns();
-    }
-  }
-
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe = name;
-    this.xVariable = '';
-    this.yVariable = '';
-    this.fillBy = '';
-    await this.loadColumns();
-  }
-
-  private async loadColumns(): Promise<void> {
-    if (!this.selectedDataframe) { this.columns.set([]); return; }
-    try {
-      const cols = await this.rService.getColumnInfo(this.selectedDataframe);
-      this.columns.set(cols);
-    } catch { this.columns.set([]); }
-  }
-
-  getNumericColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('numeric') || t.includes('integer') || t.includes('double');
-    });
-  }
-
-  getFactorColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('factor') || t.includes('character');
-    });
-  }
-
-  async execute(): Promise<void> {
-    if (!this.isValid) {
-      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
-      return;
-    }
-
-    this.isLoading.set(true);
-
-    try {
-      const result = await this.rService.execute(this.rCode());
-
-      if (result.success) {
-        this.toastService.success(this.languageService.instant('TOAST.COMMAND_SUCCESS'));
-        this.close.emit();
-      } else {
-        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
-      }
-    } catch (error) {
-      this.toastService.error(
-        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
-      );
-    } finally {
-      this.isLoading.set(false);
-    }
   }
 }

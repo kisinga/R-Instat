@@ -15,6 +15,100 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { RBridge } from './r-bridge';
 
+interface AnthropicMessageRequest {
+  apiKey: string;
+  system: string;
+  userMessage: string;
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
+}
+
+interface OpenAIChatRequest {
+  apiKey: string;
+  system: string;
+  userMessage: string;
+  model?: string;
+  temperature?: number;
+  responseFormat?: 'json_object' | 'text';
+  timeoutMs?: number;
+}
+
+interface AIProxyResponse {
+  ok: boolean;
+  status: number;
+  data: unknown;
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'))
+  );
+}
+
+function extractNetworkErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const maybeCode = (error as { code?: unknown }).code;
+  if (typeof maybeCode === 'string') return maybeCode;
+
+  const maybeCause = (error as { cause?: unknown }).cause;
+  if (typeof maybeCause === 'object' && maybeCause !== null) {
+    const causeCode = (maybeCause as { code?: unknown }).code;
+    if (typeof causeCode === 'string') return causeCode;
+  }
+  return undefined;
+}
+
+async function postJsonWithTimeout(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  timeoutMs: number
+): Promise<AIProxyResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    const data = (await response.json()) as unknown;
+    return {
+      ok: response.ok,
+      status: response.status,
+      data,
+    };
+  } catch (error) {
+    const isTimeout = isAbortLikeError(error);
+    const code = extractNetworkErrorCode(error);
+    const status = isTimeout ? 408 : 599;
+    const message = isTimeout
+      ? `AI request timed out after ${timeoutMs}ms`
+      : error instanceof Error
+        ? error.message
+        : 'Network request failed';
+
+    console.error('[AI Bridge] Request failed', { url, status, code, message });
+    return {
+      ok: false,
+      status,
+      data: {
+        error: {
+          message,
+          code: code ?? (isTimeout ? 'ETIMEDOUT' : 'NETWORK_ERROR'),
+        },
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 // This is only needed for Windows Squirrel installer
 try {
@@ -325,6 +419,48 @@ function setupIPC(): void {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Write failed' };
     }
+  });
+
+  // AI provider bridge (main process avoids renderer CORS restrictions)
+  ipcMain.handle('ai:anthropicMessage', async (_event, request: AnthropicMessageRequest) => {
+    return postJsonWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        'content-type': 'application/json',
+        'x-api-key': request.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      {
+        model: request.model ?? 'claude-haiku-4-5',
+        max_tokens: request.maxTokens ?? 1800,
+        temperature: request.temperature ?? 0.2,
+        system: request.system,
+        messages: [{ role: 'user', content: request.userMessage }],
+      },
+      request.timeoutMs ?? 45000
+    );
+  });
+
+  ipcMain.handle('ai:openaiChat', async (_event, request: OpenAIChatRequest) => {
+    return postJsonWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${request.apiKey}`,
+      },
+      {
+        model: request.model ?? 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: request.system },
+          { role: 'user', content: request.userMessage },
+        ],
+        temperature: request.temperature ?? 0.2,
+        ...(request.responseFormat === 'json_object'
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
+      },
+      request.timeoutMs ?? 45000
+    );
   });
 
   // Start R process

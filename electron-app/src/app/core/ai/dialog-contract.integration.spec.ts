@@ -1,0 +1,132 @@
+import { DIALOG_SCHEMAS } from './dialog-schema.registry';
+import { OPERATION_REGISTRY } from './operation-registry';
+import {
+  getComponentType,
+  getDialogContract,
+  getDialogContractsForPrompt,
+  listDialogIds,
+} from './dialog-identity.registry';
+import { getMetadataStateDiagnostics } from './dialog-metadata-contract';
+import { IntentResolverService } from '../services/intent-resolver.service';
+import type { AICallResult, DataContext } from '../services/ai-client.service';
+import { MergeDialogComponent } from '../../features/dialogs/merge/merge-dialog.component';
+import { StackDialogComponent } from '../../features/dialogs/stack/stack-dialog.component';
+import { UnstackDialogComponent } from '../../features/dialogs/unstack/unstack-dialog.component';
+import { LinePlotDialogComponent } from '../../features/dialogs/line-plot/line-plot-dialog.component';
+import { DotPlotDialogComponent } from '../../features/dialogs/dot-plot/dot-plot-dialog.component';
+
+describe('dialog contract composition', () => {
+  it('resolves component types for all schema dialogs', () => {
+    for (const schema of DIALOG_SCHEMAS) {
+      expect(getComponentType(schema.dialogId)).withContext(schema.dialogId).toBeDefined();
+      expect(getDialogContract(schema.dialogId)?.schema).withContext(schema.dialogId).toBeDefined();
+    }
+  });
+
+  it('resolves component types for all operation-mapped dialogs', () => {
+    const mappedDialogs = new Set(OPERATION_REGISTRY.flatMap((op) => op.mappedDialogs));
+    for (const dialogId of mappedDialogs) {
+      expect(getComponentType(dialogId)).withContext(dialogId).toBeDefined();
+    }
+  });
+
+  it('ensures all operation-mapped dialogs have schemas', () => {
+    const mappedDialogs = new Set(OPERATION_REGISTRY.flatMap((op) => op.mappedDialogs));
+    const schemaDialogIds = new Set(DIALOG_SCHEMAS.map((schema) => schema.dialogId));
+    for (const dialogId of mappedDialogs) {
+      expect(schemaDialogIds.has(dialogId)).withContext(dialogId).toBeTrue();
+    }
+  });
+
+  it('builds prompt contracts including component type and params', () => {
+    const contracts = getDialogContractsForPrompt();
+    expect(contracts.length).toBeGreaterThan(0);
+    expect(contracts.every((entry) => !!entry.componentType)).toBeTrue();
+    expect(contracts.every((entry) => Array.isArray(entry.params))).toBeTrue();
+  });
+
+  it('lists only analytical host dialogs when requested', () => {
+    const ids = listDialogIds({ includeNonAnalytical: false });
+    expect(ids).toContain('summary');
+    expect(ids).not.toContain('import');
+    expect(ids).not.toContain('ai-assist');
+  });
+});
+
+describe('dialog identity contract', () => {
+  it('uses explicit static dialogId on migrated analytical dialogs', () => {
+    expect(MergeDialogComponent.dialogId).toBe('merge');
+    expect(StackDialogComponent.dialogId).toBe('stack');
+    expect(UnstackDialogComponent.dialogId).toBe('unstack');
+    expect(LinePlotDialogComponent.dialogId).toBe('line-plot');
+    expect(DotPlotDialogComponent.dialogId).toBe('dot-plot');
+  });
+});
+
+describe('metadata diagnostics', () => {
+  it('flags unknown and unregistered keys for restore observability', () => {
+    const diagnostics = getMetadataStateDiagnostics(
+      'bar-chart',
+      {
+        dataframe: 'df1',
+        xVariable: 'species',
+        fillVariable: 'group',
+        badField: 'should-warn',
+      },
+      ['xVariable']
+    );
+
+    expect(diagnostics.unknownKeys).toEqual(['badField']);
+    expect(diagnostics.unregisteredKeys).toEqual(['fillVariable']);
+  });
+});
+
+describe('intent resolver integration', () => {
+  it('builds dialog metadata with component type from shared registry', () => {
+    const resolver = new IntentResolverService();
+    const dataContext: DataContext = {
+      dataframes: ['df1'],
+      activeDataframe: 'df1',
+      columnsByDataframe: {
+        df1: [
+          { name: 'height', type: 'numeric' },
+          { name: 'species', type: 'factor' },
+        ],
+      },
+    };
+
+    const aiResult: AICallResult = {
+      success: true,
+      plan: {
+        goal: 'Plot a histogram',
+        assumptions: [],
+        clarificationQuestions: [],
+        overallConfidence: 0.9,
+        requiresConfirmation: false,
+        executionMode: 'component_codegen',
+        modeReason: 'dialog available',
+        modeConfidence: 0.9,
+        steps: [
+          {
+            stepId: 's1',
+            stepType: 'dialog',
+            operationId: 'describe.distribution.numeric',
+            dialogId: 'histogram',
+            dependsOnStepId: undefined,
+            state: {
+              dataframe: 'df1',
+              variable: 'height',
+            },
+            inferredFields: ['variable'],
+            confidence: 0.9,
+            rationale: 'Histogram best matches request',
+          },
+        ],
+      },
+    };
+
+    const resolved = resolver.resolve(aiResult, dataContext);
+    expect(resolved.ok).toBeTrue();
+    expect(resolved.plan?.steps[0].metadata?.componentType).toBe('HistogramDialogComponent');
+  });
+});

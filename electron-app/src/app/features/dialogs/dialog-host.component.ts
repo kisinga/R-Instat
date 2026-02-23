@@ -1,7 +1,8 @@
-import { Component, OnInit, OnDestroy, inject, signal, Type } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
+import { listDialogIds } from '../../core/ai/dialog-identity.registry';
 
 // Import all dialog components
 import { ImportDialogComponent } from './import-dialog/import-dialog.component';
@@ -41,46 +42,7 @@ import { UnstackDialogComponent } from './unstack/unstack-dialog.component';
 import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component';
 import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
 import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
-
-// Dialog registry
-const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
-  'import': ImportDialogComponent,
-  'summary': SummaryDialogComponent,
-  'histogram': HistogramDialogComponent,
-  'boxplot': BoxplotDialogComponent,
-  'scatter': ScatterDialogComponent,
-  'bar-chart': BarChartDialogComponent,
-  'filter': FilterDialogComponent,
-  'sort': SortDialogComponent,
-  'calculate': CalculateDialogComponent,
-  'recode': RecodeDialogComponent,
-  'rename': RenameDialogComponent,
-  'correlation': CorrelationDialogComponent,
-  't-test': TTestDialogComponent,
-  'regression': RegressionDialogComponent,
-  'describe': DescribeDialogComponent,
-  'describe:summary': SummaryDialogComponent,
-  'describe:graph': DescribeDialogComponent,
-  // Domain Expert dialogs
-  'domain-selector': DomainSelectorComponent,
-  'define-climatic-data': DefineClimaticDataDialogComponent,
-  'climatic-summary': ClimaticSummaryDialogComponent,
-  'inventory-plot': InventoryPlotDialogComponent,
-  'annual-rainfall': AnnualRainfallDialogComponent,
-  'extremes': ExtremesDialogComponent,
-  'day-count': DayCountDialogComponent,
-  'spell-lengths': SpellLengthsDialogComponent,
-  'seasonal-summary': SeasonalSummaryDialogComponent,
-  'missing-report': MissingReportDialogComponent,
-  'temperature-summary': TemperatureSummaryDialogComponent,
-  // High Priority dialogs
-  'export': ExportDialogComponent,
-  'merge': MergeDialogComponent,
-  'stack': StackDialogComponent,
-  'unstack': UnstackDialogComponent,
-  'line-plot': LinePlotDialogComponent,
-  'dot-plot': DotPlotDialogComponent,
-};
+import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component';
 
 @Component({
   selector: 'app-dialog-host',
@@ -122,6 +84,7 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
     LinePlotDialogComponent,
     DotPlotDialogComponent,
     RestoreFromCodeDialogComponent,
+    AIAssistDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -232,12 +195,17 @@ const DIALOG_COMPONENTS: Record<string, Type<unknown>> = {
           @case ('restore-from-code') {
             <app-restore-from-code-dialog (close)="closeDialog()" />
           }
+          @case ('ai-assist') {
+            <app-ai-assist-dialog (close)="closeDialog()" />
+          }
         }
       </div>
     }
   `,
 })
 export class DialogHostComponent implements OnInit, OnDestroy {
+  private static readonly HOST_DIALOG_IDS = new Set(listDialogIds());
+
   private readonly rService = inject(RService);
   private subscription?: Subscription;
 
@@ -247,6 +215,10 @@ export class DialogHostComponent implements OnInit, OnDestroy {
     this.subscription = this.rService.dialog$.subscribe(({ action, dialog }) => {
       console.log('[DialogHost] Dialog action:', action, 'dialog:', dialog);
       if (action === 'open') {
+        if (!DialogHostComponent.HOST_DIALOG_IDS.has(dialog)) {
+          console.warn('[DialogHost] Unknown dialog id:', dialog);
+          return;
+        }
         this.activeDialog.set(dialog);
         console.log('[DialogHost] Active dialog set to:', dialog);
       } else if (action === 'close') {

@@ -9,6 +9,8 @@ import { DialogBuilder } from '../../core/dialogs/builders/types';
 import { DialogMetadata } from '../../core/r-codegen/dialog-metadata';
 import { stripMetadata } from '../../core/r-codegen/metadata-parser';
 import { DialogRestoreService } from '../../core/services/dialog-restore.service';
+import { getMetadataStateDiagnostics } from '../../core/ai/dialog-metadata-contract';
+import { getDialogId } from '../../core/ai/dialog-identity.registry';
 
 /**
  * Base class for all statistical dialogs
@@ -54,11 +56,20 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
   abstract readonly dialogTitle: string;
   
   /**
-   * Optional: Override to provide a unique ID for preference storage
-   * Defaults to dialogTitle if not specified
+   * Deterministic dialog identity used for preference persistence and metadata.
+   * Dialogs can provide static dialogId; otherwise identity is resolved from
+   * the shared dialog identity registry using component type.
    */
   get dialogId(): string {
-    return this.dialogTitle.toLowerCase().replace(/\s+/g, '-');
+    const ctor = this.constructor as typeof DialogBase & { dialogId?: string };
+    if (typeof ctor.dialogId === 'string' && ctor.dialogId.length > 0) {
+      return ctor.dialogId;
+    }
+    const byComponentName = getDialogId(this.constructor.name);
+    if (byComponentName) {
+      return byComponentName;
+    }
+    throw new Error(`Dialog "${this.constructor.name}" is missing identity registration`);
   }
 
   ngOnInit(): void {
@@ -431,6 +442,22 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
       if (metadata.dialogId !== this.dialogId) {
         console.warn(`Dialog ID mismatch: expected ${this.dialogId}, got ${metadata.dialogId}`);
         return false;
+      }
+
+      const diagnostics = getMetadataStateDiagnostics(
+        this.dialogId,
+        metadata.state ?? {},
+        this.formFields.keys()
+      );
+      if (diagnostics.unknownKeys.length > 0) {
+        console.warn(
+          `[DialogBase] Metadata contains keys not in schema for "${this.dialogId}": ${diagnostics.unknownKeys.join(', ')}`
+        );
+      }
+      if (diagnostics.unregisteredKeys.length > 0) {
+        console.warn(
+          `[DialogBase] Metadata keys are valid schema params but not registered form fields for "${this.dialogId}": ${diagnostics.unregisteredKeys.join(', ')}`
+        );
       }
 
       // Set dataframe if provided and exists

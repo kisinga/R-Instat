@@ -166,6 +166,7 @@ export class ToolbarComponent {
       labelKey: 'TOOLBAR.MENU_ANALYZE',
       icon: '📊',
       items: [
+        { labelKey: 'TOOLBAR.AI_ASSIST', action: 'ai-assist' },
         { labelKey: 'TOOLBAR.DESCRIBE', action: 'describe', shortcut: 'Ctrl+D' },
         { labelKey: 'TOOLBAR.SUMMARY', action: 'summary' },
       ]

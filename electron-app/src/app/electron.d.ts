@@ -68,6 +68,26 @@ interface SaveDialogResult {
   filePath?: string;
 }
 
+interface AnthropicMessageRequest {
+  apiKey: string;
+  system: string;
+  userMessage: string;
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
+}
+
+interface OpenAIChatRequest {
+  apiKey: string;
+  system: string;
+  userMessage: string;
+  model?: string;
+  temperature?: number;
+  responseFormat?: 'json_object' | 'text';
+  timeoutMs?: number;
+}
+
 interface ElectronAPI {
   r: {
     execute: (code: string) => Promise<RResult>;
@@ -98,6 +118,10 @@ interface ElectronAPI {
   };
   app: {
     setLanguage: (lang: string) => Promise<{ success: boolean }>;
+  };
+  ai: {
+    anthropicMessage: (request: AnthropicMessageRequest) => Promise<{ ok: boolean; status: number; data: unknown }>;
+    openaiChat: (request: OpenAIChatRequest) => Promise<{ ok: boolean; status: number; data: unknown }>;
   };
   file: {
     writeText: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;

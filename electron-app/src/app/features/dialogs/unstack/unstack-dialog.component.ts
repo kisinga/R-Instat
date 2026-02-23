@@ -1,18 +1,10 @@
-/**
- * Unstack Dialog Component
- * 
- * Dialog for unstacking data (long to wide format) using tidyr::pivot_wider.
- */
-
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { RService } from '../../../core/services/r.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { LanguageService } from '../../../core/services/language.service';
-import { ColumnInfo } from '../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { DialogBase } from '../dialog-base';
+import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
   selector: 'app-unstack-dialog',
@@ -22,7 +14,7 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     <div class="dialog-content unstack-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'UNSTACK.TITLE' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
@@ -34,7 +26,11 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
               {{ 'DIALOG.NO_DATA' | translate }}
             </div>
           } @else {
-            <select class="select select-bordered w-full select-sm" [(ngModel)]="selectedDataframe" (ngModelChange)="onDataframeChange($event)">
+            <select
+              class="select select-bordered w-full select-sm"
+              [ngModel]="selectedDataframe()"
+              (ngModelChange)="onDataframeChange($event)"
+            >
               @for (df of dataframes(); track df) {
                 <option [value]="df">{{ df }}</option>
               }
@@ -46,14 +42,24 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
           <!-- Names From -->
           <div class="form-group">
             <label class="form-label">{{ 'UNSTACK.NAMES_FROM' | translate }}</label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [(selectedColumn)]="namesFrom" />
+            <app-column-picker
+              [columns]="getFactorColumns()"
+              [multiple]="false"
+              [selectedColumn]="namesFrom()"
+              (selectedColumnChange)="namesFrom.set($event)"
+            />
             <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.NAMES_HINT' | translate }}</p>
           </div>
 
           <!-- Values From -->
           <div class="form-group">
             <label class="form-label">{{ 'UNSTACK.VALUES_FROM' | translate }}</label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [(selectedColumn)]="valuesFrom" />
+            <app-column-picker
+              [columns]="getNumericColumns()"
+              [multiple]="false"
+              [selectedColumn]="valuesFrom()"
+              (selectedColumnChange)="valuesFrom.set($event)"
+            />
             <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.VALUES_HINT' | translate }}</p>
           </div>
         </div>
@@ -61,22 +67,34 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
         <!-- Values Fill -->
         <div class="form-group mt-4">
           <label class="form-label">{{ 'UNSTACK.VALUES_FILL' | translate }}</label>
-          <input type="text" class="input input-bordered w-full input-sm" [(ngModel)]="valuesFill" placeholder="NA" />
+          <input
+            type="text"
+            class="input input-bordered w-full input-sm"
+            [ngModel]="valuesFill()"
+            (ngModelChange)="valuesFill.set($event)"
+            placeholder="NA"
+          />
           <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.FILL_HINT' | translate }}</p>
         </div>
 
         <!-- Result Name -->
         <div class="form-group mt-4">
           <label class="form-label">{{ 'UNSTACK.RESULT_NAME' | translate }}</label>
-          <input type="text" class="input input-bordered w-full input-sm" [(ngModel)]="resultName" placeholder="unstacked_data" />
+          <input
+            type="text"
+            class="input input-bordered w-full input-sm"
+            [ngModel]="resultName()"
+            (ngModelChange)="resultName.set($event)"
+            placeholder="unstacked_data"
+          />
         </div>
 
         <!-- Code Preview -->
         <div class="code-preview-section mt-4">
-          <button class="btn btn-ghost btn-xs gap-1" (click)="showCode.set(!showCode())">
-            {{ showCode() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
+          <button class="btn btn-ghost btn-xs gap-1" (click)="toggleCodePreview()">
+            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
           </button>
-          @if (showCode()) {
+          @if (showCodePreview()) {
             <pre class="code-block mt-2">{{ rCode() }}</pre>
           }
         </div>
@@ -84,11 +102,11 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
 
       <div class="dialog-footer">
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
-          [disabled]="!isValid || isLoading()"
+          [disabled]="!isValid() || isLoading()"
         >
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
@@ -113,124 +131,72 @@ import { ColumnPickerComponent } from '../../../shared/components/column-picker/
     .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
   `]
 })
-export class UnstackDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class UnstackDialogComponent extends DialogBase implements OnInit {
+  static readonly dialogId = 'unstack';
+  readonly dialogTitle = 'Unstack';
 
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
+  namesFrom = signal('');
+  valuesFrom = signal('');
+  valuesFill = signal('');
+  resultName = signal('unstacked_data');
 
-  dataframes = signal<string[]>([]);
-  selectedDataframe = '';
-  columns = signal<ColumnInfo[]>([]);
-  namesFrom = '';
-  valuesFrom = '';
-  valuesFill = '';
-  resultName = 'unstacked_data';
-  
-  isLoading = signal(false);
-  showCode = signal(false);
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  rCode = computed(() => {
-    if (!this.selectedDataframe || !this.namesFrom || !this.valuesFrom) {
-      return '# Select dataframe and columns';
-    }
-    
-    let code = `${this.resultName || 'unstacked_data'} <- get_dataframe("${this.selectedDataframe}") %>%\n`;
-    code += `  tidyr::pivot_wider(\n`;
-    code += `    names_from = ${this.namesFrom},\n`;
-    code += `    values_from = ${this.valuesFrom}`;
-    
-    if (this.valuesFill && this.valuesFill !== 'NA') {
-      // Try to parse as number, otherwise treat as string
-      const fillValue = isNaN(Number(this.valuesFill)) 
-        ? `"${this.valuesFill}"` 
-        : this.valuesFill;
-      code += `,\n    values_fill = ${fillValue}`;
-    }
-    
-    code += `\n  )`;
-    code += `\ndata_store[["${this.resultName || 'unstacked_data'}"]] <- ${this.resultName || 'unstacked_data'}`;
-    
-    return code;
-  });
+    this.registerFormFields({
+      namesFrom: this.namesFrom,
+      valuesFrom: this.valuesFrom,
+      valuesFill: this.valuesFill,
+      resultName: this.resultName,
+    });
 
-  get isValid(): boolean {
+    this.initializeCodeManager(() => rSyntax().setBase(this.buildUnstackCode()));
+
+    this.createEffect(() => {
+      this.selectedDataframe();
+      this.namesFrom();
+      this.valuesFrom();
+      this.valuesFill();
+      this.resultName();
+      this.rebuildRCode();
+    });
+  }
+
+  override async onDataframeChange(name: string): Promise<void> {
+    await super.onDataframeChange(name);
+    this.namesFrom.set('');
+    this.valuesFrom.set('');
+  }
+
+  isValid(): boolean {
     return !!(
-      this.selectedDataframe && 
-      this.namesFrom &&
-      this.valuesFrom &&
-      this.resultName
+      this.selectedDataframe() &&
+      this.namesFrom() &&
+      this.valuesFrom() &&
+      this.resultName().trim()
     );
   }
 
-  async ngOnInit(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-    
-    const active = this.rService.activeDataframe();
-    if (active && dfs.includes(active)) {
-      this.selectedDataframe = active;
-      await this.loadColumns();
-    } else if (dfs.length > 0) {
-      this.selectedDataframe = dfs[0];
-      await this.loadColumns();
-    }
-  }
-
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe = name;
-    this.namesFrom = '';
-    this.valuesFrom = '';
-    await this.loadColumns();
-  }
-
-  private async loadColumns(): Promise<void> {
-    if (!this.selectedDataframe) { this.columns.set([]); return; }
-    try {
-      const cols = await this.rService.getColumnInfo(this.selectedDataframe);
-      this.columns.set(cols);
-    } catch { this.columns.set([]); }
-  }
-
-  getFactorColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('factor') || t.includes('character');
-    });
-  }
-
-  getNumericColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      return t.includes('numeric') || t.includes('integer') || t.includes('double');
-    });
-  }
-
-  async execute(): Promise<void> {
-    if (!this.isValid) {
-      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
-      return;
+  private buildUnstackCode(): string {
+    if (!this.selectedDataframe() || !this.namesFrom() || !this.valuesFrom()) {
+      return '# Select dataframe and columns';
     }
 
-    this.isLoading.set(true);
+    const outputName = this.resultName().trim() || 'unstacked_data';
+    let code = `${outputName} <- get_dataframe("${this.selectedDataframe()}") %>%\n`;
+    code += '  tidyr::pivot_wider(\n';
+    code += `    names_from = ${this.namesFrom()},\n`;
+    code += `    values_from = ${this.valuesFrom()}`;
 
-    try {
-      const result = await this.rService.execute(this.rCode(), true);
-
-      if (result.success) {
-        await this.rService.refreshDataframes();
-        this.toastService.success(this.languageService.instant('UNSTACK.SUCCESS'));
-        this.close.emit();
-      } else {
-        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
-      }
-    } catch (error) {
-      this.toastService.error(
-        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
-      );
-    } finally {
-      this.isLoading.set(false);
+    if (this.valuesFill() && this.valuesFill() !== 'NA') {
+      const fillValue = Number.isNaN(Number(this.valuesFill()))
+        ? `"${this.valuesFill()}"`
+        : this.valuesFill();
+      code += `,\n    values_fill = ${fillValue}`;
     }
+
+    code += '\n  )\n';
+    code += `add_dataframe(name = "${outputName}", df = ${outputName})`;
+    return code;
   }
 }

@@ -1,17 +1,9 @@
-/**
- * Stack Dialog Component
- * 
- * Dialog for stacking data (wide to long format) using tidyr::pivot_longer.
- */
-
-import { Component, Output, EventEmitter, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { RService } from '../../../core/services/r.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { LanguageService } from '../../../core/services/language.service';
-import { ColumnInfo } from '../../../core/models/r.model';
+import { DialogBase } from '../dialog-base';
+import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
   selector: 'app-stack-dialog',
@@ -21,7 +13,7 @@ import { ColumnInfo } from '../../../core/models/r.model';
     <div class="dialog-content stack-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
         <h2 class="text-lg font-semibold">{{ 'STACK.TITLE' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        <button class="btn btn-ghost btn-sm btn-square" (click)="cancel()">✕</button>
       </div>
 
       <div class="dialog-body">
@@ -33,7 +25,11 @@ import { ColumnInfo } from '../../../core/models/r.model';
               {{ 'DIALOG.NO_DATA' | translate }}
             </div>
           } @else {
-            <select class="select select-bordered w-full select-sm" [(ngModel)]="selectedDataframe" (ngModelChange)="onDataframeChange($event)">
+            <select
+              class="select select-bordered w-full select-sm"
+              [ngModel]="selectedDataframe()"
+              (ngModelChange)="onDataframeChange($event)"
+            >
               @for (df of dataframes(); track df) {
                 <option [value]="df">{{ df }}</option>
               }
@@ -49,7 +45,7 @@ import { ColumnInfo } from '../../../core/models/r.model';
             @for (col of columns(); track col.name) {
               <label class="cursor-pointer flex items-center gap-1.5 bg-base-100 px-2 py-1 rounded shadow-sm">
                 <input type="checkbox" class="checkbox checkbox-xs" 
-                  [checked]="columnsToStack.includes(col.name)"
+                  [checked]="columnsToStack().includes(col.name)"
                   (change)="toggleColumn(col.name)" />
                 <span class="text-sm">{{ col.name }}</span>
               </label>
@@ -61,14 +57,26 @@ import { ColumnInfo } from '../../../core/models/r.model';
           <!-- Names To -->
           <div class="form-group">
             <label class="form-label">{{ 'STACK.NAMES_TO' | translate }}</label>
-            <input type="text" class="input input-bordered w-full input-sm" [(ngModel)]="namesTo" placeholder="variable" />
+            <input
+              type="text"
+              class="input input-bordered w-full input-sm"
+              [ngModel]="namesTo()"
+              (ngModelChange)="namesTo.set($event)"
+              placeholder="variable"
+            />
             <p class="text-xs text-base-content/60 mt-1">{{ 'STACK.NAMES_HINT' | translate }}</p>
           </div>
 
           <!-- Values To -->
           <div class="form-group">
             <label class="form-label">{{ 'STACK.VALUES_TO' | translate }}</label>
-            <input type="text" class="input input-bordered w-full input-sm" [(ngModel)]="valuesTo" placeholder="value" />
+            <input
+              type="text"
+              class="input input-bordered w-full input-sm"
+              [ngModel]="valuesTo()"
+              (ngModelChange)="valuesTo.set($event)"
+              placeholder="value"
+            />
             <p class="text-xs text-base-content/60 mt-1">{{ 'STACK.VALUES_HINT' | translate }}</p>
           </div>
         </div>
@@ -76,7 +84,7 @@ import { ColumnInfo } from '../../../core/models/r.model';
         <!-- Options -->
         <div class="form-group mt-4">
           <label class="cursor-pointer flex items-center gap-2">
-            <input type="checkbox" class="checkbox checkbox-sm" [(ngModel)]="dropNA" />
+            <input type="checkbox" class="checkbox checkbox-sm" [ngModel]="dropNA()" (ngModelChange)="dropNA.set($event)" />
             <span class="text-sm">{{ 'STACK.DROP_NA' | translate }}</span>
           </label>
         </div>
@@ -84,15 +92,21 @@ import { ColumnInfo } from '../../../core/models/r.model';
         <!-- Result Name -->
         <div class="form-group mt-4">
           <label class="form-label">{{ 'STACK.RESULT_NAME' | translate }}</label>
-          <input type="text" class="input input-bordered w-full input-sm" [(ngModel)]="resultName" placeholder="stacked_data" />
+          <input
+            type="text"
+            class="input input-bordered w-full input-sm"
+            [ngModel]="resultName()"
+            (ngModelChange)="resultName.set($event)"
+            placeholder="stacked_data"
+          />
         </div>
 
         <!-- Code Preview -->
         <div class="code-preview-section mt-4">
-          <button class="btn btn-ghost btn-xs gap-1" (click)="showCode.set(!showCode())">
-            {{ showCode() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
+          <button class="btn btn-ghost btn-xs gap-1" (click)="toggleCodePreview()">
+            {{ showCodePreview() ? ('DIALOG.HIDE_CODE' | translate) : ('DIALOG.SHOW_CODE' | translate) }}
           </button>
-          @if (showCode()) {
+          @if (showCodePreview()) {
             <pre class="code-block mt-2">{{ rCode() }}</pre>
           }
         </div>
@@ -100,11 +114,11 @@ import { ColumnInfo } from '../../../core/models/r.model';
 
       <div class="dialog-footer">
         <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CANCEL' | translate }}</button>
+        <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
         <button 
           class="btn btn-primary" 
           (click)="execute()"
-          [disabled]="!isValid || isLoading()"
+          [disabled]="!isValid() || isLoading()"
         >
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
@@ -129,117 +143,79 @@ import { ColumnInfo } from '../../../core/models/r.model';
     .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
   `]
 })
-export class StackDialogComponent implements OnInit {
-  @Output() close = new EventEmitter<void>();
+export class StackDialogComponent extends DialogBase implements OnInit {
+  static readonly dialogId = 'stack';
+  readonly dialogTitle = 'Stack';
 
-  private readonly rService = inject(RService);
-  private readonly toastService = inject(ToastService);
-  private readonly languageService = inject(LanguageService);
+  columnsToStack = signal<string[]>([]);
+  namesTo = signal('variable');
+  valuesTo = signal('value');
+  dropNA = signal(true);
+  resultName = signal('stacked_data');
 
-  dataframes = signal<string[]>([]);
-  selectedDataframe = '';
-  columns = signal<ColumnInfo[]>([]);
-  columnsToStack: string[] = [];
-  namesTo = 'variable';
-  valuesTo = 'value';
-  dropNA = true;
-  resultName = 'stacked_data';
-  
-  isLoading = signal(false);
-  showCode = signal(false);
+  override ngOnInit(): void {
+    super.ngOnInit();
 
-  rCode = computed(() => {
-    if (!this.selectedDataframe || this.columnsToStack.length === 0) {
-      return '# Select dataframe and columns to stack';
-    }
-    
-    const cols = this.columnsToStack.map(c => `"${c}"`).join(', ');
-    
-    let code = `${this.resultName || 'stacked_data'} <- get_dataframe("${this.selectedDataframe}") %>%\n`;
-    code += `  tidyr::pivot_longer(\n`;
-    code += `    cols = c(${cols}),\n`;
-    code += `    names_to = "${this.namesTo || 'variable'}",\n`;
-    code += `    values_to = "${this.valuesTo || 'value'}"`;
-    if (this.dropNA) {
-      code += `,\n    values_drop_na = TRUE`;
-    }
-    code += `\n  )`;
-    code += `\ndata_store[["${this.resultName || 'stacked_data'}"]] <- ${this.resultName || 'stacked_data'}`;
-    
-    return code;
-  });
+    this.registerFormFields({
+      columnsToStack: this.columnsToStack,
+      namesTo: this.namesTo,
+      valuesTo: this.valuesTo,
+      dropNA: this.dropNA,
+      resultName: this.resultName,
+    });
 
-  get isValid(): boolean {
-    return !!(
-      this.selectedDataframe && 
-      this.columnsToStack.length > 0 &&
-      this.namesTo &&
-      this.valuesTo &&
-      this.resultName
-    );
+    this.initializeCodeManager(() => rSyntax().setBase(this.buildStackCode()));
+
+    this.createEffect(() => {
+      this.selectedDataframe();
+      this.columnsToStack();
+      this.namesTo();
+      this.valuesTo();
+      this.dropNA();
+      this.resultName();
+      this.rebuildRCode();
+    });
   }
 
-  async ngOnInit(): Promise<void> {
-    const dfs = this.rService.dataframes();
-    this.dataframes.set(dfs);
-    
-    const active = this.rService.activeDataframe();
-    if (active && dfs.includes(active)) {
-      this.selectedDataframe = active;
-      await this.loadColumns();
-    } else if (dfs.length > 0) {
-      this.selectedDataframe = dfs[0];
-      await this.loadColumns();
-    }
-  }
-
-  async onDataframeChange(name: string): Promise<void> {
-    this.selectedDataframe = name;
-    this.columnsToStack = [];
-    await this.loadColumns();
-  }
-
-  private async loadColumns(): Promise<void> {
-    if (!this.selectedDataframe) { this.columns.set([]); return; }
-    try {
-      const cols = await this.rService.getColumnInfo(this.selectedDataframe);
-      this.columns.set(cols);
-    } catch { this.columns.set([]); }
+  override async onDataframeChange(name: string): Promise<void> {
+    await super.onDataframeChange(name);
+    this.columnsToStack.set([]);
   }
 
   toggleColumn(colName: string): void {
-    const idx = this.columnsToStack.indexOf(colName);
-    if (idx >= 0) {
-      this.columnsToStack.splice(idx, 1);
-    } else {
-      this.columnsToStack.push(colName);
-    }
+    this.columnsToStack.update((current) =>
+      current.includes(colName) ? current.filter((c) => c !== colName) : [...current, colName]
+    );
   }
 
-  async execute(): Promise<void> {
-    if (!this.isValid) {
-      this.toastService.warning(this.languageService.instant('TOAST.FORM_INCOMPLETE'));
-      return;
+  isValid(): boolean {
+    return !!(
+      this.selectedDataframe() &&
+      this.columnsToStack().length > 0 &&
+      this.namesTo().trim() &&
+      this.valuesTo().trim() &&
+      this.resultName().trim()
+    );
+  }
+
+  private buildStackCode(): string {
+    if (!this.selectedDataframe() || this.columnsToStack().length === 0) {
+      return '# Select dataframe and columns to stack';
     }
 
-    this.isLoading.set(true);
+    const outputName = this.resultName().trim() || 'stacked_data';
+    const cols = this.columnsToStack().map((c) => `"${c}"`).join(', ');
 
-    try {
-      const result = await this.rService.execute(this.rCode(), true);
-
-      if (result.success) {
-        await this.rService.refreshDataframes();
-        this.toastService.success(this.languageService.instant('STACK.SUCCESS'));
-        this.close.emit();
-      } else {
-        this.toastService.error(result.error || this.languageService.instant('TOAST.COMMAND_FAILED'));
-      }
-    } catch (error) {
-      this.toastService.error(
-        error instanceof Error ? error.message : this.languageService.instant('TOAST.COMMAND_FAILED')
-      );
-    } finally {
-      this.isLoading.set(false);
+    let code = `${outputName} <- get_dataframe("${this.selectedDataframe()}") %>%\n`;
+    code += '  tidyr::pivot_longer(\n';
+    code += `    cols = c(${cols}),\n`;
+    code += `    names_to = "${this.namesTo().trim() || 'variable'}",\n`;
+    code += `    values_to = "${this.valuesTo().trim() || 'value'}"`;
+    if (this.dropNA()) {
+      code += ',\n    values_drop_na = TRUE';
     }
+    code += '\n  )\n';
+    code += `add_dataframe(name = "${outputName}", df = ${outputName})`;
+    return code;
   }
 }
