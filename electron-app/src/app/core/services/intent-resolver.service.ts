@@ -9,6 +9,7 @@ import { DialogMetadata } from '../r-codegen/dialog-metadata';
 import { getSchema, type DialogParamSchema } from '../ai/dialog-schema.registry';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
 import { getDialogContract } from '../ai/dialog-identity.registry';
+import { ResolverTransformPipeline } from './intent-resolver.pipeline';
 import type {
   AICallResult,
   AICodePlanStep,
@@ -51,11 +52,34 @@ export interface ResolvedPlan {
 
 @Injectable({ providedIn: 'root' })
 export class IntentResolverService {
-  private readonly stateTransforms = [
-    this.inferMissingFields.bind(this),
-    this.normalizeFilterCombineLogic.bind(this),
-    this.normalizeColumnReferences.bind(this),
-  ] as const;
+  private readonly stateTransformPipeline = new ResolverTransformPipeline([
+    {
+      id: 'infer-missing-fields',
+      scope: 'global',
+      run: (dialogId, params, state, dataContext, warnings) =>
+        this.inferMissingFields(dialogId, params, state, dataContext, warnings),
+    },
+    {
+      id: 'normalize-filter-combine-logic',
+      scope: 'dialog',
+      dialogId: 'filter',
+      run: (_dialogId, params, state, dataContext, warnings) =>
+        this.normalizeFilterCombineLogic('filter', params, state, dataContext, warnings),
+    },
+    {
+      id: 'normalize-column-references',
+      scope: 'global',
+      run: (dialogId, params, state, dataContext, warnings) =>
+        this.normalizeColumnReferences(dialogId, params, state, dataContext, warnings),
+    },
+    {
+      id: 'plotting-normalize-bar-chart-state',
+      scope: 'dialog',
+      dialogId: 'bar-chart',
+      run: (_dialogId, params, state, dataContext, warnings) =>
+        this.normalizeBarChartState('bar-chart', params, state, dataContext, warnings),
+    },
+  ]);
 
   resolve(result: AICallResult, dataContext: DataContext): ResolveResult {
     if (!result.success || !result.plan) {
@@ -204,9 +228,15 @@ export class IntentResolverService {
     dataContext: DataContext,
     warnings: string[]
   ): Record<string, unknown> {
-    let state = { ...initial };
-    for (const transform of this.stateTransforms) {
-      state = transform(dialogId, params, state, dataContext, warnings);
+    const { state, diagnostics } = this.stateTransformPipeline.apply(
+      dialogId,
+      params,
+      initial,
+      dataContext,
+      warnings
+    );
+    if (diagnostics.appliedTransformIds.length === 0) {
+      warnings.push(`No resolver transforms applied for "${dialogId}"`);
     }
     return state;
   }
@@ -229,6 +259,36 @@ export class IntentResolverService {
     } else if (combineLogic === 'or') {
       normalized['combineLogic'] = '|';
     }
+    return normalized;
+  }
+
+  private normalizeBarChartState(
+    dialogId: string,
+    _params: DialogParamSchema[],
+    state: Record<string, unknown>,
+    _dataContext: DataContext,
+    warnings: string[]
+  ): Record<string, unknown> {
+    if (dialogId !== 'bar-chart') {
+      return state;
+    }
+
+    const normalized = { ...state };
+    const chartType = normalized['chartType'];
+    const hasYVariable = typeof normalized['yVariable'] === 'string' && normalized['yVariable'] !== '';
+
+    // If model provides yVariable but omits chartType, infer value mode.
+    if (!chartType && hasYVariable) {
+      normalized['chartType'] = 'value';
+      warnings.push('Inferred "chartType" as "value" for bar-chart because "yVariable" is set');
+    }
+
+    // If frequency is explicitly chosen, drop stray yVariable for deterministic restore behavior.
+    if (normalized['chartType'] === 'frequency' && hasYVariable) {
+      delete normalized['yVariable'];
+      warnings.push('Removed "yVariable" for bar-chart because chartType is "frequency"');
+    }
+
     return normalized;
   }
 

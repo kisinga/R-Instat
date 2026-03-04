@@ -606,6 +606,30 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
   }
 
   /**
+   * Convenience helper for the common "watch fields then rebuild" pattern.
+   * Pass a callback that reads all dependent signals.
+   */
+  protected createRebuildEffect(readDependencies: () => void): void {
+    this.createEffect(() => {
+      readDependencies();
+      this.rebuildRCode();
+    });
+  }
+
+  /**
+   * Reset a set of registered form fields to provided defaults.
+   * Useful when dialogs need deterministic field cleanup on context changes.
+   */
+  protected resetRegisteredFields(defaults: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(defaults)) {
+      const field = this.formFields.get(name);
+      if (field) {
+        field.set(value);
+      }
+    }
+  }
+
+  /**
    * Create effect in proper injection context (required for ngOnInit)
    */
   protected createEffect(effectFn: () => void): void {

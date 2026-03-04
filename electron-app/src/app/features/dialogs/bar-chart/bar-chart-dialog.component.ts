@@ -1,4 +1,4 @@
-import { Component, computed, OnInit, effect, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -19,21 +19,23 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
       </div>
 
       <div class="dialog-body">
-        <!-- Dataframe Selection -->
         <div class="form-group">
           <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
-          <select 
-            class="select select-bordered w-full"
-            [ngModel]="selectedDataframe()"
-            (ngModelChange)="onDataframeChange($event)"
-          >
+          <select class="select select-bordered w-full" [ngModel]="selectedDataframe()" (ngModelChange)="onDataframeChange($event)">
             @for (df of dataframes(); track df) {
               <option [value]="df">{{ df }}</option>
             }
           </select>
         </div>
 
-        <!-- X Variable -->
+        <div class="form-group">
+          <label class="form-label">{{ 'BAR_CHART.TYPE' | translate }}</label>
+          <select class="select select-bordered w-full" [ngModel]="chartType()" (ngModelChange)="chartType.set($event)">
+            <option value="frequency">{{ 'BAR_CHART.TYPE_FREQUENCY' | translate }}</option>
+            <option value="value">{{ 'BAR_CHART.TYPE_VALUE' | translate }}</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label class="form-label">{{ 'BAR_CHART.X_VARIABLE' | translate }}</label>
           <app-column-picker
@@ -44,7 +46,18 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
           />
         </div>
 
-        <!-- Fill Variable -->
+        @if (chartType() === 'value') {
+          <div class="form-group">
+            <label class="form-label">{{ 'BAR_CHART.Y_VARIABLE' | translate }}</label>
+            <app-column-picker
+              [columns]="getNumericColumns()"
+              [multiple]="false"
+              [selectedColumn]="yVariable()"
+              (selectedColumnChange)="yVariable.set($event)"
+            />
+          </div>
+        }
+
         <div class="form-group">
           <label class="form-label">{{ 'BAR_CHART.FILL_BY' | translate }}</label>
           <select class="select select-bordered w-full" [ngModel]="fillVariable()" (ngModelChange)="fillVariable.set($event)">
@@ -55,25 +68,44 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
           </select>
         </div>
 
-        <!-- Position -->
-        <div class="form-group">
-          <label class="form-label">{{ 'BAR_CHART.POSITION' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="position()" (ngModelChange)="position.set($event)">
-            <option value="stack">{{ 'BAR_CHART.POSITION_STACK' | translate }}</option>
-            <option value="dodge">{{ 'BAR_CHART.POSITION_DODGE' | translate }}</option>
-            <option value="fill">{{ 'BAR_CHART.POSITION_FILL' | translate }}</option>
-          </select>
-        </div>
+        @if (fillVariable()) {
+          <div class="form-group">
+            <label class="form-label">{{ 'BAR_CHART.POSITION' | translate }}</label>
+            <select class="select select-bordered w-full" [ngModel]="position()" (ngModelChange)="position.set($event)">
+              <option value="stack">{{ 'BAR_CHART.POSITION_STACK' | translate }}</option>
+              <option value="dodge">{{ 'BAR_CHART.POSITION_DODGE' | translate }}</option>
+              <option value="fill">{{ 'BAR_CHART.POSITION_FILL' | translate }}</option>
+            </select>
+          </div>
+        }
 
-        <!-- Orientation -->
         <div class="form-group">
           <label class="label cursor-pointer justify-start gap-2">
             <input type="checkbox" class="checkbox checkbox-primary" [ngModel]="horizontal()" (ngModelChange)="horizontal.set($event)" />
-            <span>{{ 'BAR_CHART.SHOW_LABELS' | translate }}</span>
+            <span>{{ 'BAR_CHART.HORIZONTAL_BARS' | translate }}</span>
           </label>
         </div>
 
-        <!-- Code Preview -->
+        <div class="form-group">
+          <label class="form-label">{{ 'BAR_CHART.PLOT_TITLE' | translate }}</label>
+          <input
+            class="input input-bordered w-full"
+            [ngModel]="title()"
+            (ngModelChange)="title.set($event)"
+            [placeholder]="'BAR_CHART.PLOT_TITLE_PLACEHOLDER' | translate"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">{{ 'BAR_CHART.OUTPUT_NAME' | translate }}</label>
+          <input
+            class="input input-bordered w-full"
+            [ngModel]="outputName()"
+            (ngModelChange)="outputName.set($event)"
+            [placeholder]="'BAR_CHART.OUTPUT_NAME_PLACEHOLDER' | translate"
+          />
+        </div>
+
         @if (showCodePreview()) {
           <div class="form-group mt-4">
             <app-code-preview [code]="rCode()" [collapsible]="false" [isValid]="formValid()" />
@@ -87,11 +119,7 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
         </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
-        <button 
-          class="btn btn-primary" 
-          (click)="execute()"
-          [disabled]="!isValid() || isLoading()"
-        >
+        <button class="btn btn-primary" (click)="execute()" [disabled]="!isValid() || isLoading()">
           @if (isLoading()) {
             <span class="loading loading-spinner loading-sm"></span>
           }
@@ -102,56 +130,93 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
   `,
 })
 export class BarChartDialogComponent extends DialogBase implements OnInit {
+  static dialogId = 'bar-chart';
   readonly dialogTitle = 'Bar Chart';
 
-  // Dialog state using signals for reactivity
+  chartType = signal<'frequency' | 'value'>('frequency');
   xVariable = signal('');
+  yVariable = signal('');
   fillVariable = signal('');
   position = signal<'stack' | 'dodge' | 'fill'>('stack');
   horizontal = signal(false);
+  title = signal('');
+  outputName = signal('');
 
   override ngOnInit(): void {
     super.ngOnInit();
 
-    // Register form fields for automatic save/restore/auto-population
     this.registerFormFields({
+      chartType: this.chartType,
       xVariable: this.xVariable,
+      yVariable: this.yVariable,
       fillVariable: this.fillVariable,
       position: this.position,
       horizontal: this.horizontal,
+      title: this.title,
+      outputName: this.outputName,
     });
 
-    // Initialize code manager with builder function
-    // The builder will be called whenever rebuild() is invoked
-    this.initializeCodeManager(() =>
-      buildBarChart({
-        type: 'frequency', // Frequency bar chart (counts occurrences)
+    this.initializeCodeManager(() => {
+      if (this.chartType() === 'value') {
+        return buildBarChart({
+          type: 'value',
+          dataframe: this.selectedDataframe(),
+          xVariable: this.xVariable(),
+          yVariable: this.yVariable(),
+          fillVariable: this.fillVariable() || undefined,
+          position: this.position(),
+          horizontal: this.horizontal(),
+          title: this.title().trim() || undefined,
+          name: this.outputName().trim() || undefined,
+        });
+      }
+
+      return buildBarChart({
+        type: 'frequency',
         dataframe: this.selectedDataframe(),
         xVariable: this.xVariable(),
         fillVariable: this.fillVariable() || undefined,
         position: this.position(),
         horizontal: this.horizontal(),
-        title: `Bar Chart of ${this.xVariable()}`,
-      })
-    );
+        title: this.title().trim() || undefined,
+        name: this.outputName().trim() || undefined,
+      });
+    });
 
-    // Set up effect to rebuild R code whenever dialog state changes
-    // This must be after initializeCodeManager so the builder is set
-    this.createEffect(() => {
-      // Read all signals to establish dependencies
+    this.createRebuildEffect(() => {
+      this.chartType();
       this.selectedDataframe();
       this.xVariable();
+      this.yVariable();
       this.fillVariable();
       this.position();
       this.horizontal();
-
-      // Rebuild when any dependency changes
-      this.rebuildRCode();
+      this.title();
+      this.outputName();
     });
   }
 
-
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.xVariable();
+    if (!this.selectedDataframe() || !this.xVariable()) {
+      return false;
+    }
+    if (this.chartType() === 'value' && !this.yVariable()) {
+      return false;
+    }
+    return true;
+  }
+
+  protected override onDataframeChanged(): void {
+    const availableColumns = new Set(this.columns().map((col) => col.name));
+
+    if (this.xVariable() && !availableColumns.has(this.xVariable())) {
+      this.xVariable.set('');
+    }
+    if (this.yVariable() && !availableColumns.has(this.yVariable())) {
+      this.yVariable.set('');
+    }
+    if (this.fillVariable() && !availableColumns.has(this.fillVariable())) {
+      this.fillVariable.set('');
+    }
   }
 }

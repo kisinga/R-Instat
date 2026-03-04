@@ -12,6 +12,7 @@ const OPENAI_STORAGE_KEY = 'r-instat-ai-openai-api-key';
 const CLAUDE_STORAGE_KEY = 'r-instat-ai-claude-api-key';
 const PROVIDER_STORAGE_KEY = 'r-instat-ai-provider';
 const GATE_STORAGE_KEY = 'r-instat-ai-gate-settings';
+const RETRIEVAL_STORAGE_KEY = 'r-instat-ai-retrieval-settings';
 
 export type AIProvider = 'openai' | 'claude';
 
@@ -21,10 +22,20 @@ export interface ConfidenceGateSettings {
   requireConfirmationForInferred: boolean;
 }
 
+export interface RetrievalSettings {
+  useDialogContractRetrieval: boolean;
+  topKContracts: number;
+}
+
 const DEFAULT_GATE_SETTINGS: ConfidenceGateSettings = {
   highConfidenceThreshold: 0.8,
   lowConfidenceThreshold: 0.55,
   requireConfirmationForInferred: true,
+};
+
+const DEFAULT_RETRIEVAL_SETTINGS: RetrievalSettings = {
+  useDialogContractRetrieval: false,
+  topKContracts: 8,
 };
 
 @Injectable({ providedIn: 'root' })
@@ -41,6 +52,8 @@ export class AIConfigService {
   readonly hasApiKey = computed(() => !!this.apiKey().trim());
   private readonly _gateSettings = signal<ConfidenceGateSettings>({ ...DEFAULT_GATE_SETTINGS });
   readonly gateSettings = this._gateSettings.asReadonly();
+  private readonly _retrievalSettings = signal<RetrievalSettings>({ ...DEFAULT_RETRIEVAL_SETTINGS });
+  readonly retrievalSettings = this._retrievalSettings.asReadonly();
 
   constructor() {
     const storedProvider = localStorage.getItem(PROVIDER_STORAGE_KEY);
@@ -86,6 +99,25 @@ export class AIConfigService {
         });
       } catch {
         this._gateSettings.set({ ...DEFAULT_GATE_SETTINGS });
+      }
+    }
+
+    const storedRetrieval = localStorage.getItem(RETRIEVAL_STORAGE_KEY);
+    if (storedRetrieval) {
+      try {
+        const parsed = JSON.parse(storedRetrieval) as Partial<RetrievalSettings>;
+        this._retrievalSettings.set({
+          useDialogContractRetrieval:
+            typeof parsed.useDialogContractRetrieval === 'boolean'
+              ? parsed.useDialogContractRetrieval
+              : DEFAULT_RETRIEVAL_SETTINGS.useDialogContractRetrieval,
+          topKContracts:
+            typeof parsed.topKContracts === 'number'
+              ? Math.max(1, Math.min(25, Math.round(parsed.topKContracts)))
+              : DEFAULT_RETRIEVAL_SETTINGS.topKContracts,
+        });
+      } catch {
+        this._retrievalSettings.set({ ...DEFAULT_RETRIEVAL_SETTINGS });
       }
     }
   }
@@ -146,6 +178,18 @@ export class AIConfigService {
         next.lowConfidenceThreshold = next.highConfidenceThreshold;
       }
       localStorage.setItem(GATE_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  updateRetrievalSettings(updates: Partial<RetrievalSettings>): void {
+    this._retrievalSettings.update((current) => {
+      const next = {
+        ...current,
+        ...updates,
+      };
+      next.topKContracts = Math.max(1, Math.min(25, Math.round(next.topKContracts)));
+      localStorage.setItem(RETRIEVAL_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }

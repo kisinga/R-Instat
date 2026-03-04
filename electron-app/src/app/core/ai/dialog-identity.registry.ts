@@ -1,6 +1,7 @@
 import { getSchema, getSchemaSummaryForPrompt } from './dialog-schema.registry';
+import { DialogContractV2Registry } from './dialog-contract-v2.registry';
 
-export const DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = {
+const LEGACY_DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = {
   'import': 'ImportDialogComponent',
   'summary': 'SummaryDialogComponent',
   'histogram': 'HistogramDialogComponent',
@@ -38,6 +39,9 @@ export const DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = {
   'restore-from-code': 'RestoreFromCodeDialogComponent',
   'ai-assist': 'AIAssistDialogComponent',
 };
+
+export const DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> =
+  DialogContractV2Registry.applyIdentityMappings(LEGACY_DIALOG_ID_TO_COMPONENT);
 
 const COMPONENT_TO_DIALOG_ID = new Map<string, string>();
 for (const [dialogId, componentType] of Object.entries(DIALOG_ID_TO_COMPONENT)) {
@@ -99,6 +103,7 @@ export function getDialogContract(dialogId: string): {
 export function getDialogContractsForPrompt(): Array<{
   dialogId: string;
   componentType: string;
+  family?: string;
   description: string;
   operations: string[];
   params: Array<{
@@ -110,8 +115,14 @@ export function getDialogContractsForPrompt(): Array<{
     when?: { param: string; equals: string | number | boolean };
   }>;
 }> {
-  return getSchemaSummaryForPrompt()
+  const v2ById = new Map(
+    DialogContractV2Registry.getPromptContracts().map((contract) => [contract.dialogId, contract])
+  );
+  const legacyContracts = getSchemaSummaryForPrompt()
     .map((schema) => {
+      if (v2ById.has(schema.dialogId)) {
+        return null;
+      }
       const componentType = getComponentType(schema.dialogId);
       if (!componentType) {
         return null;
@@ -122,4 +133,15 @@ export function getDialogContractsForPrompt(): Array<{
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  const v2Contracts = DialogContractV2Registry.getPromptContracts().map((contract) => ({
+    dialogId: contract.dialogId,
+    componentType: contract.componentType,
+    family: contract.family,
+    description: contract.description,
+    operations: contract.operations,
+    params: contract.params,
+  }));
+
+  return [...v2Contracts, ...legacyContracts];
 }

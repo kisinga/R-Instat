@@ -211,7 +211,11 @@
     "VARIABLE": "Variable (numérique)",
     "BINS": "Nombre de classes",
     "FILL_COLOR": "Couleur de remplissage",
-    "FACET_BY": "Facetter par (optionnel)"
+    "FACET_BY": "Facetter par (optionnel)",
+    "PLOT_TITLE": "Titre du graphique (optionnel)",
+    "PLOT_TITLE_PLACEHOLDER": "Laisser vide pour un titre automatique",
+    "OUTPUT_NAME": "Nom de sortie (optionnel)",
+    "OUTPUT_NAME_PLACEHOLDER": "ex. histogramme_graphique"
   },
   "BOXPLOT": {
     "TITLE": "Boîte à moustaches",
@@ -230,13 +234,21 @@
   },
   "BAR_CHART": {
     "TITLE": "Diagramme en barres",
+    "TYPE": "Type de graphique",
+    "TYPE_FREQUENCY": "Fréquence (effectif)",
+    "TYPE_VALUE": "Valeur (utilise la variable Y)",
     "X_VARIABLE": "Variable X (catégorielle)",
+    "Y_VARIABLE": "Variable Y (numérique)",
     "FILL_BY": "Remplir par (optionnel)",
     "POSITION": "Position",
     "POSITION_STACK": "Empilé",
     "POSITION_DODGE": "Côte à côte",
     "POSITION_FILL": "Pourcentage",
-    "SHOW_LABELS": "Afficher les étiquettes"
+    "HORIZONTAL_BARS": "Barres horizontales",
+    "PLOT_TITLE": "Titre du graphique (optionnel)",
+    "PLOT_TITLE_PLACEHOLDER": "Laisser vide pour un titre automatique",
+    "OUTPUT_NAME": "Nom de sortie (optionnel)",
+    "OUTPUT_NAME_PLACEHOLDER": "ex. graphique_barres"
   },
   "FILTER": {
     "TITLE": "Filtrer les lignes",

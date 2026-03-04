@@ -6,16 +6,33 @@ import {
   getDialogContractsForPrompt,
   listDialogIds,
 } from './dialog-identity.registry';
+import { buildParityConsistencyReport } from './dialog-parity-check';
 import { getMetadataStateDiagnostics } from './dialog-metadata-contract';
 import { IntentResolverService } from '../services/intent-resolver.service';
 import type { AICallResult, DataContext } from '../services/ai-client.service';
+import { DialogContractV2Registry } from './dialog-contract-v2.registry';
 import { MergeDialogComponent } from '../../features/dialogs/merge/merge-dialog.component';
 import { StackDialogComponent } from '../../features/dialogs/stack/stack-dialog.component';
 import { UnstackDialogComponent } from '../../features/dialogs/unstack/unstack-dialog.component';
 import { LinePlotDialogComponent } from '../../features/dialogs/line-plot/line-plot-dialog.component';
 import { DotPlotDialogComponent } from '../../features/dialogs/dot-plot/dot-plot-dialog.component';
+import { BarChartDialogComponent } from '../../features/dialogs/bar-chart/bar-chart-dialog.component';
 
 describe('dialog contract composition', () => {
+  it('keeps schema, operation mappings, and host dialogs consistent', () => {
+    const report = buildParityConsistencyReport();
+    expect(report.ok).toBeTrue();
+    expect(report.hostWithoutSchema).toEqual([]);
+    expect(report.schemaWithoutHost).toEqual([]);
+    expect(report.operationWithoutSchema).toEqual([]);
+    expect(report.operationWithoutHost).toEqual([]);
+    expect(report.schemaWithoutOperation).toEqual([]);
+    expect(report.v2WithoutSchema).toEqual([]);
+    expect(report.v2WithoutOperation).toEqual([]);
+    expect(report.v2WithoutHost).toEqual([]);
+    expect(report.parityEvidenceMissingForV2).toEqual([]);
+  });
+
   it('resolves component types for all schema dialogs', () => {
     for (const schema of DIALOG_SCHEMAS) {
       expect(getComponentType(schema.dialogId)).withContext(schema.dialogId).toBeDefined();
@@ -45,6 +62,18 @@ describe('dialog contract composition', () => {
     expect(contracts.every((entry) => Array.isArray(entry.params))).toBeTrue();
   });
 
+  it('publishes plotting pilot via ContractV2 adapters', () => {
+    const v2 = DialogContractV2Registry.list();
+    expect(v2.map((x) => x.dialogId)).toContain('bar-chart');
+    expect(v2.map((x) => x.dialogId)).toContain('histogram');
+
+    const promptContracts = getDialogContractsForPrompt();
+    const barChart = promptContracts.find((x) => x.dialogId === 'bar-chart');
+    const histogram = promptContracts.find((x) => x.dialogId === 'histogram');
+    expect(barChart?.componentType).toBe('BarChartDialogComponent');
+    expect(histogram?.componentType).toBe('HistogramDialogComponent');
+  });
+
   it('lists only analytical host dialogs when requested', () => {
     const ids = listDialogIds({ includeNonAnalytical: false });
     expect(ids).toContain('summary');
@@ -60,6 +89,7 @@ describe('dialog identity contract', () => {
     expect(UnstackDialogComponent.dialogId).toBe('unstack');
     expect(LinePlotDialogComponent.dialogId).toBe('line-plot');
     expect(DotPlotDialogComponent.dialogId).toBe('dot-plot');
+    expect(BarChartDialogComponent.dialogId).toBe('bar-chart');
   });
 });
 
@@ -128,5 +158,108 @@ describe('intent resolver integration', () => {
     const resolved = resolver.resolve(aiResult, dataContext);
     expect(resolved.ok).toBeTrue();
     expect(resolved.plan?.steps[0].metadata?.componentType).toBe('HistogramDialogComponent');
+  });
+
+  it('normalizes bar-chart to value mode when yVariable is provided', () => {
+    const resolver = new IntentResolverService();
+    const dataContext: DataContext = {
+      dataframes: ['df1'],
+      activeDataframe: 'df1',
+      columnsByDataframe: {
+        df1: [
+          { name: 'species', type: 'factor' },
+          { name: 'count', type: 'numeric' },
+          { name: 'island', type: 'factor' },
+        ],
+      },
+    };
+
+    const aiResult: AICallResult = {
+      success: true,
+      plan: {
+        goal: 'Bar chart values by species',
+        assumptions: [],
+        clarificationQuestions: [],
+        overallConfidence: 0.9,
+        requiresConfirmation: false,
+        executionMode: 'component_codegen',
+        modeReason: 'dialog available',
+        modeConfidence: 0.9,
+        steps: [
+          {
+            stepId: 's1',
+            stepType: 'dialog',
+            operationId: 'describe.comparison.numeric_by_group',
+            dialogId: 'bar-chart',
+            dependsOnStepId: undefined,
+            state: {
+              dataframe: 'df1',
+              xVariable: 'species',
+              yVariable: 'count',
+              fillVariable: 'island',
+            },
+            inferredFields: ['chartType'],
+            confidence: 0.9,
+            rationale: 'Value bars compare numeric values across groups',
+          },
+        ],
+      },
+    };
+
+    const resolved = resolver.resolve(aiResult, dataContext);
+    expect(resolved.ok).toBeTrue();
+    const state = resolved.plan?.steps[0].metadata?.state ?? {};
+    expect(state['chartType']).toBe('value');
+    expect(state['yVariable']).toBe('count');
+    expect(resolved.warnings?.some((x) => x.includes('plotting-normalize-bar-chart-state'))).toBeFalse();
+  });
+
+  it('rejects bar-chart value mode when yVariable is missing', () => {
+    const resolver = new IntentResolverService();
+    const dataContext: DataContext = {
+      dataframes: ['df1'],
+      activeDataframe: 'df1',
+      columnsByDataframe: {
+        df1: [
+          { name: 'species', type: 'factor' },
+          { name: 'count', type: 'numeric' },
+        ],
+      },
+    };
+
+    const aiResult: AICallResult = {
+      success: true,
+      plan: {
+        goal: 'Bar chart value mode without y',
+        assumptions: [],
+        clarificationQuestions: [],
+        overallConfidence: 0.9,
+        requiresConfirmation: false,
+        executionMode: 'component_codegen',
+        modeReason: 'dialog available',
+        modeConfidence: 0.9,
+        steps: [
+          {
+            stepId: 's1',
+            stepType: 'dialog',
+            operationId: 'describe.comparison.numeric_by_group',
+            dialogId: 'bar-chart',
+            dependsOnStepId: undefined,
+            state: {
+              dataframe: 'df1',
+              chartType: 'value',
+              xVariable: 'species',
+            },
+            inferredFields: [],
+            confidence: 0.9,
+            rationale: 'Intentional invalid payload',
+          },
+        ],
+      },
+    };
+
+    const resolved = resolver.resolve(aiResult, dataContext);
+    expect(resolved.ok).toBeFalse();
+    expect(resolved.error).toContain('Missing required param "yVariable"');
   });
 });

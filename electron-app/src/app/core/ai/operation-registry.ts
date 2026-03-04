@@ -5,6 +5,8 @@
  * (primary/derived statistical intent), independent of specific dialogs.
  */
 
+import { DialogContractV2Registry } from './dialog-contract-v2.registry';
+
 export type PrimaryKind =
   | 'data-preparation'
   | 'descriptive'
@@ -34,7 +36,7 @@ export interface OperationDefinition {
   mappedDialogs: string[];
 }
 
-export const OPERATION_REGISTRY: OperationDefinition[] = [
+const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
   {
     id: 'data.filter',
     label: 'Filter rows',
@@ -81,7 +83,7 @@ export const OPERATION_REGISTRY: OperationDefinition[] = [
     primaryKind: 'descriptive',
     derivedKind: 'distribution',
     description: 'Visualize distribution of numeric variables.',
-    mappedDialogs: ['histogram', 'boxplot'],
+    mappedDialogs: ['boxplot'],
   },
   {
     id: 'describe.comparison.numeric_by_group',
@@ -148,4 +150,7 @@ export const OPERATION_REGISTRY: OperationDefinition[] = [
     mappedDialogs: ['day-count', 'spell-lengths'],
   },
 ];
+
+export const OPERATION_REGISTRY: OperationDefinition[] =
+  DialogContractV2Registry.applyOperationMappings(LEGACY_OPERATION_REGISTRY);
 

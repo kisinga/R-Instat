@@ -6,6 +6,8 @@
  * - Validation of model-produced state
  */
 
+import { DialogContractV2Registry } from './dialog-contract-v2.registry';
+
 export type ParamKind =
   | 'dataframe'
   | 'column'
@@ -49,30 +51,7 @@ const p = (
 ): DialogParamSchema => ({ name, kind, ...opts });
 
 export const DIALOG_SCHEMAS: DialogSchema[] = [
-  {
-    dialogId: 'bar-chart',
-    description: 'Bar chart of categorical variable.',
-    operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],
-    params: [
-      p('dataframe', 'dataframe', { required: true }),
-      p('xVariable', 'column', { required: true, columnType: 'factor' }),
-      p('fillVariable', 'column', { columnType: 'factor' }),
-      p('position', 'enum', { enumValues: ['stack', 'dodge', 'fill'] }),
-      p('horizontal', 'boolean'),
-    ],
-  },
-  {
-    dialogId: 'histogram',
-    description: 'Histogram of numeric variable.',
-    operations: ['describe.distribution.numeric'],
-    params: [
-      p('dataframe', 'dataframe', { required: true }),
-      p('variable', 'column', { required: true, columnType: 'numeric' }),
-      p('bins', 'number', { min: 5, max: 100 }),
-      p('fillColor', 'string'),
-      p('facetBy', 'column', { columnType: 'factor' }),
-    ],
-  },
+  ...DialogContractV2Registry.getSchemas(),
   {
     dialogId: 'boxplot',
     description: 'Boxplot comparing numeric variable across groups.',

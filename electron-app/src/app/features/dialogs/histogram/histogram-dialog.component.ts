@@ -1,4 +1,4 @@
-import { Component, signal, OnInit, effect } from '@angular/core';
+import { Component, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -80,6 +80,26 @@ import { buildHistogram } from '../../../core/dialogs/builders/graphs';
           </select>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">{{ 'HISTOGRAM.PLOT_TITLE' | translate }}</label>
+          <input
+            class="input input-bordered w-full"
+            [ngModel]="title()"
+            (ngModelChange)="title.set($event)"
+            [placeholder]="'HISTOGRAM.PLOT_TITLE_PLACEHOLDER' | translate"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">{{ 'HISTOGRAM.OUTPUT_NAME' | translate }}</label>
+          <input
+            class="input input-bordered w-full"
+            [ngModel]="outputName()"
+            (ngModelChange)="outputName.set($event)"
+            [placeholder]="'HISTOGRAM.OUTPUT_NAME_PLACEHOLDER' | translate"
+          />
+        </div>
+
         <!-- Code Preview -->
         @if (showCodePreview()) {
           <div class="form-group mt-4">
@@ -109,6 +129,7 @@ import { buildHistogram } from '../../../core/dialogs/builders/graphs';
   `,
 })
 export class HistogramDialogComponent extends DialogBase implements OnInit {
+  static dialogId = 'histogram';
   readonly dialogTitle = 'Histogram';
 
   // Dialog state using signals for reactivity
@@ -116,6 +137,8 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
   bins = signal(30);
   fillColor = signal('#6366f1');
   facetBy = signal('');
+  title = signal('');
+  outputName = signal('');
 
   override ngOnInit(): void {
     super.ngOnInit();
@@ -126,6 +149,8 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
       bins: this.bins,
       fillColor: this.fillColor,
       facetBy: this.facetBy,
+      title: this.title,
+      outputName: this.outputName,
     });
 
     // Initialize code manager with builder function
@@ -136,25 +161,25 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
         bins: this.bins(),
         fillColor: this.fillColor(),
         facetBy: this.facetBy() || undefined,
-        title: `Histogram of ${this.variable()}`,
+        title: this.title().trim() || undefined,
+        name: this.outputName().trim() || undefined,
       })
     );
 
     // Set up effect to rebuild R code whenever dialog state changes
-    this.createEffect(() => {
+    this.createRebuildEffect(() => {
       // Read all signals to establish dependencies
       this.selectedDataframe();
       this.variable();
       this.bins();
       this.fillColor();
       this.facetBy();
-
-      // Rebuild when any dependency changes
-      this.rebuildRCode();
+      this.title();
+      this.outputName();
     });
   }
 
   isValid(): boolean {
-    return !!this.selectedDataframe() && !!this.variable();
+    return !!this.selectedDataframe() && !!this.variable() && this.bins() >= 5 && this.bins() <= 100;
   }
 }

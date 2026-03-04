@@ -9,6 +9,8 @@ import { AIConfigService } from './ai-config.service';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
 import { buildCapabilityInventory, TEMPLATE_CODEGEN_DIALOG_IDS } from '../ai/capability-inventory';
 import { getDialogContractsForPrompt } from '../ai/dialog-identity.registry';
+import { DialogContractV2Registry } from '../ai/dialog-contract-v2.registry';
+import { retrieveDialogContractsTopK } from '../ai/dialog-context-retriever';
 import {
   aliasDataContext,
   applyAliasesToInput,
@@ -71,6 +73,12 @@ export interface AICallResult {
   plan?: AIPlan;
   error?: string;
   rawResponse?: string;
+  retrievalReport?: {
+    enabled: boolean;
+    topK: number;
+    selectedDialogIds: string[];
+    explainability: Array<{ dialogId: string; score: number; reasons: string[] }>;
+  };
   privacyReport?: {
     redactedPatterns: string[];
     aliasedDataframes: number;
@@ -150,7 +158,8 @@ Rules:
       return { success: false, error: `No API key. Add your ${label} API key in Settings.` };
     }
 
-    const contractsJson = JSON.stringify(getDialogContractsForPrompt());
+    const retrievalSelection = this.selectContractsForPrompt(aliasedInput, aliasedContext);
+    const contractsJson = JSON.stringify(retrievalSelection.contracts);
     const operationsJson = JSON.stringify(OPERATION_REGISTRY);
 
     const userMessage = this.buildUserMessage(
@@ -171,6 +180,7 @@ Rules:
             modeDecision,
             deAliasScript(script, maps)
           ),
+          retrievalReport: retrievalSelection.report,
           privacyReport,
         };
       }
@@ -191,11 +201,12 @@ Rules:
         return {
           success: true,
           plan: structuredPlan,
+          retrievalReport: retrievalSelection.report,
           privacyReport,
         };
       }
 
-      return { ...parsed, plan: normalizedPlan, privacyReport };
+      return { ...parsed, plan: normalizedPlan, retrievalReport: retrievalSelection.report, privacyReport };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const lower = message.toLowerCase();
@@ -782,5 +793,53 @@ Request: ${userInput}`;
       return trimmed.slice(first, last + 1);
     }
     return trimmed;
+  }
+
+  private selectContractsForPrompt(userInput: string, dataContext: DataContext): {
+    contracts: ReturnType<typeof getDialogContractsForPrompt>;
+    report: AICallResult['retrievalReport'];
+  } {
+    const settings = this.aiConfig.retrievalSettings();
+    const legacyContracts = getDialogContractsForPrompt();
+    if (!settings.useDialogContractRetrieval || !this.isPlottingIntent(userInput)) {
+      return {
+        contracts: legacyContracts,
+        report: {
+          enabled: false,
+          topK: settings.topKContracts,
+          selectedDialogIds: legacyContracts.map((x) => x.dialogId),
+          explainability: [],
+        },
+      };
+    }
+
+    const candidates = retrieveDialogContractsTopK(
+      userInput,
+      DialogContractV2Registry.getPromptContracts(),
+      dataContext,
+      settings.topKContracts
+    );
+    const selectedIds = new Set(candidates.map((x) => x.dialogId));
+    const selectedContracts = legacyContracts.filter((contract) => selectedIds.has(contract.dialogId));
+
+    return {
+      contracts: selectedContracts.length > 0 ? selectedContracts : legacyContracts,
+      report: {
+        enabled: true,
+        topK: settings.topKContracts,
+        selectedDialogIds: selectedContracts.map((x) => x.dialogId),
+        explainability: candidates.map((x) => ({
+          dialogId: x.dialogId,
+          score: x.score,
+          reasons: x.reasons,
+        })),
+      },
+    };
+  }
+
+  private isPlottingIntent(input: string): boolean {
+    const lower = input.toLowerCase();
+    const tokens = ['plot', 'graph', 'chart', 'histogram', 'bar chart', 'distribution', 'scatter', 'boxplot'];
+    return tokens.some((token) => lower.includes(token));
   }
 }

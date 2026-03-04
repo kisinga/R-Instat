@@ -224,7 +224,11 @@
     "VARIABLE": "Variable (numeric)",
     "BINS": "Number of Bins",
     "FILL_COLOR": "Fill Color",
-    "FACET_BY": "Facet By (optional)"
+    "FACET_BY": "Facet By (optional)",
+    "PLOT_TITLE": "Plot Title (optional)",
+    "PLOT_TITLE_PLACEHOLDER": "Leave empty for automatic title",
+    "OUTPUT_NAME": "Output Name (optional)",
+    "OUTPUT_NAME_PLACEHOLDER": "e.g. histogram_plot"
   },
   "BOXPLOT": {
     "TITLE": "Box Plot",
@@ -243,13 +247,21 @@
   },
   "BAR_CHART": {
     "TITLE": "Bar Chart",
+    "TYPE": "Chart Type",
+    "TYPE_FREQUENCY": "Frequency (count)",
+    "TYPE_VALUE": "Value (use Y variable)",
     "X_VARIABLE": "X Variable (categorical)",
+    "Y_VARIABLE": "Y Variable (numeric)",
     "FILL_BY": "Fill By (optional)",
     "POSITION": "Position",
     "POSITION_STACK": "Stacked",
     "POSITION_DODGE": "Side by side",
     "POSITION_FILL": "Percentage",
-    "SHOW_LABELS": "Show value labels"
+    "HORIZONTAL_BARS": "Horizontal bars",
+    "PLOT_TITLE": "Plot Title (optional)",
+    "PLOT_TITLE_PLACEHOLDER": "Leave empty for automatic title",
+    "OUTPUT_NAME": "Output Name (optional)",
+    "OUTPUT_NAME_PLACEHOLDER": "e.g. bar_chart_plot"
   },
   "FILTER": {
     "TITLE": "Filter Rows",
