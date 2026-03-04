@@ -1,8 +1,4 @@
-import { DIALOG_SCHEMAS } from './dialog-schema.registry';
-import { OPERATION_REGISTRY } from './operation-registry';
-import { listDialogIds } from './dialog-identity.registry';
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
-import { DIALOG_PARITY_EVIDENCE } from './dialog-parity-evidence.registry';
+import { getDialogRegistryView } from './dialog-registry-view';
 
 export interface ParityConsistencyReport {
   hostWithoutSchema: string[];
@@ -19,40 +15,51 @@ export interface ParityConsistencyReport {
 
 /**
  * Verifies contract consistency across host dialogs, schema definitions,
- * and operation mappings. This is intentionally strict to catch regressions
- * where AI plans target dialogs that cannot be opened/configured safely.
+ * and operation mappings. Inferred from the single dialog registry view.
  */
 export function buildParityConsistencyReport(): ParityConsistencyReport {
-  const hostDialogs = new Set(listDialogIds({ includeNonAnalytical: false }));
-  const schemaDialogs = new Set(DIALOG_SCHEMAS.map((s) => s.dialogId));
-  const operationDialogs = new Set(OPERATION_REGISTRY.flatMap((o) => o.mappedDialogs));
-  const v2Dialogs = new Set(DialogContractV2Registry.list().map((c) => c.dialogId));
-  const parityEvidenceDialogs = new Set(
-    DIALOG_PARITY_EVIDENCE.filter((x) => x.status === 'complete').map((x) => x.dialogId)
-  );
+  const view = getDialogRegistryView();
+  const { hostIds, schemaIds, operationIds, v2Ids, parityEvidenceIds, allIds } = view;
 
-  const hostWithoutSchema = [...hostDialogs].filter((dialogId) => !schemaDialogs.has(dialogId)).sort();
-  const schemaWithoutHost = [...schemaDialogs].filter((dialogId) => !hostDialogs.has(dialogId)).sort();
-  const operationWithoutSchema = [...operationDialogs].filter((dialogId) => !schemaDialogs.has(dialogId)).sort();
-  const operationWithoutHost = [...operationDialogs].filter((dialogId) => !hostDialogs.has(dialogId)).sort();
-  const schemaWithoutOperation = [...schemaDialogs].filter((dialogId) => !operationDialogs.has(dialogId)).sort();
-  const v2WithoutSchema = [...v2Dialogs].filter((dialogId) => !schemaDialogs.has(dialogId)).sort();
-  const v2WithoutOperation = [...v2Dialogs].filter((dialogId) => !operationDialogs.has(dialogId)).sort();
-  const v2WithoutHost = [...v2Dialogs].filter((dialogId) => !hostDialogs.has(dialogId)).sort();
-  const parityEvidenceMissingForV2 = [...v2Dialogs]
-    .filter((dialogId) => !parityEvidenceDialogs.has(dialogId))
-    .sort();
+  const hostWithoutSchema: string[] = [];
+  const schemaWithoutHost: string[] = [];
+  const operationWithoutSchema: string[] = [];
+  const operationWithoutHost: string[] = [];
+  const schemaWithoutOperation: string[] = [];
+  const v2WithoutSchema: string[] = [];
+  const v2WithoutOperation: string[] = [];
+  const v2WithoutHost: string[] = [];
+  const parityEvidenceMissingForV2: string[] = [];
 
+  for (const dialogId of allIds) {
+    const inHost = hostIds.has(dialogId);
+    const inSchema = schemaIds.has(dialogId);
+    const inOperation = operationIds.has(dialogId);
+    const inV2 = v2Ids.has(dialogId);
+    const inParityEvidence = parityEvidenceIds.has(dialogId);
+
+    if (inHost && !inSchema) hostWithoutSchema.push(dialogId);
+    if (inSchema && !inHost) schemaWithoutHost.push(dialogId);
+    if (inOperation && !inSchema) operationWithoutSchema.push(dialogId);
+    if (inOperation && !inHost) operationWithoutHost.push(dialogId);
+    if (inSchema && !inOperation) schemaWithoutOperation.push(dialogId);
+    if (inV2 && !inSchema) v2WithoutSchema.push(dialogId);
+    if (inV2 && !inOperation) v2WithoutOperation.push(dialogId);
+    if (inV2 && !inHost) v2WithoutHost.push(dialogId);
+    if (inV2 && !inParityEvidence) parityEvidenceMissingForV2.push(dialogId);
+  }
+
+  const sort = (a: string[]) => a.slice().sort();
   return {
-    hostWithoutSchema,
-    schemaWithoutHost,
-    operationWithoutSchema,
-    operationWithoutHost,
-    schemaWithoutOperation,
-    v2WithoutSchema,
-    v2WithoutOperation,
-    v2WithoutHost,
-    parityEvidenceMissingForV2,
+    hostWithoutSchema: sort(hostWithoutSchema),
+    schemaWithoutHost: sort(schemaWithoutHost),
+    operationWithoutSchema: sort(operationWithoutSchema),
+    operationWithoutHost: sort(operationWithoutHost),
+    schemaWithoutOperation: sort(schemaWithoutOperation),
+    v2WithoutSchema: sort(v2WithoutSchema),
+    v2WithoutOperation: sort(v2WithoutOperation),
+    v2WithoutHost: sort(v2WithoutHost),
+    parityEvidenceMissingForV2: sort(parityEvidenceMissingForV2),
     ok:
       hostWithoutSchema.length === 0 &&
       schemaWithoutHost.length === 0 &&

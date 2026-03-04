@@ -1,4 +1,4 @@
-import { inject, signal, computed, OnInit, AfterViewInit, Output, EventEmitter, Directive, Injector, runInInjectionContext, effect, WritableSignal } from '@angular/core';
+import { inject, signal, computed, OnInit, AfterViewInit, OnDestroy, Output, EventEmitter, Directive, Injector, runInInjectionContext, effect, WritableSignal } from '@angular/core';
 import { AppStateService } from '../../core/services/app-state.service';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -11,6 +11,10 @@ import { stripMetadata } from '../../core/r-codegen/metadata-parser';
 import { DialogRestoreService } from '../../core/services/dialog-restore.service';
 import { getMetadataStateDiagnostics } from '../../core/ai/dialog-metadata-contract';
 import { getDialogId } from '../../core/ai/dialog-identity.registry';
+import { CurrentDialogueRegistryService } from '../../core/ai/current-dialogue-registry.service';
+import { buildDialogueAIContract } from '../../core/ai/dialogue-ai-adapters';
+import { validateDialogueAIContract } from '../../core/ai/dialogue-contract-validator';
+import type { AICapability } from '../../core/ai/current-dialogue-contract';
 
 /**
  * Base class for all statistical dialogs
@@ -23,7 +27,7 @@ import { getDialogId } from '../../core/ai/dialog-identity.registry';
  * - Loading states and error handling
  */
 @Directive()
-export abstract class DialogBase implements OnInit, AfterViewInit {
+export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   @Output() close = new EventEmitter<void>();
 
   protected readonly appState = inject(AppStateService);
@@ -32,6 +36,7 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
   protected readonly codeManager = inject(DialogRCodeManager);
   protected readonly injector = inject(Injector);
   protected readonly dialogRestoreService = inject(DialogRestoreService);
+  protected readonly currentDialogueRegistry = inject(CurrentDialogueRegistryService);
 
   // Dataframes from global state (single source of truth)
   readonly dataframes = this.appState.dataframes;
@@ -72,6 +77,20 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
     throw new Error(`Dialog "${this.constructor.name}" is missing identity registration`);
   }
 
+  /**
+   * Override to supply a short description (e.g. for tooltips or integration). Default empty.
+   */
+  protected get dialogDescription(): string {
+    return '';
+  }
+
+  /**
+   * Override to supply capability tokens so this dialog can be registered with the integration layer. Default empty; if empty, this dialog is not registered.
+   */
+  protected get dialogCapabilities(): readonly AICapability[] {
+    return [];
+  }
+
   ngOnInit(): void {
     this.initializeDialog().catch(error => {
       console.error('Failed to initialize dialog:', error);
@@ -104,7 +123,38 @@ export abstract class DialogBase implements OnInit, AfterViewInit {
     // Auto-populate from registered sources (after restore, so roles override preferences)
     this.autoPopulateFromSources();
 
+    // Register with AI current-dialogue registry so pipeline can use refine path and live context
+    this.registerWithAI();
+
     // Restoration will happen in ngAfterViewInit after child component has registered form fields
+  }
+
+  /**
+   * Gather contract input from the dialogue, build contract, validate, and register only if valid.
+   */
+  private registerWithAI(): void {
+    const input = {
+      id: this.dialogId,
+      name: this.dialogTitle,
+      description: this.dialogDescription,
+      capabilities: this.dialogCapabilities,
+      getVariables: () => this.getDialogMetadata()?.state ?? this.getCurrentDefaults(),
+      getRCode: () => this.codeManager.code(),
+    };
+    const contract = buildDialogueAIContract(input);
+    const { valid, warnings } = validateDialogueAIContract(contract);
+    if (valid) {
+      this.currentDialogueRegistry.register(this.dialogId, contract);
+    } else {
+      console.warn(
+        `[AI Registry] Dialog "${this.dialogId}" not registered: contract incomplete.`,
+        warnings
+      );
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.currentDialogueRegistry.unregister(this.dialogId);
   }
 
   /**

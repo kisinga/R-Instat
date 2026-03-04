@@ -77,7 +77,14 @@
     "LOW_THRESHOLD": "Low confidence threshold",
     "REQUIRE_CONFIRM_INFERRED": "Require confirmation for inferred fields",
     "CONFIRMED": "Confirmed",
-    "RUN_ALL_CONFIRMED": "Run first confirmed step"
+    "RUN_ALL_CONFIRMED": "Run first confirmed step",
+    "MODE_AND_ASSUMPTIONS": "Mode & assumptions",
+    "CLICK_TO_SEND": "Click an option to send it and continue the conversation.",
+    "YOU_SENT": "You sent",
+    "NEW_RESPONSE": "New response",
+    "INFORMATIONAL_RESPONSE": "Informational response — no steps to run.",
+    "REQUEST_UNCLEAR": "Your request wasn't clear.",
+    "CHOOSE_DIRECTION": "What would you like to do? Choose an option below or describe in more detail in the text box."
   },
   "STATUS": {
     "PROCESSING": "Processing...",

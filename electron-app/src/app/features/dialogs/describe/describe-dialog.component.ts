@@ -18,6 +18,9 @@ import { DescribeDialogService, OutputMode } from './describe-dialog.service';
 import { GraphMode } from './utils/variable-type-analyzer';
 import { GraphPanelComponent } from './panels/graph-panel.component';
 import { FrequencyPanelComponent } from './panels/frequency-panel.component';
+import { CurrentDialogueRegistryService } from '../../../core/ai/current-dialogue-registry.service';
+import { createDefaultDescriptor } from '../../../core/ai/dialogue-ai-adapters';
+import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-validator';
 
 @Component({
   selector: 'app-describe-dialog',
@@ -331,6 +334,7 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
   private readonly languageService = inject(LanguageService);
+  private readonly currentDialogueRegistry = inject(CurrentDialogueRegistryService);
 
   /**
    * Keyboard shortcuts:
@@ -365,7 +369,7 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Reset service state when dialog closes
+    this.currentDialogueRegistry.unregister('describe');
     this.service.reset();
   }
 
@@ -424,6 +428,35 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
     // 'describe' and default both use 'graph' which is the service default
     
     await this.loadDataframes();
+
+    // Register with AI current-dialogue registry (education-oriented capabilities)
+    const descriptor = createDefaultDescriptor('describe', 'Describe', {
+      description: 'Describe data with summaries, graphs, and frequency tables',
+      capabilities: ['provide-r-code', 'suggest-columns', 'explain-options', 'explain-statistics'],
+    });
+    const contract = {
+      getDescriptor: () => descriptor,
+      getContext: () => ({
+        variables: {
+          dataframe: this.service.dataframe(),
+          outputMode: this.service.outputMode(),
+          graphMode: this.service.graphMode(),
+          analyze: this.service.roles().analyze.map(c => c.name),
+          groupBy: this.service.roles().groupBy?.name,
+          facetBy: this.service.roles().facetBy?.name,
+        },
+        currentRCode: this.service.rCode() || undefined,
+      }),
+    };
+    const { valid, warnings } = validateDialogueAIContract(contract);
+    if (valid) {
+      this.currentDialogueRegistry.register('describe', contract);
+    } else {
+      console.warn(
+        '[AI Registry] Dialog "describe" not registered: contract incomplete.',
+        warnings
+      );
+    }
   }
 
   private async loadDataframes(): Promise<void> {

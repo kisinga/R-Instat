@@ -6,8 +6,6 @@
  * - Validation of model-produced state
  */
 
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
-
 export type ParamKind =
   | 'dataframe'
   | 'column'
@@ -51,7 +49,36 @@ const p = (
 ): DialogParamSchema => ({ name, kind, ...opts });
 
 export const DIALOG_SCHEMAS: DialogSchema[] = [
-  ...DialogContractV2Registry.getSchemas(),
+  {
+    dialogId: 'bar-chart',
+    description: 'Bar chart for categorical counts or numeric values by category.',
+    operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],
+    params: [
+      p('dataframe', 'dataframe', { required: true }),
+      p('chartType', 'enum', { required: true, enumValues: ['frequency', 'value'] }),
+      p('xVariable', 'column', { required: true, columnType: 'factor' }),
+      p('yVariable', 'column', { required: true, columnType: 'numeric', when: { param: 'chartType', equals: 'value' } }),
+      p('fillVariable', 'column', { columnType: 'factor' }),
+      p('position', 'enum', { enumValues: ['stack', 'dodge', 'fill'] }),
+      p('horizontal', 'boolean'),
+      p('title', 'string'),
+      p('outputName', 'string'),
+    ],
+  },
+  {
+    dialogId: 'histogram',
+    description: 'Histogram of numeric variable.',
+    operations: ['describe.distribution.numeric'],
+    params: [
+      p('dataframe', 'dataframe', { required: true }),
+      p('variable', 'column', { required: true, columnType: 'numeric' }),
+      p('bins', 'number', { min: 5, max: 100 }),
+      p('fillColor', 'string'),
+      p('facetBy', 'column', { columnType: 'factor' }),
+      p('title', 'string'),
+      p('outputName', 'string'),
+    ],
+  },
   {
     dialogId: 'boxplot',
     description: 'Boxplot comparing numeric variable across groups.',

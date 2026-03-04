@@ -13,7 +13,7 @@ This documentation set defines how the dialog platform scales to 200+ dialogs wi
 
 - `architecture.md`: target architecture, extension points, and versioning
 - `migration-playbook.md`: migration workflow, checklist, and DoD
-- `ai-integration.md`: retrieval strategy, resolver pipeline, and safety
+- `ai-integration.md`: logic flow (Categorize → Scope → Plan), contract/registry, main code areas, and diagrams
 - `operations-governance.md`: parity evidence, CI gates, and release policy
 - `contract-authoring-guide.md`: how to author `DialogContractV2`
 - `family-taxonomy.md`: family model and pilot family conventions

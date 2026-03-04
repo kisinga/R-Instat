@@ -1,35 +1,24 @@
-import type { DialogSchema } from './dialog-schema.registry';
+import { getSchema, type DialogSchema } from './dialog-schema.registry';
 import type { OperationDefinition } from './operation-registry';
 import type { DialogContractV2, DialogPromptContractV2 } from './dialog-contract-v2';
 
-const p = (
-  name: string,
-  kind: DialogSchema['params'][number]['kind'],
-  opts: Omit<DialogSchema['params'][number], 'name' | 'kind'> = {}
-): DialogSchema['params'][number] => ({ name, kind, ...opts });
-
 /**
- * Pilot V2 contracts for plotting family.
- * Additional dialogs will be moved here in rollout waves.
+ * V2 overlay: only metadata not already in the schema registry.
+ * Params, description, operations come from getSchema(dialogId).
  */
-const CONTRACTS_V2: DialogContractV2[] = [
+export interface DialogContractV2Overlay {
+  dialogId: string;
+  componentType: string;
+  family: DialogContractV2['family'];
+  retrievalHints: { keywords: string[] };
+  migration: { parityStatus: 'pilot' | 'in-progress' | 'complete'; parityArtifactPath?: string };
+}
+
+const OVERLAYS: DialogContractV2Overlay[] = [
   {
     dialogId: 'bar-chart',
     componentType: 'BarChartDialogComponent',
     family: 'plotting',
-    description: 'Bar chart for categorical counts or numeric values by category.',
-    operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],
-    params: [
-      p('dataframe', 'dataframe', { required: true }),
-      p('chartType', 'enum', { required: true, enumValues: ['frequency', 'value'] }),
-      p('xVariable', 'column', { required: true, columnType: 'factor' }),
-      p('yVariable', 'column', { required: true, columnType: 'numeric', when: { param: 'chartType', equals: 'value' } }),
-      p('fillVariable', 'column', { columnType: 'factor' }),
-      p('position', 'enum', { enumValues: ['stack', 'dodge', 'fill'] }),
-      p('horizontal', 'boolean'),
-      p('title', 'string'),
-      p('outputName', 'string'),
-    ],
     retrievalHints: {
       keywords: ['bar', 'bars', 'count', 'category', 'frequency', 'group', 'comparison'],
     },
@@ -42,56 +31,150 @@ const CONTRACTS_V2: DialogContractV2[] = [
     dialogId: 'histogram',
     componentType: 'HistogramDialogComponent',
     family: 'plotting',
-    description: 'Histogram of numeric variable.',
-    operations: ['describe.distribution.numeric'],
-    params: [
-      p('dataframe', 'dataframe', { required: true }),
-      p('variable', 'column', { required: true, columnType: 'numeric' }),
-      p('bins', 'number', { min: 5, max: 100 }),
-      p('fillColor', 'string'),
-      p('facetBy', 'column', { columnType: 'factor' }),
-      p('title', 'string'),
-      p('outputName', 'string'),
-    ],
     retrievalHints: {
       keywords: ['histogram', 'distribution', 'numeric', 'bins', 'frequency'],
     },
-    migration: {
-      parityStatus: 'complete',
+    migration: { parityStatus: 'complete' },
+  },
+  {
+    dialogId: 'filter',
+    componentType: 'FilterDialogComponent',
+    family: 'data-preparation',
+    retrievalHints: {
+      keywords: ['filter', 'subset', 'rows', 'condition', 'where', 'keep', 'exclude'],
     },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'sort',
+    componentType: 'SortDialogComponent',
+    family: 'data-preparation',
+    retrievalHints: {
+      keywords: ['sort', 'order', 'ascending', 'descending', 'order by'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'scatter',
+    componentType: 'ScatterDialogComponent',
+    family: 'plotting',
+    retrievalHints: {
+      keywords: ['scatter', 'scatter plot', 'x y', 'two numeric', 'relationship'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'boxplot',
+    componentType: 'BoxplotDialogComponent',
+    family: 'plotting',
+    retrievalHints: {
+      keywords: ['boxplot', 'box plot', 'distribution', 'quartile', 'outlier'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 't-test',
+    componentType: 'TTestDialogComponent',
+    family: 'inferential',
+    retrievalHints: {
+      keywords: ['t-test', 'ttest', 't test', 'one-sample', 'two-sample', 'paired', 'hypothesis'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'regression',
+    componentType: 'RegressionDialogComponent',
+    family: 'predictive',
+    retrievalHints: {
+      keywords: ['regression', 'linear model', 'predictor', 'lm', 'linear'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'correlation',
+    componentType: 'CorrelationDialogComponent',
+    family: 'inferential',
+    retrievalHints: {
+      keywords: ['correlation', 'correlate', 'pearson', 'spearman', 'association'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'calculate',
+    componentType: 'CalculateDialogComponent',
+    family: 'data-preparation',
+    retrievalHints: {
+      keywords: ['calculate', 'new column', 'derived', 'formula', 'computed'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'rename',
+    componentType: 'RenameDialogComponent',
+    family: 'data-preparation',
+    retrievalHints: {
+      keywords: ['rename', 'rename column', 'column name', 'relabel'],
+    },
+    migration: { parityStatus: 'pilot' },
+  },
+  {
+    dialogId: 'recode',
+    componentType: 'RecodeDialogComponent',
+    family: 'data-preparation',
+    retrievalHints: {
+      keywords: ['recode', 'recode column', 'map', 'replace values', 'categorise'],
+    },
+    migration: { parityStatus: 'pilot' },
   },
 ];
 
-const CONTRACT_BY_ID = new Map<string, DialogContractV2>(CONTRACTS_V2.map((x) => [x.dialogId, x]));
+const OVERLAY_BY_ID = new Map<string, DialogContractV2Overlay>(
+  OVERLAYS.map((x) => [x.dialogId, x])
+);
+
+function mergeOverlayWithSchema(overlay: DialogContractV2Overlay): DialogContractV2 | null {
+  const schema = getSchema(overlay.dialogId);
+  if (!schema) return null;
+  return {
+    dialogId: overlay.dialogId,
+    componentType: overlay.componentType,
+    family: overlay.family,
+    description: schema.description,
+    operations: schema.operations,
+    params: schema.params,
+    retrievalHints: overlay.retrievalHints,
+    migration: overlay.migration,
+  };
+}
 
 export class DialogContractV2Registry {
   static list(): DialogContractV2[] {
-    return CONTRACTS_V2;
+    return OVERLAYS.map((o) => mergeOverlayWithSchema(o)).filter(
+      (c): c is DialogContractV2 => c !== null
+    );
   }
 
   static get(dialogId: string): DialogContractV2 | undefined {
-    return CONTRACT_BY_ID.get(dialogId);
+    const overlay = OVERLAY_BY_ID.get(dialogId);
+    return overlay ? mergeOverlayWithSchema(overlay) ?? undefined : undefined;
   }
 
   static getSchemas(): DialogSchema[] {
-    return CONTRACTS_V2.map((contract) => ({
-      dialogId: contract.dialogId,
-      description: contract.description,
-      operations: contract.operations,
-      params: contract.params,
-    }));
+    return OVERLAYS.map((o) => getSchema(o.dialogId)).filter(
+      (s): s is DialogSchema => s !== undefined
+    );
   }
 
   static applyOperationMappings(legacy: OperationDefinition[]): OperationDefinition[] {
     const byId = new Map(legacy.map((op) => [op.id, { ...op, mappedDialogs: [...op.mappedDialogs] }]));
-    for (const contract of CONTRACTS_V2) {
-      for (const operationId of contract.operations) {
+    for (const overlay of OVERLAYS) {
+      const schema = getSchema(overlay.dialogId);
+      if (!schema) continue;
+      for (const operationId of schema.operations) {
         const op = byId.get(operationId);
-        if (!op) {
-          continue;
-        }
-        if (!op.mappedDialogs.includes(contract.dialogId)) {
-          op.mappedDialogs.push(contract.dialogId);
+        if (!op) continue;
+        if (!op.mappedDialogs.includes(overlay.dialogId)) {
+          op.mappedDialogs.push(overlay.dialogId);
         }
       }
     }
@@ -103,22 +186,25 @@ export class DialogContractV2Registry {
 
   static applyIdentityMappings(legacy: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
     const next: Record<string, string> = { ...legacy };
-    for (const contract of CONTRACTS_V2) {
-      next[contract.dialogId] = contract.componentType;
+    for (const overlay of OVERLAYS) {
+      next[overlay.dialogId] = overlay.componentType;
     }
     return next;
   }
 
   static getPromptContracts(): DialogPromptContractV2[] {
-    return CONTRACTS_V2.map((contract) => ({
-      dialogId: contract.dialogId,
-      componentType: contract.componentType,
-      family: contract.family,
-      description: contract.description,
-      operations: contract.operations,
-      params: contract.params,
-      retrievalHints: contract.retrievalHints,
-    }));
+    return OVERLAYS.map((overlay) => {
+      const schema = getSchema(overlay.dialogId);
+      if (!schema) return null;
+      return {
+        dialogId: overlay.dialogId,
+        componentType: overlay.componentType,
+        family: overlay.family,
+        description: schema.description,
+        operations: schema.operations,
+        params: schema.params,
+        retrievalHints: overlay.retrievalHints,
+      };
+    }).filter((c): c is DialogPromptContractV2 => c !== null);
   }
 }
-

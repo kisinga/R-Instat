@@ -1,5 +1,7 @@
-import { getSchema, getSchemaSummaryForPrompt } from './dialog-schema.registry';
+import { DIALOG_SCHEMAS, getSchema } from './dialog-schema.registry';
 import { DialogContractV2Registry } from './dialog-contract-v2.registry';
+import type { DialogFamily, DialogPromptContractV2 } from './dialog-contract-v2';
+import { OPERATION_REGISTRY } from './operation-registry';
 
 const LEGACY_DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = {
   'import': 'ImportDialogComponent',
@@ -100,48 +102,47 @@ export function getDialogContract(dialogId: string): {
   };
 }
 
-export function getDialogContractsForPrompt(): Array<{
-  dialogId: string;
-  componentType: string;
-  family?: string;
-  description: string;
-  operations: string[];
-  params: Array<{
-    name: string;
-    kind: string;
-    required?: boolean;
-    columnType?: string;
-    enumValues?: string[];
-    when?: { param: string; equals: string | number | boolean };
-  }>;
-}> {
-  const v2ById = new Map(
-    DialogContractV2Registry.getPromptContracts().map((contract) => [contract.dialogId, contract])
-  );
-  const legacyContracts = getSchemaSummaryForPrompt()
-    .map((schema) => {
-      if (v2ById.has(schema.dialogId)) {
-        return null;
-      }
-      const componentType = getComponentType(schema.dialogId);
-      if (!componentType) {
-        return null;
-      }
-      return {
-        ...schema,
-        componentType,
-      };
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+/**
+ * Infer DialogFamily from operation registry when no V2 overlay exists.
+ */
+function inferFamilyForDialog(dialogId: string): DialogFamily {
+  const op = OPERATION_REGISTRY.find((o) => o.mappedDialogs.includes(dialogId));
+  if (!op) return 'other';
+  const d = op.derivedKind as string;
+  if (d.startsWith('climatic')) return 'climatic';
+  switch (op.primaryKind) {
+    case 'data-preparation':
+      return 'data-preparation';
+    case 'inferential':
+      return 'inferential';
+    case 'predictive':
+      return 'predictive';
+    case 'descriptive':
+      return 'plotting';
+    default:
+      return 'other';
+  }
+}
 
-  const v2Contracts = DialogContractV2Registry.getPromptContracts().map((contract) => ({
-    dialogId: contract.dialogId,
-    componentType: contract.componentType,
-    family: contract.family,
-    description: contract.description,
-    operations: contract.operations,
-    params: contract.params,
-  }));
-
-  return [...v2Contracts, ...legacyContracts];
+/**
+ * Single path for prompt contracts: every dialog with a schema and host component.
+ * V2 overlay supplies family and retrievalHints when present; otherwise inferred or default.
+ */
+export function getDialogContractsForPrompt(): DialogPromptContractV2[] {
+  const result: DialogPromptContractV2[] = [];
+  for (const schema of DIALOG_SCHEMAS) {
+    const componentType = getComponentType(schema.dialogId);
+    if (!componentType) continue;
+    const overlay = DialogContractV2Registry.get(schema.dialogId);
+    result.push({
+      dialogId: schema.dialogId,
+      componentType,
+      family: overlay?.family ?? inferFamilyForDialog(schema.dialogId),
+      description: schema.description,
+      operations: schema.operations,
+      params: schema.params,
+      retrievalHints: overlay?.retrievalHints ?? { keywords: [] },
+    });
+  }
+  return result;
 }

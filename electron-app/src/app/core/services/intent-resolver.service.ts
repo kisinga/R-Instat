@@ -7,6 +7,7 @@
 import { Injectable } from '@angular/core';
 import { DialogMetadata } from '../r-codegen/dialog-metadata';
 import { getSchema, type DialogParamSchema } from '../ai/dialog-schema.registry';
+import { PARAM_ALIAS_CONFIG } from '../ai/param-alias.config';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
 import { getDialogContract } from '../ai/dialog-identity.registry';
 import { ResolverTransformPipeline } from './intent-resolver.pipeline';
@@ -24,6 +25,10 @@ export interface ResolveResult {
   plan?: ResolvedPlan;
   error?: string;
   warnings?: string[];
+  /** When true, intent was unclear; show disambiguationSuggestions (from AIClientService, not resolver). */
+  needsDisambiguation?: boolean;
+  /** Category-directed suggestions; only set when needsDisambiguation is true. */
+  disambiguationSuggestions?: Array<{ text: string; category: string }>;
 }
 
 export interface ResolvedPlanStep {
@@ -78,6 +83,12 @@ export class IntentResolverService {
       dialogId: 'bar-chart',
       run: (_dialogId, params, state, dataContext, warnings) =>
         this.normalizeBarChartState('bar-chart', params, state, dataContext, warnings),
+    },
+    {
+      id: 'param-aliases',
+      scope: 'global',
+      run: (dialogId, _params, state, _dataContext, warnings) =>
+        this.applyParamAliases(dialogId, state, warnings),
     },
   ]);
 
@@ -290,6 +301,31 @@ export class IntentResolverService {
     }
 
     return normalized;
+  }
+
+  /**
+   * Apply param aliases from config (single transform for all dialogs with alias rules).
+   */
+  private applyParamAliases(
+    dialogId: string,
+    state: Record<string, unknown>,
+    warnings: string[]
+  ): Record<string, unknown> {
+    const entries = PARAM_ALIAS_CONFIG.get(dialogId);
+    if (!entries?.length) return state;
+    const out = { ...state };
+    for (const { alias, schemaKey } of entries) {
+      const value = out[alias];
+      if (value === undefined || value === null || value === '') continue;
+      if (out[schemaKey] !== undefined && out[schemaKey] !== null && out[schemaKey] !== '') {
+        delete (out as Record<string, unknown>)[alias];
+        continue;
+      }
+      (out as Record<string, unknown>)[schemaKey] = value;
+      warnings.push(`Mapped param "${alias}" → "${schemaKey}"`);
+      delete (out as Record<string, unknown>)[alias];
+    }
+    return out;
   }
 
   private inferMissingFields(
