@@ -135,7 +135,7 @@ export class IntentResolverService {
 
       const dialogStep = step as AIDialogPlanStep;
       const rawOpId = dialogStep.operationId;
-      if (rawOpId === null || rawOpId === undefined || String(rawOpId).trim() === '') {
+      if (this.isPlaceholderOperationId(rawOpId)) {
         return {
           ok: false,
           error:
@@ -234,6 +234,13 @@ export class IntentResolverService {
         steps: resolvedSteps,
       },
     };
+  }
+
+  /** Treats null, undefined, empty string, and placeholders like "N/A" or "none" as invalid. */
+  private isPlaceholderOperationId(value: unknown): boolean {
+    if (value === null || value === undefined) return true;
+    const s = String(value).trim().toLowerCase();
+    return s === '' || ['n/a', 'none', 'null'].includes(s);
   }
 
   private applyStateTransforms(

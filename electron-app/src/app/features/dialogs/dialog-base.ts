@@ -58,6 +58,7 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   // Form field registry for automatic save/restore/auto-population
   private formFields = new Map<string, WritableSignal<any>>();
   private autoPopulateSources: Array<() => Record<string, any> | null> = [];
+  private aiRegistered = false;
 
   // Abstract properties
   abstract readonly dialogTitle: string;
@@ -88,14 +89,14 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Override to supply a short description (e.g. for tooltips or integration). Default empty.
+   * Override to supply a short description for the runtime AI contract. If not overridden and this dialog has a catalog descriptor, the catalog description is used.
    */
   protected get dialogDescription(): string {
     return '';
   }
 
   /**
-   * Override to supply capability tokens so this dialog can be registered with the integration layer. Default empty; if empty, this dialog is not registered.
+   * Override to supply capability tokens for the runtime AI contract. If not overridden and this dialog has a catalog descriptor, ['provide-r-code'] is used so catalog dialogs register by default.
    */
   protected get dialogCapabilities(): readonly AICapability[] {
     return [];
@@ -133,21 +134,28 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
     // Auto-populate from registered sources (after restore, so roles override preferences)
     this.autoPopulateFromSources();
 
-    // Register with AI current-dialogue registry so pipeline can use refine path and live context
     this.registerWithAI();
-
-    // Restoration will happen in ngAfterViewInit after child component has registered form fields
   }
 
   /**
-   * Gather contract input from the dialogue, build contract, validate, and register only if valid.
+   * Builds runtime contract from instance getters and, when not overridden, from static catalog.
+   * Registers with current-dialogue registry only when the contract is valid.
    */
   private registerWithAI(): void {
+    const ctor = this.constructor as typeof DialogBase;
+    const catalog = ctor.getCatalogDescriptor();
+    const description =
+      this.dialogDescription || (catalog?.description ?? '');
+    const capabilities =
+      this.dialogCapabilities.length > 0
+        ? this.dialogCapabilities
+        : (catalog ? (['provide-r-code'] as const) : []);
+
     const input = {
       id: this.dialogId,
       name: this.dialogTitle,
-      description: this.dialogDescription,
-      capabilities: this.dialogCapabilities,
+      description,
+      capabilities,
       getVariables: () => this.getDialogMetadata()?.state ?? this.getCurrentDefaults(),
       getRCode: () => this.codeManager.code(),
     };
@@ -155,6 +163,7 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
     const { valid, warnings } = validateDialogueAIContract(contract);
     if (valid) {
       this.currentDialogueRegistry.register(this.dialogId, contract);
+      this.aiRegistered = true;
     } else {
       console.warn(
         `[AI Registry] Dialog "${this.dialogId}" not registered: contract incomplete.`,
@@ -164,7 +173,10 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.currentDialogueRegistry.unregister(this.dialogId);
+    if (this.aiRegistered) {
+      this.currentDialogueRegistry.unregister(this.dialogId);
+      this.aiRegistered = false;
+    }
   }
 
   /**

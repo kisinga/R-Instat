@@ -145,6 +145,13 @@ function buildDisambiguationSuggestions(hasCurrentDialog: boolean): Disambiguati
   return suggestions;
 }
 
+/** True if operationId is a real registry id; false for null, undefined, empty, or placeholders like "N/A". */
+function isValidOperationId(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  const s = String(value).trim().toLowerCase();
+  return s !== '' && !['n/a', 'none', 'null'].includes(s);
+}
+
 @Injectable({ providedIn: 'root' })
 export class AIClientService {
   private readonly aiConfig = inject(AIConfigService);
@@ -536,11 +543,11 @@ Return the strict JSON plan only.`;
       const jsonContent = this.extractJson(content);
       const parsed = JSON.parse(jsonContent) as Partial<AIPlan>;
       const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
-      // Drop dialog steps with missing operationId (e.g. education_question when model returns an informational step)
+      // Drop dialog steps with missing or placeholder operationId (e.g. education_question when model returns N/A or null)
       const steps = rawSteps.filter((s) => {
         if (s.stepType === 'code') return true;
         const opId = (s as AIDialogPlanStep).operationId;
-        return opId != null && String(opId).trim() !== '';
+        return isValidOperationId(opId);
       }) as AIPlanStep[];
       const hasClarifications = Array.isArray(parsed.clarificationQuestions) && parsed.clarificationQuestions.length > 0;
       const allowEmptySteps =
