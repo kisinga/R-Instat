@@ -1,9 +1,10 @@
+import '../../features/dialogs/dialog-host.component';
 import {
   filterOperationsForScopedDialogs,
   buildPlanningContractViews,
 } from './planner-context';
 import { OPERATION_REGISTRY } from './operation-registry';
-import { getSchema } from './dialog-schema.registry';
+import { getSchema } from './dialog-catalog-aggregator';
 import { getDialogContractsForPrompt } from './dialog-identity.registry';
 
 describe('planner-context', () => {

@@ -19,6 +19,9 @@ import {
   SummaryStatistic 
 } from '../describe/utils/r-code-builders';
 import { rSyntax } from '../../../core/r-codegen';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 interface SummaryModeOption {
   value: SummaryMode;
@@ -182,8 +185,31 @@ interface StatisticOption {
   `,
 })
 export class SummaryDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(SummaryDialogComponent); }
+  static readonly dialogId = 'summary';
   readonly dialogTitle = 'Summary Statistics';
   private readonly languageService = inject(LanguageService);
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'summary',
+      componentType: 'SummaryDialogComponent',
+      family: 'plotting',
+      description: 'Summary statistics for selected columns.',
+      operations: ['describe.comparison.numeric_by_group'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('selectedColumns', 'column[]', { required: true, columnType: 'any' }),
+        p('groupByColumn', 'column', { columnType: 'factor' }),
+        p('summaryMode', 'enum', { enumValues: ['default', 'customised', 'skim'] }),
+        p('selectedStatistics', 'string[]'),
+        p('omitMissing', 'boolean'),
+      ],
+      retrievalHints: {
+        keywords: ['summary', 'statistics', 'describe', 'numeric', 'group'],
+      },
+    };
+  }
 
   // Column selection
   selectedColumns = signal<string[]>([]);

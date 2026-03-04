@@ -12,6 +12,9 @@ import {
   isConditionValid,
 } from './filter-r-builders';
 import { rSyntax } from '../../../core/r-codegen';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-filter-dialog',
@@ -153,7 +156,27 @@ import { rSyntax } from '../../../core/r-codegen';
   `,
 })
 export class FilterDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(FilterDialogComponent); }
+  static readonly dialogId = 'filter';
   readonly dialogTitle = 'Filter Rows';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'filter',
+      componentType: 'FilterDialogComponent',
+      family: 'data-preparation',
+      description: 'Filter rows using one or more conditions.',
+      operations: ['data.filter'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('conditions', 'object[]', { required: true }),
+        p('combineLogic', 'enum', { enumValues: ['and', 'or', '&', '|'] }),
+      ],
+      retrievalHints: {
+        keywords: ['filter', 'subset', 'rows', 'condition', 'where', 'keep', 'exclude'],
+      },
+    };
+  }
 
   conditions = signal<FilterCondition[]>([{ column: '', operator: '==', value: '' }]);
   combineLogic = signal<CombineLogic>('&');

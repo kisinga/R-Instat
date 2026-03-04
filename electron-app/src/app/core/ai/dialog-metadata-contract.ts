@@ -1,4 +1,4 @@
-import { getSchema } from './dialog-schema.registry';
+import { getSchema } from './dialog-catalog-aggregator';
 
 export interface MetadataStateDiagnostics {
   unknownKeys: string[];

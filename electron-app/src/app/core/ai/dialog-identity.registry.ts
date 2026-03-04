@@ -1,56 +1,63 @@
-import { DIALOG_SCHEMAS, getSchema } from './dialog-schema.registry';
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
-import type { DialogFamily, DialogPromptContractV2 } from './dialog-contract-v2';
-import { OPERATION_REGISTRY } from './operation-registry';
+import {
+  getDialogContractsForPrompt,
+  getSchema,
+} from './dialog-catalog-aggregator';
 
-const LEGACY_DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = {
+export { getDialogContractsForPrompt };
+
+/** Non–DialogBase dialogs: identity only (Describe, Import, etc.). */
+const OTHER_DIALOG_IDENTITY: Readonly<Record<string, string>> = {
   'import': 'ImportDialogComponent',
-  'summary': 'SummaryDialogComponent',
-  'histogram': 'HistogramDialogComponent',
-  'boxplot': 'BoxplotDialogComponent',
-  'scatter': 'ScatterDialogComponent',
-  'bar-chart': 'BarChartDialogComponent',
-  'filter': 'FilterDialogComponent',
-  'sort': 'SortDialogComponent',
-  'calculate': 'CalculateDialogComponent',
-  'recode': 'RecodeDialogComponent',
-  'rename': 'RenameDialogComponent',
-  'correlation': 'CorrelationDialogComponent',
-  't-test': 'TTestDialogComponent',
-  'regression': 'RegressionDialogComponent',
   'describe': 'DescribeDialogComponent',
   'describe:summary': 'SummaryDialogComponent',
   'describe:graph': 'DescribeDialogComponent',
   'domain-selector': 'DomainSelectorComponent',
   'define-climatic-data': 'DefineClimaticDataDialogComponent',
-  'climatic-summary': 'ClimaticSummaryDialogComponent',
-  'inventory-plot': 'InventoryPlotDialogComponent',
-  'annual-rainfall': 'AnnualRainfallDialogComponent',
-  'extremes': 'ExtremesDialogComponent',
-  'day-count': 'DayCountDialogComponent',
-  'spell-lengths': 'SpellLengthsDialogComponent',
-  'seasonal-summary': 'SeasonalSummaryDialogComponent',
-  'missing-report': 'MissingReportDialogComponent',
-  'temperature-summary': 'TemperatureSummaryDialogComponent',
   'export': 'ExportDialogComponent',
-  'merge': 'MergeDialogComponent',
-  'stack': 'StackDialogComponent',
-  'unstack': 'UnstackDialogComponent',
-  'line-plot': 'LinePlotDialogComponent',
-  'dot-plot': 'DotPlotDialogComponent',
-  'restore-from-code': 'RestoreFromCodeDialogComponent',
   'ai-assist': 'AIAssistDialogComponent',
 };
 
-export const DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> =
-  DialogContractV2Registry.applyIdentityMappings(LEGACY_DIALOG_ID_TO_COMPONENT);
+let _identityMap: Readonly<Record<string, string>> | null = null;
+let _componentToDialogId: Map<string, string> | null = null;
 
-const COMPONENT_TO_DIALOG_ID = new Map<string, string>();
-for (const [dialogId, componentType] of Object.entries(DIALOG_ID_TO_COMPONENT)) {
-  if (!COMPONENT_TO_DIALOG_ID.has(componentType)) {
-    COMPONENT_TO_DIALOG_ID.set(componentType, dialogId);
+function ensureIdentity(): Readonly<Record<string, string>> {
+  if (_identityMap === null) {
+    const catalog = getDialogContractsForPrompt();
+    const map: Record<string, string> = { ...OTHER_DIALOG_IDENTITY };
+    for (const c of catalog) {
+      map[c.dialogId] = c.componentType;
+    }
+    _identityMap = map;
+    _componentToDialogId = new Map<string, string>();
+    for (const [dialogId, componentType] of Object.entries(_identityMap)) {
+      if (!_componentToDialogId.has(componentType)) {
+        _componentToDialogId.set(componentType, dialogId);
+      }
+    }
   }
+  return _identityMap;
 }
+
+export function getDialogIdToComponent(): Readonly<Record<string, string>> {
+  return ensureIdentity();
+}
+
+/** @deprecated Use getDialogIdToComponent() to avoid circular dependency at module load. */
+export const DIALOG_ID_TO_COMPONENT: Readonly<Record<string, string>> = new Proxy(
+  {} as Record<string, string>,
+  {
+    get(_, prop: string | symbol) {
+      return typeof prop === 'string' ? ensureIdentity()[prop] : undefined;
+    },
+    ownKeys() {
+      return Reflect.ownKeys(ensureIdentity());
+    },
+    getOwnPropertyDescriptor(_, prop: string | symbol) {
+      const value = typeof prop === 'string' ? ensureIdentity()[prop] : undefined;
+      return { enumerable: true, configurable: true, value };
+    },
+  }
+);
 
 const NON_ANALYTICAL_DIALOGS = new Set<string>([
   'import',
@@ -65,21 +72,22 @@ function normalizeComponentType(componentType: string): string {
 }
 
 export function getComponentType(dialogId: string): string | undefined {
-  return DIALOG_ID_TO_COMPONENT[dialogId];
+  return ensureIdentity()[dialogId];
 }
 
 export function getDialogId(componentType: string): string | null {
+  ensureIdentity();
   const normalized = normalizeComponentType(componentType);
-  return COMPONENT_TO_DIALOG_ID.get(normalized) ?? null;
+  return _componentToDialogId!.get(normalized) ?? null;
 }
 
 export function isKnownDialogId(dialogId: string): boolean {
-  return Object.prototype.hasOwnProperty.call(DIALOG_ID_TO_COMPONENT, dialogId);
+  return Object.prototype.hasOwnProperty.call(ensureIdentity(), dialogId);
 }
 
 export function listDialogIds(opts: { includeNonAnalytical?: boolean } = {}): string[] {
   const { includeNonAnalytical = true } = opts;
-  const dialogIds = Object.keys(DIALOG_ID_TO_COMPONENT);
+  const dialogIds = Object.keys(ensureIdentity());
   if (includeNonAnalytical) {
     return dialogIds;
   }
@@ -100,49 +108,4 @@ export function getDialogContract(dialogId: string): {
     componentType,
     schema: getSchema(dialogId),
   };
-}
-
-/**
- * Infer DialogFamily from operation registry when no V2 overlay exists.
- */
-function inferFamilyForDialog(dialogId: string): DialogFamily {
-  const op = OPERATION_REGISTRY.find((o) => o.mappedDialogs.includes(dialogId));
-  if (!op) return 'other';
-  const d = op.derivedKind as string;
-  if (d.startsWith('climatic')) return 'climatic';
-  switch (op.primaryKind) {
-    case 'data-preparation':
-      return 'data-preparation';
-    case 'inferential':
-      return 'inferential';
-    case 'predictive':
-      return 'predictive';
-    case 'descriptive':
-      return 'plotting';
-    default:
-      return 'other';
-  }
-}
-
-/**
- * Single path for prompt contracts: every dialog with a schema and host component.
- * V2 overlay supplies family and retrievalHints when present; otherwise inferred or default.
- */
-export function getDialogContractsForPrompt(): DialogPromptContractV2[] {
-  const result: DialogPromptContractV2[] = [];
-  for (const schema of DIALOG_SCHEMAS) {
-    const componentType = getComponentType(schema.dialogId);
-    if (!componentType) continue;
-    const overlay = DialogContractV2Registry.get(schema.dialogId);
-    result.push({
-      dialogId: schema.dialogId,
-      componentType,
-      family: overlay?.family ?? inferFamilyForDialog(schema.dialogId),
-      description: schema.description,
-      operations: schema.operations,
-      params: schema.params,
-      retrievalHints: overlay?.retrievalHints ?? { keywords: [] },
-    });
-  }
-  return result;
 }

@@ -6,6 +6,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBarChart } from '../../../core/dialogs/builders/barchart';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-bar-chart-dialog',
@@ -130,8 +133,33 @@ import { buildBarChart } from '../../../core/dialogs/builders/barchart';
   `,
 })
 export class BarChartDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(BarChartDialogComponent); }
   static dialogId = 'bar-chart';
   readonly dialogTitle = 'Bar Chart';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'bar-chart',
+      componentType: 'BarChartDialogComponent',
+      family: 'plotting',
+      description: 'Bar chart for categorical counts or numeric values by category.',
+      operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('chartType', 'enum', { required: true, enumValues: ['frequency', 'value'] }),
+        p('xVariable', 'column', { required: true, columnType: 'factor' }),
+        p('yVariable', 'column', { required: true, columnType: 'numeric', when: { param: 'chartType', equals: 'value' } }),
+        p('fillVariable', 'column', { columnType: 'factor' }),
+        p('position', 'enum', { enumValues: ['stack', 'dodge', 'fill'] }),
+        p('horizontal', 'boolean'),
+        p('title', 'string'),
+        p('outputName', 'string'),
+      ],
+      retrievalHints: {
+        keywords: ['bar', 'bars', 'count', 'category', 'frequency', 'group', 'comparison'],
+      },
+    };
+  }
 
   chartType = signal<'frequency' | 'value'>('frequency');
   xVariable = signal('');

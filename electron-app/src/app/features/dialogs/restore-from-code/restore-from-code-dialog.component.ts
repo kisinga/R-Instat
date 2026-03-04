@@ -13,6 +13,7 @@ import { extractMetadata, stripMetadata, hasMetadata } from '../../../core/r-cod
 import { DialogMetadata } from '../../../core/r-codegen/dialog-metadata';
 import { mapComponentTypeToDialogId } from '../dialog-name-mapper';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-restore-from-code-dialog',
@@ -85,6 +86,7 @@ import { CodePreviewComponent } from '../../../shared/components/code-preview/co
   `]
 })
 export class RestoreFromCodeDialogComponent extends DialogBase {
+  static { AIDialogClassRegistry.register(RestoreFromCodeDialogComponent); }
   static readonly dialogId = 'restore-from-code';
   readonly dialogTitle = 'Restore From Code';
 

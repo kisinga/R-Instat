@@ -2,7 +2,7 @@
  * Types for the AI pipeline (Categorize → Scope → Plan).
  */
 
-import type { DialogFamily } from './dialog-contract-v2';
+import type { DialogFamily } from './dialog-catalog';
 
 export type PromptCategory =
   | 'open_dialog'

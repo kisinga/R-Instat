@@ -1,6 +1,6 @@
 import type { DialogParamSchema } from '../ai/dialog-schema.registry';
 import type { DataContext } from './ai-client.service';
-import { DialogContractV2Registry } from '../ai/dialog-contract-v2.registry';
+import { getCatalogContract } from '../ai/dialog-catalog-aggregator';
 
 export type ResolverTransformScope = 'global' | 'family' | 'dialog';
 
@@ -32,7 +32,7 @@ export class ResolverTransformPipeline {
     dataContext: DataContext,
     warnings: string[]
   ): { state: Record<string, unknown>; diagnostics: ResolverPipelineDiagnostics } {
-    const family = DialogContractV2Registry.get(dialogId)?.family;
+    const family = getCatalogContract(dialogId)?.family;
     let state = { ...initialState };
     const appliedTransformIds: string[] = [];
 

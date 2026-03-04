@@ -6,6 +6,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildScatter } from '../../../core/dialogs/builders/graphs';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-scatter-dialog',
@@ -103,7 +106,29 @@ import { buildScatter } from '../../../core/dialogs/builders/graphs';
   `,
 })
 export class ScatterDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(ScatterDialogComponent); }
+  static readonly dialogId = 'scatter';
   readonly dialogTitle = 'Scatter Plot';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'scatter',
+      componentType: 'ScatterDialogComponent',
+      family: 'plotting',
+      description: 'Scatter plot of two numeric variables.',
+      operations: ['describe.association.numeric_numeric'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('xVariable', 'column', { required: true, columnType: 'numeric' }),
+        p('yVariable', 'column', { required: true, columnType: 'numeric' }),
+        p('colorVariable', 'column', { columnType: 'factor' }),
+        p('addTrendLine', 'boolean'),
+      ],
+      retrievalHints: {
+        keywords: ['scatter', 'scatter plot', 'x y', 'two numeric', 'relationship'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   xVariable = signal('');

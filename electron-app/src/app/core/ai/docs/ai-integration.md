@@ -42,13 +42,13 @@ flowchart LR
 |------|----------|----------------|
 | **Contract types** | `core/ai/current-dialogue-contract.ts` | `DialogueAIDescriptor`, `DialogueAIContext`, `DialogueAIContract`. The dialogue fulfills this; the registry consumes it. |
 | **Registry** | `core/ai/current-dialogue-registry.service.ts` | Single “current” registration. `register(dialogId, contract)`, `unregister(dialogId)`, `getCurrentDescriptor()`, `getCurrentContext()`, `hasCurrent()`. No dependency on dialogs or R codegen. |
-| **Adapters** | `core/ai/dialogue-ai-adapters.ts` | QoL: `createDefaultDescriptor`, `createDefaultContextProvider`, `createDialogBaseAIContract`. Build a contract from id/name/variables/code. |
+| **Adapter** | `core/ai/dialogue-ai-adapters.ts` | `buildDialogueAIContract(input)` — single path to build a contract from plain input (id, name, description, capabilities, getVariables, getRCode). |
 | **Layer 1 – Categorizer** | `core/ai/prompt-categorizer.service.ts` | `categorize(userInput, hasCurrentDialog)` → `Promise<{ category, family? }>`. **Compositional:** rule-based strategy first (`categorizer-rules.ts`); when it returns null, LLM is used. Returns `unclear` when the API is unavailable or intent is genuinely ambiguous. |
 | **Layer 2 – Scoper** | `core/ai/prompt-scoper.service.ts` | `scope(category, family?, userInput, dataContext, topK)` → `{ contracts, currentDialogContext, executionMode }`. Uses registry for refine path; uses retrieval (optionally family-scoped) for open_dialog. Not called when category is unclear. |
 | **Layer 3 – Plan/Execute** | `core/services/ai-client.service.ts` | When category is **unclear**, returns `needsDisambiguation` and `disambiguationSuggestions` (no Scope/Plan). Otherwise: scope → build message → LLM or direct R. Planner context is built from **scoped operations** (only operations whose dialogs are in scope) and **compact contract views** (dialogId, description, operations, paramNames) via `planner-context.ts`; param reference remains the single authority for state keys. Injects current-dialogue context and current category. For **structured codegen**, compiles dialog steps to R via `step-to-r.ts`. |
 | **Step-to-R** | `core/ai/step-to-r.ts` | Single adapter: maps AI plan step state (dialogId + schema-shaped state) to existing dialog R builders (buildSort, buildTTest, etc.). Returns builder output script or null. Ensures one source of truth for how each dialog produces R. |
-| **Retrieval** | `core/ai/dialog-context-retriever.ts` | `retrieveDialogContractsTopK(userInput, contracts, dataContext, topK, family?)`. Family filter narrows the set before scoring. **Retrieval hints:** dialogs with V2 overlays in `dialog-contract-v2.registry.ts` supply `retrievalHints.keywords` for better matching; more dialogs have overlays (filter, sort, scatter, boxplot, t-test, regression, correlation, calculate, rename, recode, etc.). |
-| **Dialog registration** | `dialog-base.ts`, Describe, Import | DialogBase: register at end of `initializeDialog()` via adapters; unregister in `ngOnDestroy()`. Describe/Import: manual register in `ngOnInit()`, unregister in `ngOnDestroy()`. |
+| **Retrieval** | `core/ai/dialog-context-retriever.ts` | `retrieveDialogContractsTopK(userInput, contracts, dataContext, topK, family?)`. Family filter narrows the set before scoring. **Retrieval hints:** catalog entries (from `getDialogContractsForPrompt()`, built from `DialogClassRegistry`) supply `retrievalHints.keywords` for better matching. |
+| **Dialog registration** | `dialog-base.ts`, Describe, Import | Single flow: gather input → `buildDialogueAIContract(input)` → `validateDialogueAIContract(contract)` → register only if valid (else console.warn). DialogBase gathers from dialogId, dialogTitle, dialogDescription, dialogCapabilities; Describe/Import build input and use same adapter + validator. Unregister in `ngOnDestroy()`. |
 
 **Single path:** All prompt handling goes through **categorize → scope → plan**. No separate “legacy” contract selection; the scoper is the only producer of the contract set and current context for the planner.
 
@@ -58,7 +58,7 @@ flowchart LR
 
 ### 3.1 Dialogue → Registry (registration)
 
-Dialogs are the only writers to the registry. They build a `DialogueAIContract` (often via adapters) and call `registry.register(this.dialogId, contract)` when ready; they call `registry.unregister(this.dialogId)` on destroy.
+Dialogs are the only writers to the registry. Single flow: build contract via `buildDialogueAIContract(input)`, validate via `validateDialogueAIContract(contract)`, then `registry.register(dialogId, contract)` only if valid; unregister on destroy.
 
 ```mermaid
 flowchart TB
@@ -67,20 +67,16 @@ flowchart TB
     Desc[DescribeDialogComponent]
     Imp[ImportDialogComponent]
   end
-  subgraph Adapters
-    A1[createDefaultDescriptor]
-    A2[createDialogBaseAIContract]
-  end
-  subgraph Registry
+  subgraph Flow
+    Build[buildDialogueAIContract]
+    Validate[validateDialogueAIContract]
     Reg[CurrentDialogueRegistryService]
   end
-  DB -->|"build contract via"| A1
-  DB --> A2
-  Desc -->|"manual contract"| Reg
-  Imp -->|"manual contract"| Reg
-  DB -->|"register / unregister"| Reg
-  A1 --> Reg
-  A2 --> Reg
+  DB -->|gather input| Build
+  Desc -->|input| Build
+  Imp -->|input| Build
+  Build --> Validate
+  Validate -->|valid| Reg
 ```
 
 ### 3.2 Pipeline: Categorize → Scope → Plan
@@ -114,8 +110,8 @@ When the pipeline produces dialog steps and execution mode is **structured_codeg
 
 | Category | Contracts | currentDialogContext | executionMode |
 |----------|-----------|----------------------|---------------|
-| `refine_current_dialog` | One contract for current dialog (from ContractV2 by descriptor.id), or fallback to open_dialog | From registry | `component_codegen` |
-| `open_dialog` | From retrieval over V2 contracts (optionally family-filtered) | `null` | `component_codegen` |
+| `refine_current_dialog` | One contract for current dialog (from catalog by descriptor.id), or fallback to open_dialog | From registry | `component_codegen` |
+| `open_dialog` | From retrieval over catalog prompt contracts (optionally family-filtered) | `null` | `component_codegen` |
 | `run_code` | `[]` | `null` | `direct_r` |
 | `education_question` | `[]` | From registry (so model can explain current state) | `component_codegen` |
 | `data_quality_recipe` | `[]` | `null` | `component_codegen` |
@@ -135,27 +131,30 @@ Plan-level **clarification questions** (from the planner LLM) are required to be
 
 | File | Role |
 |------|------|
-| `current-dialogue-contract.ts` | Contract types only. |
+| `current-dialogue-contract.ts` | Contract types and `DialogueContractInput`. |
 | `current-dialogue-registry.service.ts` | Registry; contract-only API. |
-| `dialogue-ai-adapters.ts` | Helpers to build descriptor and contract from id/name/variables/code. |
+| `dialogue-ai-adapters.ts` | `buildDialogueAIContract(input)` — single adapter to build contract from plain input. |
+| `dialogue-contract-validator.ts` | `validateDialogueAIContract(contract)` — pure validator; gate for registration. |
 | `pipeline-types.ts` | `PromptCategory`, `CategorizerResult`, `CategorizerStrategy`. |
 | `categorizer-rules.ts` | Rule-based categorizer strategy (pure); evaluated first. |
 | `prompt-categorizer.service.ts` | Layer 1: composes rule-based then LLM `categorize()`. |
 | `planner-context.ts` | Pure builders: `filterOperationsForScopedDialogs`, `buildPlanningContractViews`. |
 | `prompt-scoper.service.ts` | Layer 2: `scope()`; uses registry + retrieval. |
+| `dialog-catalog.ts` | Types: `DialogCatalogContract`, `DialogPromptContract`, `DialogFamily`. |
+| `dialog-class-registry.ts` | `DialogClassRegistry`: populated by self-registration (each dialog's static block). No hand-maintained list. The dialog host's imports ensure all catalog dialogs load at bootstrap. Catalog is built from it in `dialog-catalog-aggregator.ts`. |
 | `dialog-context-retriever.ts` | Retrieval with optional `family` filter. |
 | `ai-client.service.ts` | Layer 3: call flow, message building, LLM/direct R. Uses `step-to-r` for structured codegen. |
 | `step-to-r.ts` | Adapter: dialogId + state → builder options → builder → script. Single source of truth for template R generation. |
-| `dialog-base.ts` | Register/unregister via adapters in init/destroy. |
-| `describe-dialog.component.ts` | Manual register/unregister for Describe. |
-| `import-dialog.component.ts` | Manual register/unregister for Import. |
+| `dialog-base.ts` | Gather input → build → validate → register (if valid); unregister on destroy. |
+| `describe-dialog.component.ts` | Same flow: buildDialogueAIContract + validate → register for Describe. |
+| `import-dialog.component.ts` | Same flow: buildDialogueAIContract + validate → register for Import. |
 
 ---
 
 ## 5. Alignment with existing pieces
 
 - **dialogId:** Same as in `dialog-identity.registry` and host keys; descriptor `id` matches.
-- **ContractV2 / schema:** Static source for prompts and retrieval. The **runtime** contract (registry) is additive: “what is open and what is its context?” Used by the scoper for refine and by the planner when current context is injected.
-- **Family:** `DialogFamily` on ContractV2 is used for family-scoped retrieval in the scoper when category is `open_dialog` and family is known.
+- **Catalog / schema:** Built from DialogClassRegistry (self-registration when dialog modules load; see dialog-class-registry.ts and getDialogContractsForPrompt()). Source for prompts and retrieval. The **runtime** contract (current-dialogue registry) is additive: “what is open and what is its context?” Used by the scoper for refine and by the planner when current context is injected.
+- **Family:** `DialogFamily` on catalog contracts is used for family-scoped retrieval in the scoper when category is `open_dialog` and family is known.
 
 No duplicate “ways” to choose contracts: the **scoper** is the single place that produces the contract set and current-dialogue context for the plan step.

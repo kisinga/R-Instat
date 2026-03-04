@@ -1,3 +1,4 @@
+import '../../features/dialogs/dialog-host.component';
 import { getDialogContractsForPrompt } from './dialog-identity.registry';
 import { retrieveDialogContractsTopK } from './dialog-context-retriever';
 

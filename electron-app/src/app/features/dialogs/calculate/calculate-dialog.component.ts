@@ -5,6 +5,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCalculate } from '../../../core/dialogs/builders/data-manipulation';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-calculate-dialog',
@@ -127,7 +130,34 @@ import { buildCalculate } from '../../../core/dialogs/builders/data-manipulation
   `,
 })
 export class CalculateDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(CalculateDialogComponent); }
+  static readonly dialogId = 'calculate';
   readonly dialogTitle = 'Calculate New Column';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'calculate',
+      componentType: 'CalculateDialogComponent',
+      family: 'data-preparation',
+      description: 'Create a new derived column from formula/arithmetic.',
+      operations: ['data.calculate'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('newColumnName', 'string', { required: true }),
+        p('calcType', 'enum', { required: true, enumValues: ['formula', 'sum', 'mean', 'diff', 'ratio'] }),
+        p('formula', 'string', { when: { param: 'calcType', equals: 'formula' } }),
+        p('selectedCols', 'column[]', { columnType: 'numeric', when: { param: 'calcType', equals: 'sum' } }),
+        p('selectedCols', 'column[]', { columnType: 'numeric', when: { param: 'calcType', equals: 'mean' } }),
+        p('columnA', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
+        p('columnB', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
+        p('columnA', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
+        p('columnB', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
+      ],
+      retrievalHints: {
+        keywords: ['calculate', 'new column', 'derived', 'formula', 'computed'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   newColumnName = signal('');

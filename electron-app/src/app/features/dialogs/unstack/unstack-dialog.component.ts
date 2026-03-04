@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { DialogBase } from '../dialog-base';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
@@ -132,6 +133,7 @@ import { rSyntax } from '../../../core/r-codegen';
   `]
 })
 export class UnstackDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(UnstackDialogComponent); }
   static readonly dialogId = 'unstack';
   readonly dialogTitle = 'Unstack';
 

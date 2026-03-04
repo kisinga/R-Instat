@@ -8,7 +8,8 @@ export type DialogFamily =
   | 'climatic'
   | 'other';
 
-export interface DialogContractV2 {
+/** Full catalog contract (schema + family + retrieval hints + migration). */
+export interface DialogCatalogContract {
   dialogId: string;
   componentType: string;
   family: DialogFamily;
@@ -24,7 +25,8 @@ export interface DialogContractV2 {
   };
 }
 
-export interface DialogPromptContractV2 {
+/** Contract shape used for prompt/retrieval (no migration). */
+export interface DialogPromptContract {
   dialogId: string;
   componentType: string;
   family: DialogFamily;

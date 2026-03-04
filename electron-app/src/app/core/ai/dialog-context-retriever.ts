@@ -1,11 +1,11 @@
-import type { DialogPromptContractV2, DialogFamily } from './dialog-contract-v2';
+import type { DialogPromptContract, DialogFamily } from './dialog-catalog';
 
 export interface RetrievalDataContext {
   activeDataframe: string | null;
   columnsByDataframe: Record<string, Array<{ name: string; type: string }>>;
 }
 
-export interface RetrievedDialogCandidate extends DialogPromptContractV2 {
+export interface RetrievedDialogCandidate extends DialogPromptContract {
   score: number;
   reasons: string[];
 }
@@ -16,7 +16,7 @@ export interface RetrievedDialogCandidate extends DialogPromptContractV2 {
  */
 export function retrieveDialogContractsTopK(
   userInput: string,
-  contracts: DialogPromptContractV2[],
+  contracts: DialogPromptContract[],
   dataContext: RetrievalDataContext,
   topK: number,
   family?: DialogFamily
@@ -29,7 +29,7 @@ export function retrieveDialogContractsTopK(
 
 function retrieveDialogContractsTopKInternal(
   userInput: string,
-  contracts: DialogPromptContractV2[],
+  contracts: DialogPromptContract[],
   dataContext: RetrievalDataContext,
   topK: number
 ): RetrievedDialogCandidate[] {

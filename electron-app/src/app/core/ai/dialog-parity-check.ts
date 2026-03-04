@@ -6,10 +6,10 @@ export interface ParityConsistencyReport {
   operationWithoutSchema: string[];
   operationWithoutHost: string[];
   schemaWithoutOperation: string[];
-  v2WithoutSchema: string[];
-  v2WithoutOperation: string[];
-  v2WithoutHost: string[];
-  parityEvidenceMissingForV2: string[];
+  catalogWithoutSchema: string[];
+  catalogWithoutOperation: string[];
+  catalogWithoutHost: string[];
+  parityEvidenceMissingForCatalog: string[];
   ok: boolean;
 }
 
@@ -19,23 +19,23 @@ export interface ParityConsistencyReport {
  */
 export function buildParityConsistencyReport(): ParityConsistencyReport {
   const view = getDialogRegistryView();
-  const { hostIds, schemaIds, operationIds, v2Ids, parityEvidenceIds, allIds } = view;
+  const { hostIds, schemaIds, operationIds, catalogIds, parityEvidenceIds, allIds } = view;
 
   const hostWithoutSchema: string[] = [];
   const schemaWithoutHost: string[] = [];
   const operationWithoutSchema: string[] = [];
   const operationWithoutHost: string[] = [];
   const schemaWithoutOperation: string[] = [];
-  const v2WithoutSchema: string[] = [];
-  const v2WithoutOperation: string[] = [];
-  const v2WithoutHost: string[] = [];
-  const parityEvidenceMissingForV2: string[] = [];
+  const catalogWithoutSchema: string[] = [];
+  const catalogWithoutOperation: string[] = [];
+  const catalogWithoutHost: string[] = [];
+  const parityEvidenceMissingForCatalog: string[] = [];
 
   for (const dialogId of allIds) {
     const inHost = hostIds.has(dialogId);
     const inSchema = schemaIds.has(dialogId);
     const inOperation = operationIds.has(dialogId);
-    const inV2 = v2Ids.has(dialogId);
+    const inCatalog = catalogIds.has(dialogId);
     const inParityEvidence = parityEvidenceIds.has(dialogId);
 
     if (inHost && !inSchema) hostWithoutSchema.push(dialogId);
@@ -43,10 +43,10 @@ export function buildParityConsistencyReport(): ParityConsistencyReport {
     if (inOperation && !inSchema) operationWithoutSchema.push(dialogId);
     if (inOperation && !inHost) operationWithoutHost.push(dialogId);
     if (inSchema && !inOperation) schemaWithoutOperation.push(dialogId);
-    if (inV2 && !inSchema) v2WithoutSchema.push(dialogId);
-    if (inV2 && !inOperation) v2WithoutOperation.push(dialogId);
-    if (inV2 && !inHost) v2WithoutHost.push(dialogId);
-    if (inV2 && !inParityEvidence) parityEvidenceMissingForV2.push(dialogId);
+    if (inCatalog && !inSchema) catalogWithoutSchema.push(dialogId);
+    if (inCatalog && !inOperation) catalogWithoutOperation.push(dialogId);
+    if (inCatalog && !inHost) catalogWithoutHost.push(dialogId);
+    if (inCatalog && !inParityEvidence) parityEvidenceMissingForCatalog.push(dialogId);
   }
 
   const sort = (a: string[]) => a.slice().sort();
@@ -56,19 +56,19 @@ export function buildParityConsistencyReport(): ParityConsistencyReport {
     operationWithoutSchema: sort(operationWithoutSchema),
     operationWithoutHost: sort(operationWithoutHost),
     schemaWithoutOperation: sort(schemaWithoutOperation),
-    v2WithoutSchema: sort(v2WithoutSchema),
-    v2WithoutOperation: sort(v2WithoutOperation),
-    v2WithoutHost: sort(v2WithoutHost),
-    parityEvidenceMissingForV2: sort(parityEvidenceMissingForV2),
+    catalogWithoutSchema: sort(catalogWithoutSchema),
+    catalogWithoutOperation: sort(catalogWithoutOperation),
+    catalogWithoutHost: sort(catalogWithoutHost),
+    parityEvidenceMissingForCatalog: sort(parityEvidenceMissingForCatalog),
     ok:
       hostWithoutSchema.length === 0 &&
       schemaWithoutHost.length === 0 &&
       operationWithoutSchema.length === 0 &&
       operationWithoutHost.length === 0 &&
       schemaWithoutOperation.length === 0 &&
-      v2WithoutSchema.length === 0 &&
-      v2WithoutOperation.length === 0 &&
-      v2WithoutHost.length === 0 &&
-      parityEvidenceMissingForV2.length === 0,
+      catalogWithoutSchema.length === 0 &&
+      catalogWithoutOperation.length === 0 &&
+      catalogWithoutHost.length === 0 &&
+      parityEvidenceMissingForCatalog.length === 0,
   };
 }

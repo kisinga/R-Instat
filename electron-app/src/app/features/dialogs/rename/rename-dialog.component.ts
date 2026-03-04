@@ -5,6 +5,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRename } from '../../../core/dialogs/builders/data-manipulation';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-rename-dialog',
@@ -85,7 +88,27 @@ import { buildRename } from '../../../core/dialogs/builders/data-manipulation';
   `,
 })
 export class RenameDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(RenameDialogComponent); }
+  static readonly dialogId = 'rename';
   readonly dialogTitle = 'Rename Column';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'rename',
+      componentType: 'RenameDialogComponent',
+      family: 'data-preparation',
+      description: 'Rename one column.',
+      operations: ['data.rename'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('oldName', 'column', { required: true, columnType: 'any' }),
+        p('newName', 'string', { required: true }),
+      ],
+      retrievalHints: {
+        keywords: ['rename', 'rename column', 'column name', 'relabel'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   oldName = signal('');

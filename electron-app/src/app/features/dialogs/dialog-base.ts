@@ -10,11 +10,13 @@ import { DialogMetadata } from '../../core/r-codegen/dialog-metadata';
 import { stripMetadata } from '../../core/r-codegen/metadata-parser';
 import { DialogRestoreService } from '../../core/services/dialog-restore.service';
 import { getMetadataStateDiagnostics } from '../../core/ai/dialog-metadata-contract';
+import { buildDialogMetadata } from '../../core/ai/dialog-metadata-builder';
 import { getDialogId } from '../../core/ai/dialog-identity.registry';
 import { CurrentDialogueRegistryService } from '../../core/ai/current-dialogue-registry.service';
 import { buildDialogueAIContract } from '../../core/ai/dialogue-ai-adapters';
 import { validateDialogueAIContract } from '../../core/ai/dialogue-contract-validator';
 import type { AICapability } from '../../core/ai/current-dialogue-contract';
+import type { DialogPromptContract } from '../../core/ai/dialog-catalog';
 
 /**
  * Base class for all statistical dialogs
@@ -59,7 +61,15 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
 
   // Abstract properties
   abstract readonly dialogTitle: string;
-  
+
+  /**
+   * Static catalog descriptor for AI prompt/retrieval. Override in subclasses that participate in the AI catalog.
+   * Return null to opt out. No aggregation or validation in DialogBase.
+   */
+  static getCatalogDescriptor(): DialogPromptContract | null {
+    return null;
+  }
+
   /**
    * Deterministic dialog identity used for preference persistence and metadata.
    * Dialogs can provide static dialogId; otherwise identity is resolved from
@@ -449,19 +459,14 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
 
-    // Get component type from constructor name
-    const componentType = this.constructor.name;
-
-    const metadata: DialogMetadata = {
-      dialogId: this.dialogId,
-      componentType,
+    const metadata = buildDialogMetadata(this.dialogId, state, {
       version: '1.0',
-      state,
       timestamp: new Date().toISOString(),
-    };
-    
-    console.log('[DialogBase] Generated metadata:', metadata);
-    return metadata;
+    });
+    if (metadata) {
+      console.log('[DialogBase] Generated metadata:', metadata);
+    }
+    return metadata ?? null;
   }
 
   /**

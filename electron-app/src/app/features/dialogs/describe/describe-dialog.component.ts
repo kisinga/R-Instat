@@ -19,7 +19,7 @@ import { GraphMode } from './utils/variable-type-analyzer';
 import { GraphPanelComponent } from './panels/graph-panel.component';
 import { FrequencyPanelComponent } from './panels/frequency-panel.component';
 import { CurrentDialogueRegistryService } from '../../../core/ai/current-dialogue-registry.service';
-import { createDefaultDescriptor } from '../../../core/ai/dialogue-ai-adapters';
+import { buildDialogueAIContract } from '../../../core/ai/dialogue-ai-adapters';
 import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-validator';
 
 @Component({
@@ -429,25 +429,22 @@ export class DescribeDialogComponent implements OnInit, OnDestroy {
     
     await this.loadDataframes();
 
-    // Register with AI current-dialogue registry (education-oriented capabilities)
-    const descriptor = createDefaultDescriptor('describe', 'Describe', {
+    // Register with AI current-dialogue registry (single flow: build → validate → register)
+    const contract = buildDialogueAIContract({
+      id: 'describe',
+      name: 'Describe',
       description: 'Describe data with summaries, graphs, and frequency tables',
       capabilities: ['provide-r-code', 'suggest-columns', 'explain-options', 'explain-statistics'],
-    });
-    const contract = {
-      getDescriptor: () => descriptor,
-      getContext: () => ({
-        variables: {
-          dataframe: this.service.dataframe(),
-          outputMode: this.service.outputMode(),
-          graphMode: this.service.graphMode(),
-          analyze: this.service.roles().analyze.map(c => c.name),
-          groupBy: this.service.roles().groupBy?.name,
-          facetBy: this.service.roles().facetBy?.name,
-        },
-        currentRCode: this.service.rCode() || undefined,
+      getVariables: () => ({
+        dataframe: this.service.dataframe(),
+        outputMode: this.service.outputMode(),
+        graphMode: this.service.graphMode(),
+        analyze: this.service.roles().analyze.map(c => c.name),
+        groupBy: this.service.roles().groupBy?.name,
+        facetBy: this.service.roles().facetBy?.name,
       }),
-    };
+      getRCode: () => this.service.rCode() || '',
+    });
     const { valid, warnings } = validateDialogueAIContract(contract);
     if (valid) {
       this.currentDialogueRegistry.register('describe', contract);

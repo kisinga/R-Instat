@@ -6,6 +6,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-boxplot-dialog',
@@ -103,7 +106,29 @@ import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
   `,
 })
 export class BoxplotDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(BoxplotDialogComponent); }
+  static readonly dialogId = 'boxplot';
   readonly dialogTitle = 'Box Plot';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'boxplot',
+      componentType: 'BoxplotDialogComponent',
+      family: 'plotting',
+      description: 'Boxplot comparing numeric variable across groups.',
+      operations: ['describe.comparison.numeric_by_group'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('yVariable', 'column', { required: true, columnType: 'numeric' }),
+        p('xVariable', 'column', { columnType: 'factor' }),
+        p('fillVariable', 'column', { columnType: 'factor' }),
+        p('showPoints', 'boolean'),
+      ],
+      retrievalHints: {
+        keywords: ['boxplot', 'box plot', 'distribution', 'quartile', 'outlier'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   yVariable = signal('');

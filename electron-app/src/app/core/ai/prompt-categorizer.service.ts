@@ -4,7 +4,7 @@
  */
 
 import { Injectable, inject } from '@angular/core';
-import type { DialogFamily } from './dialog-contract-v2';
+import type { DialogFamily } from './dialog-catalog';
 import type { CategorizerResult, PromptCategory } from './pipeline-types';
 import { ruleBasedCategorizer } from './categorizer-rules';
 import { AIConfigService } from '../services/ai-config.service';

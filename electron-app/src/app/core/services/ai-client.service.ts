@@ -21,7 +21,7 @@ import {
 import { CurrentDialogueRegistryService } from '../ai/current-dialogue-registry.service';
 import { PromptScoperService } from '../ai/prompt-scoper.service';
 import { PromptCategorizerService } from '../ai/prompt-categorizer.service';
-import { getSchema } from '../ai/dialog-schema.registry';
+import { getSchema } from '../ai/dialog-catalog-aggregator';
 import {
   filterOperationsForScopedDialogs,
   buildPlanningContractViews,
@@ -535,12 +535,28 @@ Return the strict JSON plan only.`;
     try {
       const jsonContent = this.extractJson(content);
       const parsed = JSON.parse(jsonContent) as Partial<AIPlan>;
-      const steps = Array.isArray(parsed.steps) ? parsed.steps : [];
+      const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+      // Drop dialog steps with missing operationId (e.g. education_question when model returns an informational step)
+      const steps = rawSteps.filter((s) => {
+        if (s.stepType === 'code') return true;
+        const opId = (s as AIDialogPlanStep).operationId;
+        return opId != null && String(opId).trim() !== '';
+      }) as AIPlanStep[];
       const hasClarifications = Array.isArray(parsed.clarificationQuestions) && parsed.clarificationQuestions.length > 0;
       const allowEmptySteps =
         options?.allowEmptySteps === true || (steps.length === 0 && hasClarifications);
       if (!parsed || (!allowEmptySteps && steps.length === 0)) {
         return { success: false, error: 'Invalid response: missing plan steps', rawResponse: content };
+      }
+      // When allowEmptySteps (e.g. education_question), accept plans that have only informational steps
+      // (no operationId). Return success with steps: [] so the UI can show goal, assumptions, and clarification options.
+      if (rawSteps.length > 0 && steps.length === 0 && !allowEmptySteps) {
+        return {
+          success: false,
+          error:
+            "This request couldn't be matched to a specific analysis. For conceptual questions (e.g. 'What does a t-test tell us?') try asking to run a t-test on your data from the menu, or rephrase as a request to perform an analysis.",
+          rawResponse: content,
+        };
       }
 
       return {

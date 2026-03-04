@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildSort } from '../../../core/dialogs/builders/data-manipulation';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 interface SortColumn {
   column: string;
@@ -106,7 +109,26 @@ interface SortColumn {
   `,
 })
 export class SortDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(SortDialogComponent); }
+  static readonly dialogId = 'sort';
   readonly dialogTitle = 'Sort Data';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'sort',
+      componentType: 'SortDialogComponent',
+      family: 'data-preparation',
+      description: 'Sort rows by one or more columns.',
+      operations: ['data.sort'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('sortColumns', 'object[]', { required: true }),
+      ],
+      retrievalHints: {
+        keywords: ['sort', 'order', 'ascending', 'descending', 'order by'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   sortColumns = signal<SortColumn[]>([{ column: '', descending: false }]);

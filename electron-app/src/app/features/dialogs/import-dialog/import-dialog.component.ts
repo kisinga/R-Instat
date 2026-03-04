@@ -4,7 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ImportFilePanelComponent } from './panels/import-file-panel.component';
 import { ImportLibraryPanelComponent } from './panels/import-library-panel.component';
 import { CurrentDialogueRegistryService } from '../../../core/ai/current-dialogue-registry.service';
-import { createDefaultDescriptor } from '../../../core/ai/dialogue-ai-adapters';
+import { buildDialogueAIContract } from '../../../core/ai/dialogue-ai-adapters';
 import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-validator';
 
 type ImportTab = 'file' | 'library';
@@ -120,17 +120,14 @@ export class ImportDialogComponent implements OnInit, OnDestroy {
   isTransitioning = signal(false);
 
   ngOnInit(): void {
-    const descriptor = createDefaultDescriptor('import', 'Import', {
+    const contract = buildDialogueAIContract({
+      id: 'import',
+      name: 'Import',
       description: 'Import data from file or R packages',
       capabilities: ['generate-data', 'provide-r-code'],
+      getVariables: () => ({ activeTab: this.activeTab() }),
+      getRCode: () => '',
     });
-    const contract = {
-      getDescriptor: () => descriptor,
-      getContext: () => ({
-        variables: { activeTab: this.activeTab() },
-        currentRCode: undefined as string | undefined,
-      }),
-    };
     const { valid, warnings } = validateDialogueAIContract(contract);
     if (valid) {
       this.currentDialogueRegistry.register('import', contract);

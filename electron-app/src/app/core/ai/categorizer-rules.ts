@@ -4,7 +4,7 @@
  * Order aligns with CLASSIFICATION_SYSTEM: education before open_dialog for explanation intents.
  */
 
-import type { DialogFamily } from './dialog-contract-v2';
+import type { DialogFamily } from './dialog-catalog';
 import type { CategorizerResult } from './pipeline-types';
 
 const EDUCATION_PROBES = [

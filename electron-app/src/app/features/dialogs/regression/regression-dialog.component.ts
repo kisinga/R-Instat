@@ -5,6 +5,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRegression } from '../../../core/dialogs/builders/statistics';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-regression-dialog',
@@ -110,7 +113,31 @@ import { buildRegression } from '../../../core/dialogs/builders/statistics';
   `,
 })
 export class RegressionDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(RegressionDialogComponent); }
+  static readonly dialogId = 'regression';
   readonly dialogTitle = 'Linear Regression';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'regression',
+      componentType: 'RegressionDialogComponent',
+      family: 'predictive',
+      description: 'Linear regression with one response and predictors.',
+      operations: ['predictive.linear_regression'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('responseVar', 'column', { required: true, columnType: 'numeric' }),
+        p('predictorVars', 'column[]', { required: true, columnType: 'any' }),
+        p('modelName', 'string'),
+        p('showSummary', 'boolean'),
+        p('showAnova', 'boolean'),
+        p('plotDiagnostics', 'boolean'),
+      ],
+      retrievalHints: {
+        keywords: ['regression', 'linear model', 'predictor', 'lm', 'linear'],
+      },
+    };
+  }
 
   responseVar = signal('');
   predictorVars = signal<string[]>([]);
