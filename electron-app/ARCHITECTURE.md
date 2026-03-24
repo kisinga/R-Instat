@@ -142,7 +142,7 @@ flowchart TB
         end
 
         subgraph Codegen["R Code Generation Layer"]
-            RSyntax["RSyntax Class - AST Container - Before/Base/After Code - Assignment Support - Metadata Embedding"]
+            RSyntax["RSyntax Class - Code Builder - Before/Base/After Code - Assignment Support - Metadata Embedding"]
             CoreGen["R Codegen Core - toScript Function - Parameter Formatting - Function/Operator Rendering"]
         end
     end
@@ -197,7 +197,7 @@ flowchart TB
 
 3. **IPC Communication Layer**: Secure bridge between main and renderer processes. Uses contextBridge to expose limited, type-safe APIs.
 
-4. **R Process**: Separate child process running R interpreter. Communicates via JSON over stdio (stdin/stdout). Isolated from main application.
+4. **R Process**: Separate child process running R interpreter. Communicates via JSON over stdio (stdin/stdout). Isolated from main application. Execution uses two-phase `parse()` then `eval()` - syntax errors are distinguished from runtime errors via `errorType` field (`"syntax"` or `"runtime"`) in the response.
 
 **Data Flow Through Layers:**
 
@@ -207,8 +207,8 @@ flowchart TB
 2. Component updates signals (reactive state)
 3. Dialog reads computed `rCode()` signal from CodeManager
 4. CodeManager calls builder function (pure function)
-5. Builder constructs RSyntax AST using composable primitives
-6. RSyntax.toScript() converts AST to R code string
+5. Builder constructs RSyntax using composable code primitives
+6. RSyntax.toScript() converts structured code representation to R code string
 7. CodeManager stores RSyntax in signal (reactive update)
 8. Dialog displays code preview reactively
 9. User clicks Execute → CodeManager.execute(rService)
@@ -244,7 +244,7 @@ flowchart TB
 
 **Key Data Structures:**
 
-- **RSyntax**: Immutable AST container with before/base/after code sections
+- **RSyntax**: Immutable code builder container with before/base/after code sections
 - **RFunction**: Typed representation of R function calls with parameters
 - **RResponse**: JSON structure with `{id, success, data, error}`
 - **DataPreview**: `{columns: string[], rows: any[][], totalRows: number}`
@@ -432,7 +432,7 @@ flowchart TB
 
 #### 4. **Architectural Separation**
 - **Service Layer**: Clear separation between UI, business logic, and R communication
-- **Composable Code Generation**: RSyntax AST enables reusable, testable R code builders
+- **Composable Code Generation**: RSyntax code builder enables reusable, testable R code generation
 - **Reactive State**: Signals provide automatic reactivity without manual subscriptions
 - **Single Source of Truth**: AppStateService centralizes all application state
 - **Dependency Injection**: Angular DI enables testable, mockable components
@@ -452,7 +452,7 @@ flowchart TB
 - **Async by Default**: Non-blocking UI during R execution
 
 #### 7. **Code Generation Quality**
-- **AST-Based**: Structured representation prevents syntax errors
+- **Structured**: Typed code builder representation prevents syntax errors
 - **Type-Safe**: TypeScript ensures correct parameter types
 - **Composable**: Builders can be combined and reused
 - **Metadata Support**: Can embed dialog state in generated code for restoration
@@ -581,7 +581,7 @@ flowchart TB
 | **UI Rendering** | Chromium renderer | GDI+ native rendering |
 | **State Management** | Centralized (AppStateService signals) | Distributed (clsDataBook, dialogs) |
 | **State Synchronization** | Automatic (reactive signals) | Manual (event handlers) |
-| **Code Generation** | AST-based (RSyntax) | String concatenation |
+| **Code Generation** | Structured code builders (RSyntax) | String concatenation |
 | **Code Validation** | Compile-time (TypeScript) | Runtime (R execution) |
 | **Code Composability** | High (composable builders) | Low (copy-paste patterns) |
 | **Platform Support** | Windows, macOS, Linux | Windows only |
@@ -640,18 +640,18 @@ flowchart TB
 ### Code Generation Strategy
 
 **Electron Approach:**
-- **AST-Based**: RSyntax provides structured representation of R code
-- **Type-Safe**: TypeScript ensures correct parameter types at compile time
-- **Composable**: Builders can be combined and reused across dialogs
-- **Validated**: Syntax errors caught during AST construction
-- **Maintainable**: Changes to R patterns propagate automatically
+- **Immutable builders**: Pure functions return new RSyntax objects. No shared mutable state between controls
+- **One-way data flow**: Signals -> builder -> RSyntax -> toScript(). No bidirectional binding, no update cycles
+- **Centralized generation**: One builder function per dialog owns all R code construction
+- **Conditional composition**: Falsy values auto-filtered from parameter lists - no AddParameter/RemoveParameter bookkeeping
+- **Pre-execution validation**: bridge.R separates `parse()` from `eval()`, returning typed errors (`syntax` vs `runtime`)
 
 **VB.net Approach:**
-- **String-Based**: R code built via string concatenation
-- **Runtime Validation**: Syntax errors only discovered when R executes
-- **Copy-Paste**: Similar patterns duplicated across dialogs
-- **Error-Prone**: Easy to introduce syntax errors in string building
-- **Maintainable**: Changes require updating multiple dialog files
+- **Shared mutable objects**: Controls call `SetRCode()` on shared `clsRFunction` instances. Mutation order determines output (source of stale-code bugs)
+- **Bidirectional binding**: Controls read from AND write to R code objects. The `bReset` flag in `SetRCodeForControls()` exists to prevent infinite update loops (source of recursive-update bugs)
+- **Scattered generation**: R code construction split across `InitialiseDialog()`, `SetDefaults()`, `SetRCodeForControls()`, and per-control event handlers (source of partial-update bugs)
+- **Manual parameter lifecycle**: Conditional parameters require explicit `AddParameter`/`RemoveParameterByName` pairs. Missing a `RemoveParameter` call leaks stale parameters into execution
+- **Heuristic validation**: `IsRunnableScript()` counts braces/quotes to guess completeness. Does not detect actual syntax errors
 
 ## Migration Considerations
 

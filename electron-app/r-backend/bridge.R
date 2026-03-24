@@ -202,8 +202,9 @@ capture_output <- function(expr) {
 #' Evaluates R code and returns appropriate result type (plot, dataframe, or text)
 handle_execute <- function(cmd) {
   tryCatch({
-    # Evaluate directly - avoid capture.output with superassignment which has scoping issues
-    result <- eval(parse(text = cmd$code))
+    # Parse first to separate syntax errors from runtime errors
+    parsed <- parse(text = cmd$code)
+    result <- eval(parsed)
     
     # Determine result type and format response
     # Check for ggplot, gg, or ggmatrix (from GGally::ggpairs)
@@ -260,10 +261,13 @@ handle_execute <- function(cmd) {
       )
     }
   }, error = function(e) {
+    # Distinguish parse errors from runtime errors
+    is_parse_error <- grepl("^<text>", e$message) || grepl("unexpected ", e$message)
     list(
       id = cmd$id,
       success = FALSE,
-      error = e$message
+      error = e$message,
+      errorType = if (is_parse_error) "syntax" else "runtime"
     )
   })
 }

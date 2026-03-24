@@ -28,7 +28,7 @@ The Electron app is an **early-stage rewrite** with a strong architectural found
 
 **VB.NET**: Mutable class hierarchy (`clsRFunction`, `clsROperator`, `clsRParameter`). Controls directly mutate shared `RCodeStructure` objects via `SetRCode()`. State leaks between dialogs are possible. String concatenation is common for complex expressions.
 
-**Electron**: Immutable AST with discriminated union types. Pure builder functions return new `RSyntax` objects - no shared mutable state. Conditional composition via falsy filtering is elegant:
+**Electron**: Immutable code builder with discriminated union types. Pure builder functions return new `RSyntax` objects - no shared mutable state. Conditional composition via falsy filtering is elegant:
 
 ```typescript
 // Electron: conditional params just work
