@@ -6,6 +6,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildHistogram } from '../../../core/dialogs/builders/graphs';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-histogram-dialog',
@@ -129,8 +132,31 @@ import { buildHistogram } from '../../../core/dialogs/builders/graphs';
   `,
 })
 export class HistogramDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(HistogramDialogComponent); }
   static dialogId = 'histogram';
   readonly dialogTitle = 'Histogram';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 'histogram',
+      componentType: 'HistogramDialogComponent',
+      family: 'plotting',
+      description: 'Histogram of numeric variable.',
+      operations: ['describe.distribution.numeric'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('variable', 'column', { required: true, columnType: 'numeric' }),
+        p('bins', 'number', { min: 5, max: 100 }),
+        p('fillColor', 'string'),
+        p('facetBy', 'column', { columnType: 'factor' }),
+        p('title', 'string'),
+        p('outputName', 'string'),
+      ],
+      retrievalHints: {
+        keywords: ['histogram', 'distribution', 'numeric', 'bins', 'frequency'],
+      },
+    };
+  }
 
   // Dialog state using signals for reactivity
   variable = signal('');

@@ -1,11 +1,12 @@
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
+import '../../features/dialogs/dialog-host.component';
+import { getDialogContractsForPrompt } from './dialog-identity.registry';
 import { retrieveDialogContractsTopK } from './dialog-context-retriever';
 
 describe('dialog context retriever', () => {
   it('ranks plotting contracts for plotting intent', () => {
     const candidates = retrieveDialogContractsTopK(
       'Create a bar chart of counts by species',
-      DialogContractV2Registry.getPromptContracts(),
+      getDialogContractsForPrompt(),
       {
         activeDataframe: 'df1',
         columnsByDataframe: {

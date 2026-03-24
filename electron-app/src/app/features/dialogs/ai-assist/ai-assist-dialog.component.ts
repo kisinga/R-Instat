@@ -10,18 +10,32 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { AIConfigService, type AIProvider } from '../../../core/services/ai-config.service';
-import { AIClientService, type DataContext } from '../../../core/services/ai-client.service';
+import { AIClientService, type AICallResult, type DataContext } from '../../../core/services/ai-client.service';
 import { IntentResolverService, type ResolveResult, type ResolvedPlanStep } from '../../../core/services/intent-resolver.service';
 import { DialogRestoreService } from '../../../core/services/dialog-restore.service';
 import { RService } from '../../../core/services/r.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AIPlanQueueService } from '../../../core/services/ai-plan-queue.service';
 import { AIEvalService } from '../../../core/services/ai-eval.service';
+import { AiAssistSettingsComponent } from './ai-assist-settings.component';
+import { AiAssistPlanResultComponent } from './ai-assist-plan-result.component';
+import { AiAssistDisambiguationComponent } from './ai-assist-disambiguation.component';
+import { AiAssistErrorCardComponent } from './ai-assist-error-card.component';
+import { AiAssistYouSentComponent } from './ai-assist-you-sent.component';
 
 @Component({
   selector: 'app-ai-assist-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    AiAssistSettingsComponent,
+    AiAssistPlanResultComponent,
+    AiAssistDisambiguationComponent,
+    AiAssistErrorCardComponent,
+    AiAssistYouSentComponent,
+  ],
   template: `
     <div class="dialog-content ai-assist-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -42,183 +56,52 @@ import { AIEvalService } from '../../../core/services/ai-eval.service';
           ></textarea>
         </div>
 
-        <div class="form-group">
-          <details class="collapse collapse-arrow bg-base-200 rounded-lg">
-            <summary class="collapse-title py-2 min-h-0">{{ 'AI_ASSIST.SETTINGS' | translate }}</summary>
-            <div class="collapse-content">
-              <label class="form-label">{{ 'AI_ASSIST.PROVIDER' | translate }}</label>
-              <select
-                class="select select-bordered w-full select-sm"
-                [ngModel]="selectedProvider()"
-                (ngModelChange)="onProviderChange($event)"
-              >
-                <option value="openai">{{ 'AI_ASSIST.PROVIDER_OPENAI' | translate }}</option>
-                <option value="claude">{{ 'AI_ASSIST.PROVIDER_CLAUDE' | translate }}</option>
-              </select>
+        <app-ai-assist-settings
+          [selectedProvider]="selectedProvider()"
+          [apiKeyInput]="apiKeyInput()"
+          [gateSettings]="gateSettings()"
+          [providerApiLink]="providerApiLink()"
+          (providerChange)="onProviderChange($event)"
+          (apiKeyInputChange)="apiKeyInput.set($event)"
+          (saveApiKey)="saveApiKey()"
+          (highThresholdChange)="updateHighThreshold($event)"
+          (lowThresholdChange)="updateLowThreshold($event)"
+          (requireConfirmationChange)="updateRequireConfirmationForInferred($event)"
+        />
 
-              <label class="form-label">{{ 'AI_ASSIST.API_KEY' | translate }}</label>
-              <input
-                type="password"
-                class="input input-bordered w-full input-sm"
-                [placeholder]="(selectedProvider() === 'claude' ? 'AI_ASSIST.API_KEY_PLACEHOLDER_CLAUDE' : 'AI_ASSIST.API_KEY_PLACEHOLDER_OPENAI') | translate"
-                [ngModel]="apiKeyInput()"
-                (ngModelChange)="apiKeyInput.set($event)"
-              />
-              <p class="text-xs text-base-content/60 mt-1">
-                <a [href]="providerApiLink()" target="_blank" rel="noopener" class="link link-primary">
-                  {{ (selectedProvider() === 'claude' ? 'AI_ASSIST.API_KEY_LINK_CLAUDE' : 'AI_ASSIST.API_KEY_LINK_OPENAI') | translate }}
-                </a>
-              </p>
-              <button class="btn btn-sm btn-primary mt-2" (click)="saveApiKey()">
-                {{ 'AI_ASSIST.SAVE_KEY' | translate }}
-              </button>
-
-              <div class="mt-4">
-                <label class="form-label">{{ 'AI_ASSIST.HIGH_THRESHOLD' | translate }}: {{ toPercent(gateSettings().highConfidenceThreshold) }}</label>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1"
-                  step="0.01"
-                  class="range range-primary range-sm"
-                  [ngModel]="gateSettings().highConfidenceThreshold"
-                  (ngModelChange)="updateHighThreshold($event)"
-                />
-              </div>
-
-              <div class="mt-3">
-                <label class="form-label">{{ 'AI_ASSIST.LOW_THRESHOLD' | translate }}: {{ toPercent(gateSettings().lowConfidenceThreshold) }}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.9"
-                  step="0.01"
-                  class="range range-secondary range-sm"
-                  [ngModel]="gateSettings().lowConfidenceThreshold"
-                  (ngModelChange)="updateLowThreshold($event)"
-                />
-              </div>
-
-              <label class="label cursor-pointer justify-start gap-2 mt-2">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-sm checkbox-primary"
-                  [ngModel]="gateSettings().requireConfirmationForInferred"
-                  (ngModelChange)="updateRequireConfirmationForInferred($event)"
-                />
-                <span class="text-sm">{{ 'AI_ASSIST.REQUIRE_CONFIRM_INFERRED' | translate }}</span>
-              </label>
-            </div>
-          </details>
-        </div>
+        @if (lastSentMessage(); as message) {
+          <app-ai-assist-you-sent [message]="message" />
+        }
 
         @if (resolveResult(); as result) {
           @if (result.ok && result.plan) {
-            <div class="alert alert-success mt-4">
-              <div class="w-full">
-                <p class="font-medium">{{ result.plan.goal }}</p>
-                <p class="text-sm opacity-80 mt-1">
-                  {{ 'AI_ASSIST.CONFIDENCE' | translate }}: {{ toPercent(result.plan.overallConfidence) }} ·
-                  {{ 'AI_ASSIST.STEPS' | translate }}: {{ result.plan.steps.length }}
-                </p>
-                <p class="text-xs opacity-80 mt-1">
-                  Mode: <span class="font-medium">{{ result.plan.executionMode }}</span>
-                  · rationale: {{ result.plan.modeReason }}
-                  · mode confidence: {{ toPercent(result.plan.modeConfidence) }}
-                </p>
-                @if (result.plan.assumptions.length) {
-                  <p class="text-xs opacity-80 mt-2">
-                    {{ 'AI_ASSIST.ASSUMPTIONS' | translate }}: {{ result.plan.assumptions.join(' | ') }}
-                  </p>
-                }
-                @if (result.plan.clarificationQuestions.length) {
-                  <div class="mt-2">
-                    <p class="text-xs font-medium">{{ 'AI_ASSIST.QUESTIONS' | translate }}</p>
-                    <ul class="text-xs list-disc list-inside">
-                      @for (q of result.plan.clarificationQuestions; track q) {
-                        <li>{{ q }}</li>
-                      }
-                    </ul>
-                  </div>
-                }
-                @if (result.warnings?.length) {
-                  <div class="alert alert-warning alert-soft mt-2">
-                    <div class="text-xs">
-                      <p class="font-medium mb-1">Auto-corrections / warnings</p>
-                      <ul class="list-disc list-inside">
-                        @for (w of result.warnings!; track w) {
-                          <li>{{ w }}</li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                }
-                <div class="mt-3 overflow-x-auto">
-                  <table class="table table-xs">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Step</th>
-                        <th>{{ 'AI_ASSIST.CONFIDENCE' | translate }}</th>
-                        <th>{{ 'AI_ASSIST.INFERRED' | translate }}</th>
-                        <th>{{ 'AI_ASSIST.CONFIRMED' | translate }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (s of result.plan.steps; track s.step.stepId; let i = $index) {
-                        <tr>
-                          <td>{{ i + 1 }}</td>
-                          <td>{{ stepLabel(s) }}</td>
-                          <td>{{ toPercent(s.step.confidence) }}</td>
-                          <td>{{ s.step.inferredFields.join(', ') || '-' }}</td>
-                          <td>
-                            <input
-                              type="checkbox"
-                              class="checkbox checkbox-xs"
-                              [checked]="isStepConfirmed(s.step.stepId)"
-                              (change)="toggleStepConfirmed(s.step.stepId, $any($event.target).checked)"
-                            />
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-                @if (currentStep()) {
-                  <p class="text-xs opacity-80 mt-2">
-                    {{ 'AI_ASSIST.NEXT_STEP' | translate }}:
-                    @if (currentStep()!.kind === 'dialog') {
-                      {{ currentStep()!.step.dialogId }} · {{ summarizeState(currentStep()!.metadata!.state) }}
-                    } @else {
-                      R code · {{ summarizeCode(currentStep()!.code!.script) }}
-                    }
-                  </p>
-                }
-              </div>
-            </div>
-            <div class="flex gap-2 mt-3">
-              <button class="btn btn-sm btn-primary" (click)="applyCurrentStep()" [disabled]="!canApplyCurrentStep()">
-                {{ 'AI_ASSIST.OPEN_CURRENT_STEP' | translate }}
-              </button>
-              <button class="btn btn-sm btn-outline" (click)="advanceStep()" [disabled]="!hasNextStep()">
-                {{ 'AI_ASSIST.NEXT' | translate }}
-              </button>
-              <button class="btn btn-sm btn-outline" (click)="applyAllConfirmed()" [disabled]="!hasAnyApprovableStep()">
-                {{ 'AI_ASSIST.RUN_ALL_CONFIRMED' | translate }}
-              </button>
-              <button class="btn btn-sm btn-ghost" (click)="clearPlan()">
-                {{ 'AI_ASSIST.CLEAR_PLAN' | translate }}
-              </button>
-            </div>
+            <app-ai-assist-plan-result
+              [result]="result"
+              [responseReceivedAt]="responseReceivedAt()"
+              [currentStep]="currentStep()"
+              [isLoading]="isLoading()"
+              [confirmedStepIds]="confirmedStepIds()"
+              [canApplyCurrentStep]="canApplyCurrentStep()"
+              [hasNextStep]="hasNextStep()"
+              [hasAnyApprovableStep]="hasAnyApprovableStep()"
+              (sendClarificationOption)="sendClarificationOption($event)"
+              (toggleStepConfirmed)="toggleStepConfirmed($event.stepId, $event.checked)"
+              (applyCurrentStep)="applyCurrentStep()"
+              (advanceStep)="advanceStep()"
+              (applyAllConfirmed)="applyAllConfirmed()"
+              (clearPlan)="clearPlan()"
+            />
+          } @else if (result.needsDisambiguation && result.disambiguationSuggestions?.length) {
+            <app-ai-assist-disambiguation
+              [suggestions]="result.disambiguationSuggestions ?? []"
+              [isLoading]="isLoading()"
+              (sendClarification)="sendClarificationOption($event)"
+            />
           } @else if (result.error) {
-            <div class="alert alert-error mt-4">
-              <div>
-                <p class="font-medium">{{ result.error }}</p>
-                @if (rawResponse()) {
-                  <pre class="text-xs mt-2 overflow-x-auto max-h-24">{{ rawResponse() }}</pre>
-                }
-              </div>
-            </div>
+            <app-ai-assist-error-card
+              [error]="result.error"
+              [rawResponse]="rawResponse()"
+            />
           }
         }
 
@@ -245,9 +128,7 @@ import { AIEvalService } from '../../../core/services/ai-eval.service';
       </div>
     </div>
   `,
-  styles: [`
-    .ai-assist-dialog { width: 520px; max-width: 90vw; }
-  `],
+  styles: [`.ai-assist-dialog { width: 520px; max-width: 90vw; }`],
 })
 export class AIAssistDialogComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
@@ -266,6 +147,10 @@ export class AIAssistDialogComponent implements OnInit {
   selectedProvider = signal<AIProvider>('openai');
   isLoading = signal(false);
   resolveResult = signal<ResolveResult | null>(null);
+  /** Last user message sent (typed or clicked clarification) so the UI shows conversation progress */
+  lastSentMessage = signal<string | null>(null);
+  /** When the current result was received (so user sees that a new response arrived) */
+  responseReceivedAt = signal<number | null>(null);
   errorMessage = signal('');
   rawResponse = signal<string | undefined>(undefined);
   confirmedStepIds = signal<string[]>([]);
@@ -318,6 +203,15 @@ export class AIAssistDialogComponent implements OnInit {
     this.clearCurrentRunState();
   }
 
+  /**
+   * Send a clarification option as the next user message to continue the conversation.
+   */
+  async sendClarificationOption(optionText: string): Promise<void> {
+    this.userInput.set(optionText);
+    await this.send();
+    this.userInput.set('');
+  }
+
   private async buildDataContext(): Promise<DataContext> {
     const dataframes = this.rService.dataframes();
     const active = this.rService.activeDataframe();
@@ -335,36 +229,72 @@ export class AIAssistDialogComponent implements OnInit {
     return { dataframes, activeDataframe: df, columnsByDataframe };
   }
 
+  /** Reset all UI and plan state before sending a new message. */
+  private resetStateForSend(): void {
+    this.planQueue.clear();
+    this.resolveResult.set(null);
+    this.errorMessage.set('');
+    this.rawResponse.set(undefined);
+    this.confirmedStepIds.set([]);
+  }
+
+  private warnIfPrivacyRedacted(result: AICallResult): void {
+    const count = result.privacyReport?.redactedPatterns?.length ?? 0;
+    if (count === 0) return;
+    this.toastService.warning(
+      `Sensitive patterns were redacted before sending to AI: ${result.privacyReport!.redactedPatterns.join(', ')}`
+    );
+  }
+
+  private handlePlanSuccess(result: AICallResult, dataContext: DataContext): void {
+    const resolved = this.intentResolver.resolve(result, dataContext);
+    if (resolved.ok && resolved.plan) {
+      this.planQueue.setPlan(resolved.plan);
+      this.confirmedStepIds.set([]);
+      this.aiEval.recordSuccess(result.plan!, resolved.warnings?.length ?? 0);
+    } else {
+      this.aiEval.recordFailure('resolver_validation_failed');
+    }
+    this.resolveResult.set(null);
+    this.responseReceivedAt.set(Date.now());
+    queueMicrotask(() => this.resolveResult.set(resolved));
+  }
+
+  private handleDisambiguation(result: AICallResult): void {
+    this.resolveResult.set({
+      ok: false,
+      needsDisambiguation: true,
+      disambiguationSuggestions: result.disambiguationSuggestions!,
+    });
+    this.responseReceivedAt.set(Date.now());
+  }
+
+  private handleProviderOrParseFailure(result: AICallResult): void {
+    this.aiEval.recordFailure('provider_or_parse_failure');
+    this.resolveResult.set({ ok: false, error: result.error });
+    this.rawResponse.set(result.rawResponse);
+  }
+
   async send(): Promise<void> {
     const input = this.userInput().trim();
     if (!input) return;
 
-    this.clearCurrentRunState();
+    this.lastSentMessage.set(input);
+    this.resetStateForSend();
     this.isLoading.set(true);
 
     try {
       const dataContext = await this.buildDataContext();
       const result = await this.aiClient.call(input, dataContext);
-      if ((result.privacyReport?.redactedPatterns.length ?? 0) > 0) {
-        this.toastService.warning(
-          `Sensitive patterns were redacted before sending to AI: ${result.privacyReport!.redactedPatterns.join(', ')}`
-        );
-      }
+
+      this.warnIfPrivacyRedacted(result);
 
       if (result.success && result.plan) {
-        const resolved = this.intentResolver.resolve(result, dataContext);
-        if (resolved.ok && resolved.plan) {
-          this.planQueue.setPlan(resolved.plan);
-          this.confirmedStepIds.set([]);
-          this.aiEval.recordSuccess(result.plan, resolved.warnings?.length ?? 0);
-        } else {
-          this.aiEval.recordFailure('resolver_validation_failed');
-        }
-        this.resolveResult.set(resolved);
+        this.handlePlanSuccess(result, dataContext);
+      } else if (result.needsDisambiguation && (result.disambiguationSuggestions?.length ?? 0) > 0) {
+        this.handleDisambiguation(result);
       } else {
-        this.aiEval.recordFailure('provider_or_parse_failure');
-        this.resolveResult.set({ ok: false, error: result.error });
-        this.rawResponse.set(result.rawResponse);
+        this.handleProviderOrParseFailure(result);
       }
     } catch (err) {
       this.aiEval.recordFailure('runtime_exception');
@@ -374,10 +304,11 @@ export class AIAssistDialogComponent implements OnInit {
     }
   }
 
-  async applyCurrentStep(): Promise<void> {
-    const step = this.currentStep();
-    if (!step) return;
-    if (!this.canApplyStep(step)) return;
+  /**
+   * Advance the queue and run the given step (open dialog or execute code).
+   * Caller must ensure the step is applicable (canApplyStep).
+   */
+  private async executeStep(step: ResolvedPlanStep): Promise<void> {
     this.planQueue.advance();
     if (step.kind === 'dialog' && step.metadata) {
       this.openDialog(step);
@@ -386,6 +317,12 @@ export class AIAssistDialogComponent implements OnInit {
     if (step.kind === 'code' && step.code) {
       await this.executeCodeStep(step);
     }
+  }
+
+  async applyCurrentStep(): Promise<void> {
+    const step = this.currentStep();
+    if (!step || !this.canApplyStep(step)) return;
+    await this.executeStep(step);
   }
 
   async applyAllConfirmed(): Promise<void> {
@@ -396,14 +333,7 @@ export class AIAssistDialogComponent implements OnInit {
     this.planQueue.setIndex(idx);
     const step = this.currentStep();
     if (!step) return;
-    this.planQueue.advance();
-    if (step.kind === 'dialog' && step.metadata) {
-      this.openDialog(step);
-      return;
-    }
-    if (step.kind === 'code' && step.code) {
-      await this.executeCodeStep(step);
-    }
+    await this.executeStep(step);
   }
 
   openDialog(step: ResolvedPlanStep): void {
@@ -447,6 +377,8 @@ export class AIAssistDialogComponent implements OnInit {
   private clearCurrentRunState(): void {
     this.planQueue.clear();
     this.resolveResult.set(null);
+    this.lastSentMessage.set(null);
+    this.responseReceivedAt.set(null);
     this.errorMessage.set('');
     this.rawResponse.set(undefined);
     this.confirmedStepIds.set([]);
@@ -520,31 +452,5 @@ export class AIAssistDialogComponent implements OnInit {
 
   updateRequireConfirmationForInferred(value: boolean): void {
     this.aiConfig.updateGateSettings({ requireConfirmationForInferred: !!value });
-  }
-
-  toPercent(value: number): string {
-    if (!Number.isFinite(value)) return '0%';
-    return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
-  }
-
-  summarizeState(state: Record<string, unknown>): string {
-    const parts = Object.entries(state)
-      .filter(([, v]) => v !== undefined && v !== null && v !== '')
-      .map(([k, v]) => {
-        if (Array.isArray(v)) return `${k}: [${v.join(', ')}]`;
-        return `${k}: ${v}`;
-      });
-    return parts.slice(0, 6).join('; ') + (parts.length > 6 ? '...' : '');
-  }
-
-  summarizeCode(script: string): string {
-    return script.replace(/\s+/g, ' ').trim().slice(0, 160);
-  }
-
-  stepLabel(step: ResolvedPlanStep): string {
-    if (step.kind === 'dialog' && step.metadata) {
-      return step.metadata.dialogId;
-    }
-    return 'R code step';
   }
 }

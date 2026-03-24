@@ -77,7 +77,14 @@
     "LOW_THRESHOLD": "Seuil de faible confiance",
     "REQUIRE_CONFIRM_INFERRED": "Exiger confirmation pour les champs inférés",
     "CONFIRMED": "Confirmé",
-    "RUN_ALL_CONFIRMED": "Exécuter la première étape confirmée"
+    "RUN_ALL_CONFIRMED": "Exécuter la première étape confirmée",
+    "MODE_AND_ASSUMPTIONS": "Mode et hypothèses",
+    "CLICK_TO_SEND": "Cliquez sur une option pour l'envoyer et poursuivre la conversation.",
+    "YOU_SENT": "Vous avez envoyé",
+    "NEW_RESPONSE": "Nouvelle réponse",
+    "INFORMATIONAL_RESPONSE": "Réponse informative — aucune étape à exécuter.",
+    "REQUEST_UNCLEAR": "Votre demande n'est pas claire.",
+    "CHOOSE_DIRECTION": "Que souhaitez-vous faire ? Choisissez une option ci-dessous ou décrivez plus en détail dans la zone de texte."
   },
   "STATUS": {
     "PROCESSING": "Traitement...",

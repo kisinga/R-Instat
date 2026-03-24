@@ -9,6 +9,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../../dialog-base';
+import { AIDialogClassRegistry } from '../../../../core/ai/dialog-class-registry';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
 import { ColumnInfo } from '../../../../core/models/r.model';
 import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
@@ -92,6 +93,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
   `]
 })
 export class SeasonalSummaryDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(SeasonalSummaryDialogComponent); }
   readonly dialogTitle = 'Seasonal Summary';
 
   private readonly climaticService = inject(ClimaticDataService);

@@ -1,16 +1,15 @@
 /**
- * AI Client Service
+ * AI Client Service (Layer 3: Plan / Execute)
  *
- * Calls selectable AI providers with strict multi-step plan output.
+ * Orchestrates the single AI path: Categorize → Scope → Plan. Uses PromptScoperService
+ * for contract set and current-dialogue context; no direct contract selection.
+ * See core/ai/docs/ai-integration.md for flow and code areas.
  */
 
 import { Injectable, inject } from '@angular/core';
 import { AIConfigService } from './ai-config.service';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
-import { buildCapabilityInventory, TEMPLATE_CODEGEN_DIALOG_IDS } from '../ai/capability-inventory';
-import { getDialogContractsForPrompt } from '../ai/dialog-identity.registry';
-import { DialogContractV2Registry } from '../ai/dialog-contract-v2.registry';
-import { retrieveDialogContractsTopK } from '../ai/dialog-context-retriever';
+import { compileStepToR as compileStepToRFromAdapter } from '../ai/step-to-r';
 import {
   aliasDataContext,
   applyAliasesToInput,
@@ -19,6 +18,21 @@ import {
   deAliasScript,
   redactUserInput,
 } from '../ai/pii-guard';
+import { CurrentDialogueRegistryService } from '../ai/current-dialogue-registry.service';
+import { PromptScoperService } from '../ai/prompt-scoper.service';
+import { PromptCategorizerService } from '../ai/prompt-categorizer.service';
+import { getSchema } from '../ai/dialog-catalog-aggregator';
+import {
+  filterOperationsForScopedDialogs,
+  buildPlanningContractViews,
+} from '../ai/planner-context';
+import type { DialogueAIContext } from '../ai/current-dialogue-contract';
+import type { PromptCategory } from '../ai/pipeline-types';
+
+export interface DisambiguationSuggestion {
+  text: string;
+  category: PromptCategory;
+}
 
 export interface DataContext {
   dataframes: string[];
@@ -73,6 +87,10 @@ export interface AICallResult {
   plan?: AIPlan;
   error?: string;
   rawResponse?: string;
+  /** When true, intent was unclear; UI should show disambiguationSuggestions instead of calling the planner. */
+  needsDisambiguation?: boolean;
+  /** Category-directed suggestions for the user to choose; only set when needsDisambiguation is true. */
+  disambiguationSuggestions?: DisambiguationSuggestion[];
   retrievalReport?: {
     enabled: boolean;
     topK: number;
@@ -97,9 +115,49 @@ interface ModeDecision {
   confidence: number;
 }
 
+/** Fixed suggestion text per category so that re-categorization yields that category. */
+const DISAMBIGUATION_SUGGESTION_TEXTS: Record<Exclude<PromptCategory, 'unclear'>, string> = {
+  open_dialog:
+    'I want to open a dialog (e.g. create a plot, run a test, filter or transform data).',
+  refine_current_dialog: 'I want to change or extend the current dialog.',
+  run_code: 'I want to run or write R code / a script.',
+  education_question: 'I have a question about statistics or how something works.',
+  data_quality_recipe: 'I want a data quality or missing-data workflow.',
+};
+
+function buildDisambiguationSuggestions(hasCurrentDialog: boolean): DisambiguationSuggestion[] {
+  const suggestions: DisambiguationSuggestion[] = [];
+  suggestions.push({
+    text: DISAMBIGUATION_SUGGESTION_TEXTS.open_dialog,
+    category: 'open_dialog',
+  });
+  if (hasCurrentDialog) {
+    suggestions.push({
+      text: DISAMBIGUATION_SUGGESTION_TEXTS.refine_current_dialog,
+      category: 'refine_current_dialog',
+    });
+  }
+  suggestions.push(
+    { text: DISAMBIGUATION_SUGGESTION_TEXTS.run_code, category: 'run_code' },
+    { text: DISAMBIGUATION_SUGGESTION_TEXTS.education_question, category: 'education_question' },
+    { text: DISAMBIGUATION_SUGGESTION_TEXTS.data_quality_recipe, category: 'data_quality_recipe' }
+  );
+  return suggestions;
+}
+
+/** True if operationId is a real registry id; false for null, undefined, empty, or placeholders like "N/A". */
+function isValidOperationId(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  const s = String(value).trim().toLowerCase();
+  return s !== '' && !['n/a', 'none', 'null'].includes(s);
+}
+
 @Injectable({ providedIn: 'root' })
 export class AIClientService {
   private readonly aiConfig = inject(AIConfigService);
+  private readonly currentDialogueRegistry = inject(CurrentDialogueRegistryService);
+  private readonly scoper = inject(PromptScoperService);
+  private readonly categorizer = inject(PromptCategorizerService);
 
   private static readonly SYSTEM_PROMPT = `You are an orchestration planner for an R-based statistics app.
 Return STRICT JSON only with this shape:
@@ -129,9 +187,11 @@ Return STRICT JSON only with this shape:
 Rules:
 - Use only provided operationId and dialogId values.
 - Use exact dataframe and column names from data context.
+- For each dialogId, use ONLY the param names listed in the "Dialog param names reference" (state keys must match exactly).
 - Respect parameter types/required/conditions from schemas.
 - Set dependsOnStepId when a step requires output/preparation from a previous step.
 - If uncertain, set requiresConfirmation=true and add clarificationQuestions.
+- Clarification options (clarificationQuestions): Each item is a **clickable option**; when the user clicks it, that **exact string is sent as the next user message**. So each item MUST be a **short statement of intent** (e.g. "I want to understand one-sample t-tests", "Use column age for the grouping variable"), NOT a question (e.g. do not use "Are you interested in X or Y?"). Otherwise the next turn will be classified as unclear. Keep the same intent category: do NOT use clarification to let the user choose between different categories (e.g. "understand vs perform"). Category is already fixed; only narrow **within** that category (e.g. for education_question: which concept or type to explain; for open_dialog: which column or which dialog param). Prefer few options (2–4) that are clear intent phrases. For clear education intents (e.g. "explain what a t-test tells us"), prefer answering directly with an informational goal; if you must clarify, use only within-education options (e.g. "Explain one-sample t-test", "Explain two-sample t-test", "Explain paired t-test").
 - Multi-step plans are allowed when prerequisite transformation is needed.
 - For data quality/effectiveness requests, prefer a composed workflow: summary by group, missing-record filter, calculate quality score, then sort/rank.
 - Keep steps minimal and executable.`;
@@ -142,7 +202,50 @@ Rules:
     const aliasedInput = applyAliasesToInput(redacted.value, maps);
     const privacyReport = buildPrivacyReport(redacted.patterns, maps);
 
-    const modeDecision = this.routeExecutionMode(userInput);
+    // Layer 1: Categorize (LLM-based; falls back to rules if unavailable)
+    const { category, family } = await this.categorizer.categorize(
+      aliasedInput,
+      this.currentDialogueRegistry.hasCurrent()
+    );
+
+    if (category === 'unclear') {
+      return {
+        success: false,
+        needsDisambiguation: true,
+        disambiguationSuggestions: buildDisambiguationSuggestions(
+          this.currentDialogueRegistry.hasCurrent()
+        ),
+        privacyReport,
+      };
+    }
+
+    // Layer 2: Scope
+    const settings = this.aiConfig.retrievalSettings();
+    const retrievalContext = {
+      activeDataframe: aliasedContext.activeDataframe,
+      columnsByDataframe: aliasedContext.columnsByDataframe,
+    };
+    const scoped = this.scoper.scope(
+      category,
+      family,
+      aliasedInput,
+      retrievalContext,
+      settings.topKContracts
+    );
+
+    const currentDialogId = this.currentDialogueRegistry.getCurrentDescriptor()?.id ?? 'none';
+    const scopedDialogIds = scoped.contracts.map((c) => c.dialogId);
+    if (typeof console !== 'undefined' && console.info) {
+      console.info(
+        `[AI] category=${category}, mode=${scoped.executionMode}, contracts=[${scopedDialogIds.join(', ')}], currentDialog=${currentDialogId}`
+      );
+    }
+
+    const modeDecision: ModeDecision = {
+      mode: scoped.executionMode,
+      reason: `Pipeline category: ${category}`,
+      confidence: 0.85,
+    };
 
     if (modeDecision.mode === 'component_codegen') {
       const recipePlan = this.tryBuildDataQualityRecipePlan(userInput, dataContext);
@@ -158,16 +261,32 @@ Rules:
       return { success: false, error: `No API key. Add your ${label} API key in Settings.` };
     }
 
-    const retrievalSelection = this.selectContractsForPrompt(aliasedInput, aliasedContext);
-    const contractsJson = JSON.stringify(retrievalSelection.contracts);
-    const operationsJson = JSON.stringify(OPERATION_REGISTRY);
+    const retrievalReport = {
+      enabled: true,
+      topK: settings.topKContracts,
+      selectedDialogIds: scoped.contracts.map((c) => c.dialogId),
+      explainability: [],
+    };
+    const scopedOperations = filterOperationsForScopedDialogs(
+      OPERATION_REGISTRY,
+      scopedDialogIds
+    );
+    const compactContracts = buildPlanningContractViews(
+      scoped.contracts,
+      getSchema
+    );
+    const contractsJson = JSON.stringify(compactContracts);
+    const operationsJson = JSON.stringify(scopedOperations);
 
     const userMessage = this.buildUserMessage(
       aliasedInput,
       aliasedContext,
       operationsJson,
       contractsJson,
-      modeDecision.mode
+      modeDecision.mode,
+      scoped.currentDialogContext,
+      scopedDialogIds,
+      category
     );
 
     try {
@@ -180,7 +299,7 @@ Rules:
             modeDecision,
             deAliasScript(script, maps)
           ),
-          retrievalReport: retrievalSelection.report,
+          retrievalReport,
           privacyReport,
         };
       }
@@ -189,7 +308,9 @@ Rules:
         ? await this.callClaude(apiKey, userMessage)
         : await this.callOpenAI(apiKey, userMessage);
 
-      const parsed = this.parseDialogPlanContent(content, userInput, modeDecision);
+      const parsed = this.parseDialogPlanContent(content, userInput, modeDecision, {
+        allowEmptySteps: category === 'education_question',
+      });
       if (!parsed.success || !parsed.plan) {
         return { ...parsed, privacyReport };
       }
@@ -201,12 +322,12 @@ Rules:
         return {
           success: true,
           plan: structuredPlan,
-          retrievalReport: retrievalSelection.report,
+          retrievalReport,
           privacyReport,
         };
       }
 
-      return { ...parsed, plan: normalizedPlan, retrievalReport: retrievalSelection.report, privacyReport };
+      return { ...parsed, plan: normalizedPlan, retrievalReport, privacyReport };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const lower = message.toLowerCase();
@@ -241,9 +362,21 @@ Rules:
     dataContext: DataContext,
     operationsJson: string,
     contractsJson: string,
-    mode: ExecutionMode
+    mode: ExecutionMode,
+    currentDialogContext?: DialogueAIContext | null,
+    scopedDialogIds: string[] = [],
+    category?: PromptCategory
   ): string {
     const inferenceHints = this.buildDataInferenceHints(dataContext);
+    const paramReference = this.buildDialogParamReference(scopedDialogIds);
+    const currentStateBlock =
+      currentDialogContext != null
+        ? `\nCurrent dialog state (use this to refine, not invent):\n${JSON.stringify(currentDialogContext)}\n\n`
+        : '';
+    const categoryBlock =
+      category != null && category !== 'unclear'
+        ? `\nCurrent intent category: ${category}. Do not offer clarifications that switch category. Any clarificationQuestions must stay within this category and each item must be a short intent statement (what the user is choosing), not a question—that text is sent as the next message.\n\n`
+        : '';
     return `Data context:
 - dataframes: ${JSON.stringify(dataContext.dataframes)}
 - activeDataframe: ${dataContext.activeDataframe ?? 'null'}
@@ -253,7 +386,9 @@ Rules:
 Operation registry: ${operationsJson}
 Dialog contracts: ${contractsJson}
 
-User request: ${userInput}
+Dialog param names reference (use ONLY these keys in state for each dialogId; no other keys allowed):
+${paramReference}
+${currentStateBlock}${categoryBlock}User request: ${userInput}
 Target execution mode: ${mode}
 
 Privacy note:
@@ -261,6 +396,23 @@ Privacy note:
 - Use only identifiers visible in this prompt.
 
 Return the strict JSON plan only.`;
+  }
+
+  /**
+   * Build a compact reference of dialogId -> param names so the model uses exact schema keys.
+   * Only includes dialogs in scope to keep prompt size bounded by topK.
+   */
+  private buildDialogParamReference(dialogIds: string[]): string {
+    if (dialogIds.length === 0) {
+      return '(no dialogs in scope)';
+    }
+    return dialogIds
+      .map((dialogId) => {
+        const schema = getSchema(dialogId);
+        return schema ? `${dialogId}: ${schema.params.map((p) => p.name).join(', ')}` : null;
+      })
+      .filter((line): line is string => line !== null)
+      .join('\n');
   }
 
   private buildDataInferenceHints(dataContext: DataContext): string {
@@ -384,13 +536,34 @@ Return the strict JSON plan only.`;
   private parseDialogPlanContent(
     content: string,
     userInput: string,
-    modeDecision: ModeDecision
+    modeDecision: ModeDecision,
+    options?: { allowEmptySteps?: boolean }
   ): AICallResult {
     try {
       const jsonContent = this.extractJson(content);
       const parsed = JSON.parse(jsonContent) as Partial<AIPlan>;
-      if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+      const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+      // Drop dialog steps with missing or placeholder operationId (e.g. education_question when model returns N/A or null)
+      const steps = rawSteps.filter((s) => {
+        if (s.stepType === 'code') return true;
+        const opId = (s as AIDialogPlanStep).operationId;
+        return isValidOperationId(opId);
+      }) as AIPlanStep[];
+      const hasClarifications = Array.isArray(parsed.clarificationQuestions) && parsed.clarificationQuestions.length > 0;
+      const allowEmptySteps =
+        options?.allowEmptySteps === true || (steps.length === 0 && hasClarifications);
+      if (!parsed || (!allowEmptySteps && steps.length === 0)) {
         return { success: false, error: 'Invalid response: missing plan steps', rawResponse: content };
+      }
+      // When allowEmptySteps (e.g. education_question), accept plans that have only informational steps
+      // (no operationId). Return success with steps: [] so the UI can show goal, assumptions, and clarification options.
+      if (rawSteps.length > 0 && steps.length === 0 && !allowEmptySteps) {
+        return {
+          success: false,
+          error:
+            "This request couldn't be matched to a specific analysis. For conceptual questions (e.g. 'What does a t-test tell us?') try asking to run a t-test on your data from the menu, or rephrase as a request to perform an analysis.",
+          rawResponse: content,
+        };
       }
 
       return {
@@ -408,7 +581,7 @@ Return the strict JSON plan only.`;
               : modeDecision.reason,
           modeConfidence:
             typeof parsed.modeConfidence === 'number' ? parsed.modeConfidence : modeDecision.confidence,
-          steps: parsed.steps as AIDialogPlanStep[],
+          steps: steps as AIDialogPlanStep[],
         },
       };
     } catch (err) {
@@ -418,43 +591,6 @@ Return the strict JSON plan only.`;
         rawResponse: content,
       };
     }
-  }
-
-  private routeExecutionMode(userInput: string): ModeDecision {
-    const lower = userInput.toLowerCase();
-    const directSignals = ['r code', 'r-code', 'write code', 'script', 'custom model', 'glm', 'survival'];
-    if (directSignals.some((s) => lower.includes(s))) {
-      return {
-        mode: 'direct_r',
-        reason: 'User requested script-level or advanced model behavior.',
-        confidence: 0.9,
-      };
-    }
-
-    const structuredSignals = ['merge', 'join', 'stack', 'unstack', 'line plot', 'dot plot'];
-    if (structuredSignals.some((s) => lower.includes(s))) {
-      return {
-        mode: 'structured_codegen',
-        reason: 'Intent includes operations not fully covered by dialog schema but suitable for templates.',
-        confidence: 0.78,
-      };
-    }
-
-    const inventory = buildCapabilityInventory();
-    const coverage = inventory.summary.coveredDialog / Math.max(1, inventory.summary.totalHostDialogs);
-    if (coverage >= 0.5) {
-      return {
-        mode: 'component_codegen',
-        reason: 'Dialog schema coverage and strict validation are preferred for accuracy.',
-        confidence: 0.82,
-      };
-    }
-
-    return {
-      mode: 'structured_codegen',
-      reason: 'Schema coverage is partial; use typed code templates for better completeness.',
-      confidence: 0.7,
-    };
   }
 
   private buildStructuredCodePlan(dialogPlan: AIPlan, modeDecision: ModeDecision): AIPlan {
@@ -503,73 +639,7 @@ Return the strict JSON plan only.`;
   }
 
   private compileStepToR(step: AIDialogPlanStep): string | null {
-    if (!TEMPLATE_CODEGEN_DIALOG_IDS.has(step.dialogId)) {
-      return null;
-    }
-    const state = step.state ?? {};
-    switch (step.dialogId) {
-      case 'sort': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const cols = Array.isArray(state['sortColumns']) ? state['sortColumns'] as Array<Record<string, unknown>> : [];
-        const args = cols
-          .map((c) => (c['descending'] ? `dplyr::desc(${String(c['column'])})` : String(c['column'])))
-          .filter(Boolean)
-          .join(', ');
-        return `${dataframe} <- ${dataframe} |> dplyr::arrange(${args})`;
-      }
-      case 'rename': {
-        const dataframe = String(state['dataframe'] ?? '');
-        return `${dataframe} <- ${dataframe} |> dplyr::rename(${String(state['newName'])} = ${String(state['oldName'])})`;
-      }
-      case 'calculate': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const newCol = String(state['newColumnName'] ?? 'new_col');
-        const formula = String(state['formula'] ?? 'NA');
-        return `${dataframe} <- ${dataframe} |> dplyr::mutate(${newCol} = ${formula})`;
-      }
-      case 'correlation': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const vars = Array.isArray(state['selectedVars']) ? (state['selectedVars'] as string[]) : [];
-        const method = String(state['method'] ?? 'pearson');
-        return `cor(${dataframe} |> dplyr::select(${vars.join(', ')}), use = "pairwise.complete.obs", method = "${method}")`;
-      }
-      case 'regression': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const y = String(state['responseVar'] ?? '');
-        const xs = Array.isArray(state['predictorVars']) ? (state['predictorVars'] as string[]) : [];
-        return `stats::lm(${y} ~ ${xs.join(' + ')}, data = ${dataframe})`;
-      }
-      case 't-test': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const testType = String(state['testType'] ?? 'one');
-        if (testType === 'two') {
-          return `stats::t.test(${String(state['variable1'])} ~ ${String(state['groupVar'])}, data = ${dataframe})`;
-        }
-        if (testType === 'paired') {
-          return `stats::t.test(${dataframe}$${String(state['variable1'])}, ${dataframe}$${String(state['variable2'])}, paired = TRUE)`;
-        }
-        return `stats::t.test(${dataframe}$${String(state['variable1'])}, mu = ${String(state['mu'] ?? 0)})`;
-      }
-      case 'histogram': {
-        const dataframe = String(state['dataframe'] ?? '');
-        const x = String(state['variable'] ?? '');
-        return `ggplot2::ggplot(${dataframe}, ggplot2::aes(x = ${x})) + ggplot2::geom_histogram()`;
-      }
-      case 'boxplot': {
-        const dataframe = String(state['dataframe'] ?? '');
-        return `ggplot2::ggplot(${dataframe}, ggplot2::aes(x = ${String(state['xVariable'] ?? '1')}, y = ${String(state['yVariable'] ?? '')})) + ggplot2::geom_boxplot()`;
-      }
-      case 'scatter': {
-        const dataframe = String(state['dataframe'] ?? '');
-        return `ggplot2::ggplot(${dataframe}, ggplot2::aes(x = ${String(state['xVariable'] ?? '')}, y = ${String(state['yVariable'] ?? '')})) + ggplot2::geom_point()`;
-      }
-      case 'bar-chart': {
-        const dataframe = String(state['dataframe'] ?? '');
-        return `ggplot2::ggplot(${dataframe}, ggplot2::aes(x = ${String(state['xVariable'] ?? '')})) + ggplot2::geom_bar()`;
-      }
-      default:
-        return null;
-    }
+    return compileStepToRFromAdapter(step.dialogId, step.state ?? {});
   }
 
   private async generateDirectRScript(
@@ -793,53 +863,5 @@ Request: ${userInput}`;
       return trimmed.slice(first, last + 1);
     }
     return trimmed;
-  }
-
-  private selectContractsForPrompt(userInput: string, dataContext: DataContext): {
-    contracts: ReturnType<typeof getDialogContractsForPrompt>;
-    report: AICallResult['retrievalReport'];
-  } {
-    const settings = this.aiConfig.retrievalSettings();
-    const legacyContracts = getDialogContractsForPrompt();
-    if (!settings.useDialogContractRetrieval || !this.isPlottingIntent(userInput)) {
-      return {
-        contracts: legacyContracts,
-        report: {
-          enabled: false,
-          topK: settings.topKContracts,
-          selectedDialogIds: legacyContracts.map((x) => x.dialogId),
-          explainability: [],
-        },
-      };
-    }
-
-    const candidates = retrieveDialogContractsTopK(
-      userInput,
-      DialogContractV2Registry.getPromptContracts(),
-      dataContext,
-      settings.topKContracts
-    );
-    const selectedIds = new Set(candidates.map((x) => x.dialogId));
-    const selectedContracts = legacyContracts.filter((contract) => selectedIds.has(contract.dialogId));
-
-    return {
-      contracts: selectedContracts.length > 0 ? selectedContracts : legacyContracts,
-      report: {
-        enabled: true,
-        topK: settings.topKContracts,
-        selectedDialogIds: selectedContracts.map((x) => x.dialogId),
-        explainability: candidates.map((x) => ({
-          dialogId: x.dialogId,
-          score: x.score,
-          reasons: x.reasons,
-        })),
-      },
-    };
-  }
-
-  private isPlottingIntent(input: string): boolean {
-    const lower = input.toLowerCase();
-    const tokens = ['plot', 'graph', 'chart', 'histogram', 'bar chart', 'distribution', 'scatter', 'boxplot'];
-    return tokens.some((token) => lower.includes(token));
   }
 }

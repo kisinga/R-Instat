@@ -1,18 +1,35 @@
-import type { DialogPromptContractV2 } from './dialog-contract-v2';
+import type { DialogPromptContract, DialogFamily } from './dialog-catalog';
 
 export interface RetrievalDataContext {
   activeDataframe: string | null;
   columnsByDataframe: Record<string, Array<{ name: string; type: string }>>;
 }
 
-export interface RetrievedDialogCandidate extends DialogPromptContractV2 {
+export interface RetrievedDialogCandidate extends DialogPromptContract {
   score: number;
   reasons: string[];
 }
 
+/**
+ * Run retrieval over contracts, optionally restricted to a dialog family.
+ * When family is set, only contracts with contract.family === family are scored.
+ */
 export function retrieveDialogContractsTopK(
   userInput: string,
-  contracts: DialogPromptContractV2[],
+  contracts: DialogPromptContract[],
+  dataContext: RetrievalDataContext,
+  topK: number,
+  family?: DialogFamily
+): RetrievedDialogCandidate[] {
+  const subset = family
+    ? contracts.filter((c) => c.family === family)
+    : contracts;
+  return retrieveDialogContractsTopKInternal(userInput, subset, dataContext, topK);
+}
+
+function retrieveDialogContractsTopKInternal(
+  userInput: string,
+  contracts: DialogPromptContract[],
   dataContext: RetrievalDataContext,
   topK: number
 ): RetrievedDialogCandidate[] {

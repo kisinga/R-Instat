@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 import { rSyntax } from '../../../core/r-codegen';
 
 @Component({
@@ -144,6 +145,7 @@ import { rSyntax } from '../../../core/r-codegen';
   `]
 })
 export class StackDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(StackDialogComponent); }
   static readonly dialogId = 'stack';
   readonly dialogTitle = 'Stack';
 

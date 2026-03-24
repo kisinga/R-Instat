@@ -5,7 +5,8 @@
  * (primary/derived statistical intent), independent of specific dialogs.
  */
 
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
+import type { DialogPromptContract } from './dialog-catalog';
+import { getDialogContractsForPrompt } from './dialog-catalog-aggregator';
 
 export type PrimaryKind =
   | 'data-preparation'
@@ -68,6 +69,14 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
     derivedKind: 'quality',
     description: 'Create a calculated column using a formula or column arithmetic.',
     mappedDialogs: ['calculate'],
+  },
+  {
+    id: 'data.recode',
+    label: 'Recode column values',
+    primaryKind: 'data-preparation',
+    derivedKind: 'transform',
+    description: 'Map existing values in a column to new values.',
+    mappedDialogs: ['recode'],
   },
   {
     id: 'data.reshape',
@@ -151,6 +160,31 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
   },
 ];
 
+function applyCatalogOperationMappings(
+  catalog: DialogPromptContract[],
+  legacy: OperationDefinition[]
+): OperationDefinition[] {
+  const byId = new Map(
+    legacy.map((op) => [op.id, { ...op, mappedDialogs: [...op.mappedDialogs] }])
+  );
+  for (const entry of catalog) {
+    for (const operationId of entry.operations) {
+      const op = byId.get(operationId);
+      if (!op) continue;
+      if (!op.mappedDialogs.includes(entry.dialogId)) {
+        op.mappedDialogs.push(entry.dialogId);
+      }
+    }
+  }
+  return [...byId.values()].map((op) => ({
+    ...op,
+    mappedDialogs: [...new Set(op.mappedDialogs)],
+  }));
+}
+
 export const OPERATION_REGISTRY: OperationDefinition[] =
-  DialogContractV2Registry.applyOperationMappings(LEGACY_OPERATION_REGISTRY);
+  applyCatalogOperationMappings(
+    getDialogContractsForPrompt(),
+    LEGACY_OPERATION_REGISTRY
+  );
 

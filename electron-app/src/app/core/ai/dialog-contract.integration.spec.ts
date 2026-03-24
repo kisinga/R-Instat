@@ -1,16 +1,15 @@
-import { DIALOG_SCHEMAS } from './dialog-schema.registry';
+import '../../features/dialogs/dialog-host.component';
 import { OPERATION_REGISTRY } from './operation-registry';
 import {
   getComponentType,
   getDialogContract,
-  getDialogContractsForPrompt,
   listDialogIds,
 } from './dialog-identity.registry';
+import { getDialogContractsForPrompt } from './dialog-catalog-aggregator';
 import { buildParityConsistencyReport } from './dialog-parity-check';
 import { getMetadataStateDiagnostics } from './dialog-metadata-contract';
 import { IntentResolverService } from '../services/intent-resolver.service';
 import type { AICallResult, DataContext } from '../services/ai-client.service';
-import { DialogContractV2Registry } from './dialog-contract-v2.registry';
 import { MergeDialogComponent } from '../../features/dialogs/merge/merge-dialog.component';
 import { StackDialogComponent } from '../../features/dialogs/stack/stack-dialog.component';
 import { UnstackDialogComponent } from '../../features/dialogs/unstack/unstack-dialog.component';
@@ -27,16 +26,17 @@ describe('dialog contract composition', () => {
     expect(report.operationWithoutSchema).toEqual([]);
     expect(report.operationWithoutHost).toEqual([]);
     expect(report.schemaWithoutOperation).toEqual([]);
-    expect(report.v2WithoutSchema).toEqual([]);
-    expect(report.v2WithoutOperation).toEqual([]);
-    expect(report.v2WithoutHost).toEqual([]);
-    expect(report.parityEvidenceMissingForV2).toEqual([]);
+    expect(report.catalogWithoutSchema).toEqual([]);
+    expect(report.catalogWithoutOperation).toEqual([]);
+    expect(report.catalogWithoutHost).toEqual([]);
+    expect(report.parityEvidenceMissingForCatalog).toEqual([]);
   });
 
-  it('resolves component types for all schema dialogs', () => {
-    for (const schema of DIALOG_SCHEMAS) {
-      expect(getComponentType(schema.dialogId)).withContext(schema.dialogId).toBeDefined();
-      expect(getDialogContract(schema.dialogId)?.schema).withContext(schema.dialogId).toBeDefined();
+  it('resolves component types for all catalog dialogs', () => {
+    const catalog = getDialogContractsForPrompt();
+    for (const entry of catalog) {
+      expect(getComponentType(entry.dialogId)).withContext(entry.dialogId).toBeDefined();
+      expect(getDialogContract(entry.dialogId)?.schema).withContext(entry.dialogId).toBeDefined();
     }
   });
 
@@ -47,11 +47,11 @@ describe('dialog contract composition', () => {
     }
   });
 
-  it('ensures all operation-mapped dialogs have schemas', () => {
+  it('ensures all operation-mapped dialogs have catalog entries', () => {
     const mappedDialogs = new Set(OPERATION_REGISTRY.flatMap((op) => op.mappedDialogs));
-    const schemaDialogIds = new Set(DIALOG_SCHEMAS.map((schema) => schema.dialogId));
+    const catalogDialogIds = new Set(getDialogContractsForPrompt().map((c) => c.dialogId));
     for (const dialogId of mappedDialogs) {
-      expect(schemaDialogIds.has(dialogId)).withContext(dialogId).toBeTrue();
+      expect(catalogDialogIds.has(dialogId)).withContext(dialogId).toBeTrue();
     }
   });
 
@@ -62,12 +62,11 @@ describe('dialog contract composition', () => {
     expect(contracts.every((entry) => Array.isArray(entry.params))).toBeTrue();
   });
 
-  it('publishes plotting pilot via ContractV2 adapters', () => {
-    const v2 = DialogContractV2Registry.list();
-    expect(v2.map((x) => x.dialogId)).toContain('bar-chart');
-    expect(v2.map((x) => x.dialogId)).toContain('histogram');
-
+  it('publishes plotting pilot via catalog from dialogs', () => {
     const promptContracts = getDialogContractsForPrompt();
+    expect(promptContracts.map((x) => x.dialogId)).toContain('bar-chart');
+    expect(promptContracts.map((x) => x.dialogId)).toContain('histogram');
+
     const barChart = promptContracts.find((x) => x.dialogId === 'bar-chart');
     const histogram = promptContracts.find((x) => x.dialogId === 'histogram');
     expect(barChart?.componentType).toBe('BarChartDialogComponent');

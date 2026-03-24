@@ -6,9 +6,11 @@
 
 import { Injectable } from '@angular/core';
 import { DialogMetadata } from '../r-codegen/dialog-metadata';
-import { getSchema, type DialogParamSchema } from '../ai/dialog-schema.registry';
+import { getSchema } from '../ai/dialog-catalog-aggregator';
+import type { DialogParamSchema } from '../ai/dialog-schema.registry';
+import { buildDialogMetadata } from '../ai/dialog-metadata-builder';
+import { PARAM_ALIAS_CONFIG } from '../ai/param-alias.config';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
-import { getDialogContract } from '../ai/dialog-identity.registry';
 import { ResolverTransformPipeline } from './intent-resolver.pipeline';
 import type {
   AICallResult,
@@ -24,6 +26,10 @@ export interface ResolveResult {
   plan?: ResolvedPlan;
   error?: string;
   warnings?: string[];
+  /** When true, intent was unclear; show disambiguationSuggestions (from AIClientService, not resolver). */
+  needsDisambiguation?: boolean;
+  /** Category-directed suggestions; only set when needsDisambiguation is true. */
+  disambiguationSuggestions?: Array<{ text: string; category: string }>;
 }
 
 export interface ResolvedPlanStep {
@@ -79,6 +85,12 @@ export class IntentResolverService {
       run: (_dialogId, params, state, dataContext, warnings) =>
         this.normalizeBarChartState('bar-chart', params, state, dataContext, warnings),
     },
+    {
+      id: 'param-aliases',
+      scope: 'global',
+      run: (dialogId, _params, state, _dataContext, warnings) =>
+        this.applyParamAliases(dialogId, state, warnings),
+    },
   ]);
 
   resolve(result: AICallResult, dataContext: DataContext): ResolveResult {
@@ -122,9 +134,17 @@ export class IntentResolverService {
       }
 
       const dialogStep = step as AIDialogPlanStep;
-      const operation = OPERATION_REGISTRY.find((x) => x.id === dialogStep.operationId);
-      if (!allowedOperations.has(dialogStep.operationId) || !operation) {
-        return { ok: false, error: `Unknown operationId "${dialogStep.operationId}"` };
+      const rawOpId = dialogStep.operationId;
+      if (this.isPlaceholderOperationId(rawOpId)) {
+        return {
+          ok: false,
+          error:
+            "This request couldn't be matched to a specific analysis. For conceptual questions (e.g. 'What does a t-test tell us?') try asking to run a t-test on your data from the menu, or rephrase as a request to perform an analysis.",
+        };
+      }
+      const operation = OPERATION_REGISTRY.find((x) => x.id === rawOpId);
+      if (!allowedOperations.has(rawOpId) || !operation) {
+        return { ok: false, error: `Unknown operationId "${rawOpId}"` };
       }
 
       const schema = getSchema(dialogStep.dialogId);
@@ -181,18 +201,13 @@ export class IntentResolverService {
         }
       }
 
-      const contract = getDialogContract(dialogStep.dialogId);
-      if (!contract) {
+      const metadata = buildDialogMetadata(dialogStep.dialogId, state as Record<string, any>, {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+      });
+      if (!metadata) {
         return { ok: false, error: `No component for dialog: ${dialogStep.dialogId}` };
       }
-
-      const metadata: DialogMetadata = {
-        dialogId: dialogStep.dialogId,
-        componentType: contract.componentType,
-        version: '1.0',
-        state: state as Record<string, any>,
-        timestamp: new Date().toISOString(),
-      };
 
       if (dialogStep.confidence < 0.6) {
         warnings.push(`Low confidence step: ${dialogStep.dialogId} (${dialogStep.confidence.toFixed(2)})`);
@@ -219,6 +234,13 @@ export class IntentResolverService {
         steps: resolvedSteps,
       },
     };
+  }
+
+  /** Treats null, undefined, empty string, and placeholders like "N/A" or "none" as invalid. */
+  private isPlaceholderOperationId(value: unknown): boolean {
+    if (value === null || value === undefined) return true;
+    const s = String(value).trim().toLowerCase();
+    return s === '' || ['n/a', 'none', 'null'].includes(s);
   }
 
   private applyStateTransforms(
@@ -290,6 +312,31 @@ export class IntentResolverService {
     }
 
     return normalized;
+  }
+
+  /**
+   * Apply param aliases from config (single transform for all dialogs with alias rules).
+   */
+  private applyParamAliases(
+    dialogId: string,
+    state: Record<string, unknown>,
+    warnings: string[]
+  ): Record<string, unknown> {
+    const entries = PARAM_ALIAS_CONFIG.get(dialogId);
+    if (!entries?.length) return state;
+    const out = { ...state };
+    for (const { alias, schemaKey } of entries) {
+      const value = out[alias];
+      if (value === undefined || value === null || value === '') continue;
+      if (out[schemaKey] !== undefined && out[schemaKey] !== null && out[schemaKey] !== '') {
+        delete (out as Record<string, unknown>)[alias];
+        continue;
+      }
+      (out as Record<string, unknown>)[schemaKey] = value;
+      warnings.push(`Mapped param "${alias}" → "${schemaKey}"`);
+      delete (out as Record<string, unknown>)[alias];
+    }
+    return out;
   }
 
   private inferMissingFields(

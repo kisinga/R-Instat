@@ -1,8 +1,11 @@
-import { Component, Output, EventEmitter, signal } from '@angular/core';
+import { Component, Output, EventEmitter, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ImportFilePanelComponent } from './panels/import-file-panel.component';
 import { ImportLibraryPanelComponent } from './panels/import-library-panel.component';
+import { CurrentDialogueRegistryService } from '../../../core/ai/current-dialogue-registry.service';
+import { buildDialogueAIContract } from '../../../core/ai/dialogue-ai-adapters';
+import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-validator';
 
 type ImportTab = 'file' | 'library';
 
@@ -108,11 +111,37 @@ type ImportTab = 'file' | 'library';
     }
   `]
 })
-export class ImportDialogComponent {
+export class ImportDialogComponent implements OnInit, OnDestroy {
   @Output() close = new EventEmitter<void>();
+
+  private readonly currentDialogueRegistry = inject(CurrentDialogueRegistryService);
 
   activeTab = signal<ImportTab>('file');
   isTransitioning = signal(false);
+
+  ngOnInit(): void {
+    const contract = buildDialogueAIContract({
+      id: 'import',
+      name: 'Import',
+      description: 'Import data from file or R packages',
+      capabilities: ['generate-data', 'provide-r-code'],
+      getVariables: () => ({ activeTab: this.activeTab() }),
+      getRCode: () => '',
+    });
+    const { valid, warnings } = validateDialogueAIContract(contract);
+    if (valid) {
+      this.currentDialogueRegistry.register('import', contract);
+    } else {
+      console.warn(
+        '[AI Registry] Dialog "import" not registered: contract incomplete.',
+        warnings
+      );
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.currentDialogueRegistry.unregister('import');
+  }
 
   switchTab(tab: ImportTab): void {
     if (tab === this.activeTab()) return;

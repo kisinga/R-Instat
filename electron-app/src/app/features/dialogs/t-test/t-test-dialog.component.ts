@@ -5,6 +5,9 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildTTest, TTestOptions } from '../../../core/dialogs/builders/statistics';
+import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import { p } from '../../../core/ai/dialog-schema.registry';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
 @Component({
   selector: 'app-t-test-dialog',
@@ -150,7 +153,32 @@ import { buildTTest, TTestOptions } from '../../../core/dialogs/builders/statist
   `,
 })
 export class TTestDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(TTestDialogComponent); }
+  static readonly dialogId = 't-test';
   readonly dialogTitle = 't-Test';
+
+  static override getCatalogDescriptor(): DialogPromptContract {
+    return {
+      dialogId: 't-test',
+      componentType: 'TTestDialogComponent',
+      family: 'inferential',
+      description: 'One-sample, two-sample, or paired t-test.',
+      operations: ['inferential.t_test'],
+      params: [
+        p('dataframe', 'dataframe', { required: true }),
+        p('testType', 'enum', { required: true, enumValues: ['one', 'two', 'paired'] }),
+        p('variable1', 'column', { required: true, columnType: 'numeric' }),
+        p('variable2', 'column', { columnType: 'numeric', when: { param: 'testType', equals: 'paired' } }),
+        p('groupVar', 'column', { columnType: 'factor', when: { param: 'testType', equals: 'two' } }),
+        p('mu', 'number', { when: { param: 'testType', equals: 'one' } }),
+        p('alternative', 'enum', { enumValues: ['two.sided', 'less', 'greater'] }),
+        p('confLevel', 'enum', { enumValues: ['0.90', '0.95', '0.99'] }),
+      ],
+      retrievalHints: {
+        keywords: ['t-test', 'ttest', 't test', 'one-sample', 'two-sample', 'paired', 'hypothesis'],
+      },
+    };
+  }
 
   testType = signal<'one' | 'two' | 'paired'>('one');
   variable1 = signal('');

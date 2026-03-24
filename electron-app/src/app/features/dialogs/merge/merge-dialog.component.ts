@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
+import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 import { ColumnInfo } from '../../../core/models/r.model';
 import { rSyntax } from '../../../core/r-codegen';
 
@@ -146,6 +147,7 @@ const JOIN_TYPES: JoinType[] = [
   `],
 })
 export class MergeDialogComponent extends DialogBase implements OnInit {
+  static { AIDialogClassRegistry.register(MergeDialogComponent); }
   static readonly dialogId = 'merge';
   readonly dialogTitle = 'Merge';
 
