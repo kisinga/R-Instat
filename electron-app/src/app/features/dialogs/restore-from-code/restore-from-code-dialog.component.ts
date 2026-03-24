@@ -4,7 +4,7 @@
  * Dialog for pasting R code and restoring the dialog state that generated it.
  */
 
-import { Component, signal, computed } from '@angular/core';
+import { Component, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -55,6 +55,13 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
               </div>
             }
           </div>
+          @if (syntaxError()) {
+            <div class="mt-1">
+              <div class="alert alert-error alert-sm">
+                <span>Syntax error: {{ syntaxError() }}</span>
+              </div>
+            </div>
+          }
         }
 
         <!-- Code Preview -->
@@ -91,6 +98,25 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
   readonly dialogTitle = 'Restore From Code';
 
   codeInput = signal('');
+  syntaxError = signal<string | null>(null);
+
+  private validateEffect = effect(() => {
+    const code = this.codeInput();
+    if (!code) {
+      this.syntaxError.set(null);
+      return;
+    }
+    const stripped = stripMetadata(code);
+    if (!stripped.trim()) {
+      this.syntaxError.set(null);
+      return;
+    }
+    this.rService.validate(stripped).then(result => {
+      this.syntaxError.set(result.success ? null : (result.error ?? 'Invalid syntax'));
+    }).catch(() => {
+      this.syntaxError.set(null); // Can't validate (R not ready) - don't block
+    });
+  });
 
   metadata = computed(() => {
     const code = this.codeInput();
@@ -99,14 +125,10 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
   });
 
   canRestore = computed(() => {
+    if (this.syntaxError()) return false;
     const meta = this.metadata();
-    if (!meta) {
-      console.log('[RestoreDialog] No metadata available');
-      return false;
-    }
-    console.log('[RestoreDialog] Metadata componentType:', meta.componentType);
+    if (!meta) return false;
     const dialogId = mapComponentTypeToDialogId(meta.componentType);
-    console.log('[RestoreDialog] Mapped dialogId:', dialogId);
     return !!dialogId;
   });
 

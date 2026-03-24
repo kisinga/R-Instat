@@ -7,8 +7,9 @@
 /**
  * Command types supported by R bridge
  */
-export type RCommandType = 
-  | 'execute' 
+export type RCommandType =
+  | 'execute'
+  | 'validate'
   | 'get_dataframes' 
   | 'get_data_preview' 
   | 'get_columns' 
@@ -47,6 +48,7 @@ export interface RResponse {
   success: boolean;
   result?: unknown;
   error?: string;
+  errorType?: 'syntax' | 'runtime';
 }
 
 /**

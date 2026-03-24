@@ -148,7 +148,7 @@ flowchart TB
     end
 
     subgraph RProcess["R Process - Child Process"]
-        BridgeR["bridge.R - JSON Command Parser - Command Router - Error Handler - Response Serializer"]
+        BridgeR["bridge.R - JSON Command Parser - Command Router - Error Handler - Response Serializer - Syntax Validator"]
         DataStore["Data Store Environment - Global data_store - DataFrame Storage - Metadata Management"]
         RPackages["R Packages - dplyr, tidyr - ggplot2, sjPlot - sjmisc, skimr"]
     end

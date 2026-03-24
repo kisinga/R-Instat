@@ -142,6 +142,16 @@ export class RService implements OnDestroy {
   // R EXECUTION
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * Validate R code syntax without executing. Returns success if parseable.
+   */
+  async validate(code: string): Promise<RResult> {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return window.electronAPI.r.validate(code);
+  }
+
   async execute(code: string, silent = false): Promise<RResult> {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');

@@ -14,6 +14,7 @@ interface RResult {
     totalRows?: number;
   };
   error?: string;
+  errorType?: 'syntax' | 'runtime';
 }
 
 interface DataPreview {
@@ -91,6 +92,7 @@ interface OpenAIChatRequest {
 interface ElectronAPI {
   r: {
     execute: (code: string) => Promise<RResult>;
+    validate: (code: string) => Promise<RResult>;
     getDataframes: () => Promise<string[]>;
     getDataPreview: (name: string, limit?: number, offset?: number) => Promise<DataPreview>;
     getColumns: (dataframe: string) => Promise<string[]>;

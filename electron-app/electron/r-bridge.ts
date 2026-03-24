@@ -403,6 +403,13 @@ export class RBridge {
   }
 
   /**
+   * Validate R code syntax without executing
+   */
+  async validate(code: string): Promise<RResponse> {
+    return this.sendCommand({ type: 'validate', code });
+  }
+
+  /**
    * Get list of dataframe names
    */
   async getDataframes(): Promise<string[]> {

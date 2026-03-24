@@ -14,10 +14,13 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 const electronAPI = {
   // R Backend Communication
   r: {
-    execute: (code: string): Promise<RResult> => 
+    execute: (code: string): Promise<RResult> =>
       ipcRenderer.invoke('r:execute', code),
-    
-    getDataframes: (): Promise<string[]> => 
+
+    validate: (code: string): Promise<RResult> =>
+      ipcRenderer.invoke('r:validate', code),
+
+    getDataframes: (): Promise<string[]> =>
       ipcRenderer.invoke('r:getDataframes'),
     
     getDataPreview: (name: string, limit?: number, offset?: number): Promise<DataPreview> => 

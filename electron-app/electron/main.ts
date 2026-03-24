@@ -275,6 +275,11 @@ function setupIPC(): void {
     return rBridge.execute(code);
   });
 
+  ipcMain.handle('r:validate', async (_event, code: string) => {
+    if (!rBridge) throw new Error('R Bridge not initialized');
+    return rBridge.validate(code);
+  });
+
   ipcMain.handle('r:getDataframes', async () => {
     if (!rBridge) throw new Error('R Bridge not initialized');
     return rBridge.getDataframes();

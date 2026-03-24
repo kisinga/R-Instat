@@ -198,6 +198,17 @@ capture_output <- function(expr) {
   paste(output, collapse = "\n")
 }
 
+#' Handle validate command
+#' Parses R code without executing. Returns success if syntax is valid.
+handle_validate <- function(cmd) {
+  tryCatch({
+    parse(text = cmd$code)
+    make_success(cmd$id, list(type = "text", value = "valid"))
+  }, error = function(e) {
+    list(id = cmd$id, success = FALSE, error = e$message, errorType = "syntax")
+  })
+}
+
 #' Handle execute command
 #' Evaluates R code and returns appropriate result type (plot, dataframe, or text)
 handle_execute <- function(cmd) {
@@ -662,6 +673,7 @@ handle_load_package_dataset <- function(cmd) {
 handle_command <- function(cmd) {
   switch(cmd$type,
     "execute" = handle_execute(cmd),
+    "validate" = handle_validate(cmd),
     "get_dataframes" = handle_get_dataframes(cmd),
     "get_data_preview" = handle_get_data_preview(cmd),
     "get_columns" = handle_get_columns(cmd),
