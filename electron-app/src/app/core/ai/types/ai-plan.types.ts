@@ -1,8 +1,21 @@
+/**
+ * AI Plan types — derived from the Zod schema in electron/schemas/plan.schema.ts.
+ *
+ * The Zod schema is the single source of truth. These types provide
+ * narrower views for downstream renderer code that needs dialog/code
+ * step discrimination.
+ */
+
 import type { ExecutionMode } from './data-context.types';
+
+/** Clarification items — discriminated union for choices vs questions */
+export type ClarificationItem =
+  | { kind: 'choice'; options: string[] }
+  | { kind: 'question'; text: string };
 
 export interface AIBasePlanStep {
   stepId: string;
-  dependsOnStepId?: string;
+  dependsOnStepId?: string | null;
   inferredFields: string[];
   confidence: number;
   rationale?: string;
@@ -31,7 +44,7 @@ export type AIPlanStep = AIDialogPlanStep | AICodePlanStep;
 export interface AIPlan {
   goal: string;
   assumptions: string[];
-  clarificationQuestions: string[];
+  clarifications: ClarificationItem[];
   overallConfidence: number;
   requiresConfirmation: boolean;
   executionMode: ExecutionMode;

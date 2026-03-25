@@ -7,6 +7,7 @@ import { KeyboardService } from './core/services/keyboard.service';
 import { LanguageService } from './core/services/language.service';
 import { ToastContainerComponent } from './shared/components/toast-container/toast-container.component';
 import { RHealthOverlayComponent } from './shared/components/r-health-overlay/r-health-overlay.component';
+import { HydrationService } from './core/vector/hydration.service';
 
 @Component({
   selector: 'app-root',
@@ -28,6 +29,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly themeService = inject(ThemeService);
   private readonly keyboardService = inject(KeyboardService);
   private readonly languageService = inject(LanguageService);
+  private readonly hydrationService = inject(HydrationService);
   private cleanupMenuListener?: () => void;
 
   ngOnInit(): void {
@@ -48,6 +50,9 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     // R health is now managed by RHealthOverlayComponent
+
+    // Hydrate vector indexes if configured for on-launch
+    this.hydrationService.hydrateIfNeeded('on-launch');
   }
 
   ngOnDestroy(): void {

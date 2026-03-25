@@ -13,8 +13,17 @@ const CLAUDE_STORAGE_KEY = 'r-instat-ai-claude-api-key';
 const PROVIDER_STORAGE_KEY = 'r-instat-ai-provider';
 const GATE_STORAGE_KEY = 'r-instat-ai-gate-settings';
 const RETRIEVAL_STORAGE_KEY = 'r-instat-ai-retrieval-settings';
+const HYDRATION_STORAGE_KEY = 'r-instat-ai-hydration-mode';
 
 export type AIProvider = 'openai' | 'claude';
+
+/**
+ * Controls when vector indexes (dialog contracts, R signatures) are refreshed.
+ * - 'on-launch':    Refresh all indexes at app startup (default)
+ * - 'on-ai-panel':  Refresh when the AI assist panel is first opened
+ * - 'disabled':     Never auto-refresh; manual only
+ */
+export type HydrationMode = 'on-launch' | 'on-ai-panel' | 'disabled';
 
 export interface ConfidenceGateSettings {
   highConfidenceThreshold: number;
@@ -92,6 +101,9 @@ export class AIConfigService {
   private readonly _retrievalSettings = signal<RetrievalSettings>({ ...DEFAULT_RETRIEVAL_SETTINGS });
   readonly retrievalSettings = this._retrievalSettings.asReadonly();
 
+  private readonly _hydrationMode = signal<HydrationMode>('on-launch');
+  readonly hydrationMode = this._hydrationMode.asReadonly();
+
   readonly modelConfig = computed<LLMModelConfig>(() => DEFAULT_MODEL_CONFIG[this._provider()]);
   readonly verboseAiDiagnostics = signal(false);
   readonly piiRedactionEnabled = signal(true);
@@ -161,6 +173,11 @@ export class AIConfigService {
         this._retrievalSettings.set({ ...DEFAULT_RETRIEVAL_SETTINGS });
       }
     }
+
+    const storedHydration = localStorage.getItem(HYDRATION_STORAGE_KEY);
+    if (storedHydration === 'on-launch' || storedHydration === 'on-ai-panel' || storedHydration === 'disabled') {
+      this._hydrationMode.set(storedHydration);
+    }
   }
 
   setProvider(provider: AIProvider): void {
@@ -221,6 +238,11 @@ export class AIConfigService {
       localStorage.setItem(GATE_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
+  }
+
+  setHydrationMode(mode: HydrationMode): void {
+    this._hydrationMode.set(mode);
+    localStorage.setItem(HYDRATION_STORAGE_KEY, mode);
   }
 
   updateRetrievalSettings(updates: Partial<RetrievalSettings>): void {

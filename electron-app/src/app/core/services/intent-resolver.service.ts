@@ -20,6 +20,7 @@ import type {
   AICodePlanStep,
   AIDialogPlanStep,
   AIPlanStep,
+  ClarificationItem,
   DataContext,
   ExecutionMode,
 } from '../ai/types';
@@ -50,7 +51,7 @@ export interface ResolvedPlanStep {
 export interface ResolvedPlan {
   goal: string;
   assumptions: string[];
-  clarificationQuestions: string[];
+  clarifications: ClarificationItem[];
   overallConfidence: number;
   requiresConfirmation: boolean;
   executionMode: ExecutionMode;
@@ -212,7 +213,7 @@ export class IntentResolverService {
       plan: {
         goal: result.plan.goal,
         assumptions: result.plan.assumptions,
-        clarificationQuestions: result.plan.clarificationQuestions,
+        clarifications: result.plan.clarifications,
         overallConfidence: result.plan.overallConfidence,
         requiresConfirmation: result.plan.requiresConfirmation,
         executionMode: result.plan.executionMode ?? 'component_codegen',
@@ -318,6 +319,13 @@ export class IntentResolverService {
       case 'object[]': {
         if (!Array.isArray(value)) return 'must be an array';
         return value.every((x) => typeof x === 'object' && x !== null) ? null : 'must be array of objects';
+      }
+      case 'checklist': {
+        if (!Array.isArray(value)) return 'must be an array of strings';
+        const validKeys = new Set((param.options ?? []).map((o) => o.key));
+        const invalid = (value as string[]).filter((v) => !validKeys.has(v));
+        if (invalid.length > 0) return `unknown options: ${invalid.join(', ')}`;
+        return null;
       }
       default:
         return 'unsupported param type';

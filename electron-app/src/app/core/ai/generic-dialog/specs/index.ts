@@ -21,3 +21,4 @@ import './chi-square-test';
 import './frequency-table';
 import './row-summary';
 import './convert-columns';
+import './one-variable-summarise';

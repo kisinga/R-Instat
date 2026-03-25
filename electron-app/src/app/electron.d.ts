@@ -69,24 +69,26 @@ interface SaveDialogResult {
   filePath?: string;
 }
 
-interface AnthropicMessageRequest {
+interface StructuredPlanRequest {
+  provider: 'openai' | 'claude';
   apiKey: string;
-  system: string;
+  systemPrompt: string;
   userMessage: string;
   model?: string;
-  maxTokens?: number;
   temperature?: number;
-  responseFormat?: 'json' | 'text';
+  maxTokens?: number;
   timeoutMs?: number;
 }
 
-interface OpenAIChatRequest {
+interface RawChatRequest {
+  provider: 'openai' | 'claude';
   apiKey: string;
-  system: string;
+  systemPrompt: string;
   userMessage: string;
+  responseFormat: 'json' | 'text';
   model?: string;
   temperature?: number;
-  responseFormat?: 'json_object' | 'text';
+  maxTokens?: number;
   timeoutMs?: number;
 }
 
@@ -123,10 +125,11 @@ interface ElectronAPI {
     setLanguage: (lang: string) => Promise<{ success: boolean }>;
   };
   ai: {
-    anthropicMessage: (request: AnthropicMessageRequest) => Promise<{ ok: boolean; status: number; data: unknown }>;
-    openaiChat: (request: OpenAIChatRequest) => Promise<{ ok: boolean; status: number; data: unknown }>;
+    structuredPlan: (request: StructuredPlanRequest) => Promise<{ ok: boolean; plan?: unknown; error?: string }>;
+    rawChat: (request: RawChatRequest) => Promise<{ ok: boolean; content?: string; error?: string }>;
   };
   file: {
+    readText: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
     writeText: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
     writeBase64: (filePath: string, base64Data: string) => Promise<{ success: boolean; error?: string }>;
   };
@@ -138,6 +141,7 @@ interface ElectronAPI {
     searchInteractions: (query: string, topK: number) => Promise<VectorSearchResult[]>;
     searchRSignatures: (query: string, topK: number) => Promise<VectorSearchResult[]>;
     tableInfo: (table: string) => Promise<{ exists: boolean; rowCount: number }>;
+    hydrateRSignatures: () => Promise<{ indexed: number }>;
   };
   onMenuCommand: (callback: (command: string, data?: unknown) => void) => () => void;
   platform: string;

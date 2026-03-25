@@ -15,9 +15,16 @@ export type ParamKind =
   | 'boolean'
   | 'number'
   | 'string'
-  | 'object[]';
+  | 'object[]'
+  | 'checklist';
 
 export type ColumnTypeHint = 'numeric' | 'factor' | 'date' | 'any';
+
+export interface ChecklistOption {
+  key: string;
+  label: string;
+  category?: string;
+}
 
 export interface ParamCondition {
   param: string;
@@ -36,7 +43,7 @@ export interface DialogParamSchema {
   when?: ParamCondition;
 
   /** Default value. Used by generic renderer for initial state and by AI for omitted fields. */
-  default?: string | number | boolean;
+  default?: string | number | boolean | string[];
 
   /** Display label override. Without this, the generic renderer derives a label from `name`. */
   label?: string;
@@ -46,6 +53,12 @@ export interface DialogParamSchema {
    * The generic renderer uses this to create collapsible sections.
    */
   group?: string;
+
+  /** Available options for 'checklist' kind. */
+  options?: ChecklistOption[];
+
+  /** Whether selected checklist items can be reordered. Default false. */
+  reorderable?: boolean;
 }
 
 /** DialogSchema is now a derived type alias. Defined in dialog-catalog.ts, re-exported here for import compatibility. */

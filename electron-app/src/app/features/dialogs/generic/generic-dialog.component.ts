@@ -38,6 +38,7 @@ import { AppStateService } from '../../../core/services/app-state.service';
 import { RService } from '../../../core/services/r.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogRestoreService } from '../../../core/services/dialog-restore.service';
+import { DialogLibraryService } from '../../../core/services/dialog-library.service';
 import { CurrentDialogueRegistryService } from '../../../core/ai/current-dialogue-registry.service';
 import { buildDialogueAIContract } from '../../../core/ai/dialogue-ai-adapters';
 import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-validator';
@@ -104,6 +105,9 @@ import type { WritableSignal } from '@angular/core';
         <button class="btn btn-ghost btn-sm" (click)="toggleCodePreview()">
           {{ showCodePreview() ? 'Hide' : 'Show' }} Code
         </button>
+        @if (dialogLibrary.isImported(spec.dialogId)) {
+          <button class="btn btn-ghost btn-sm" (click)="exportSpec()">Export</button>
+        }
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">Cancel</button>
         <button class="btn btn-primary" (click)="execute()" [disabled]="!isValid() || isLoading()">
@@ -126,6 +130,7 @@ export class GenericDialogComponent implements OnInit, OnDestroy {
   private readonly dialogRestore = inject(DialogRestoreService);
   private readonly currentDialogueRegistry = inject(CurrentDialogueRegistryService);
   private readonly injector = inject(Injector);
+  readonly dialogLibrary = inject(DialogLibraryService);
 
   // Global state
   readonly dataframes = this.appState.dataframes;
@@ -293,6 +298,13 @@ export class GenericDialogComponent implements OnInit, OnDestroy {
 
   toggleCodePreview(): void {
     this.showCodePreview.update((v) => !v);
+  }
+
+  async exportSpec(): Promise<void> {
+    const success = await this.dialogLibrary.exportToFile(this.spec.dialogId);
+    if (success) {
+      this.toastService.success('Dialog exported');
+    }
   }
 
   cancel(): void {

@@ -2,8 +2,15 @@ import {
   getDialogContractsForPrompt,
   getSchema,
 } from './dialog-catalog-aggregator';
+import { onSpecsChanged } from './generic-dialog/operation-spec.registry';
 
 export { getDialogContractsForPrompt };
+
+// Invalidate identity cache when generic specs change (import/remove)
+onSpecsChanged(() => {
+  _identityMap = null;
+  _componentToDialogId = null;
+});
 
 /** Non–DialogBase dialogs: identity only (Describe, Import, etc.). */
 const OTHER_DIALOG_IDENTITY: Readonly<Record<string, string>> = {

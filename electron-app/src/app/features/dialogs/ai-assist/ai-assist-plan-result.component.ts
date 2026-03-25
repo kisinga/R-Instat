@@ -46,21 +46,27 @@ import { toPercent, stepLabel, summarizeState, summarizeCode } from './ai-assist
         </div>
       </details>
 
-      @if (result().plan!.clarificationQuestions.length) {
+      @if (result().plan!.clarifications.length) {
         <div class="ai-assist-result-card__questions">
           <p class="ai-assist-result-card__questions-title">{{ 'AI_ASSIST.QUESTIONS' | translate }}</p>
           <p class="ai-assist-result-card__questions-hint">{{ 'AI_ASSIST.CLICK_TO_SEND' | translate }}</p>
           <div class="ai-assist-result-card__options">
-            @for (q of result().plan!.clarificationQuestions; track q) {
-              <button
-                type="button"
-                class="ai-assist-result-card__option"
-                [disabled]="isLoading()"
-                (click)="sendClarificationOption.emit(q)"
-              >
-                <span class="ai-assist-result-card__option-icon" aria-hidden="true">›</span>
-                <span class="ai-assist-result-card__option-text">{{ q }}</span>
-              </button>
+            @for (item of result().plan!.clarifications; track $index) {
+              @if (item.kind === 'choice') {
+                @for (opt of item.options; track opt) {
+                  <button
+                    type="button"
+                    class="ai-assist-result-card__option"
+                    [disabled]="isLoading()"
+                    (click)="sendClarificationOption.emit(opt)"
+                  >
+                    <span class="ai-assist-result-card__option-icon" aria-hidden="true">›</span>
+                    <span class="ai-assist-result-card__option-text">{{ opt }}</span>
+                  </button>
+                }
+              } @else {
+                <p class="text-xs opacity-70 mb-1">{{ item.text }}</p>
+              }
             }
           </div>
         </div>
@@ -119,7 +125,7 @@ import { toPercent, stepLabel, summarizeState, summarizeCode } from './ai-assist
             }
           </p>
         }
-      } @else if (result().plan!.clarificationQuestions.length === 0) {
+      } @else if (result().plan!.clarifications.length === 0) {
         <p class="text-xs opacity-80 mt-2">{{ 'AI_ASSIST.INFORMATIONAL_RESPONSE' | translate }}</p>
       }
     </div>

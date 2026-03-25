@@ -4,9 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import type { ChatMessage } from '../../../../core/models/chat.model';
 import type { ResolvedPlanStep } from '../../../../core/services/intent-resolver.service';
+import type { ClarificationItem } from '../../../../core/ai/types/ai-plan.types';
 import { ToastService } from '../../../../core/services/toast.service';
-
-const MAX_VISIBLE_QUESTIONS = 3;
 
 @Component({
   selector: 'app-chat-plan-message',
@@ -74,30 +73,49 @@ const MAX_VISIBLE_QUESTIONS = 3;
             }
           </div>
 
-          @if (plan.clarificationQuestions.length > 0) {
-            <div class="mt-3">
-              <p class="text-xs font-semibold opacity-70 mb-1">{{ 'AI_CHAT.QUESTIONS' | translate }}:</p>
-              <div class="space-y-1">
-                @for (q of visibleQuestions(plan.clarificationQuestions); track q) {
-                  <button
-                    class="btn btn-sm btn-outline btn-block justify-start text-left text-xs whitespace-normal break-words leading-tight h-auto min-h-[2rem] py-1.5"
-                    (click)="sendClarification.emit(q)"
-                  >
-                    {{ q }}
-                  </button>
+          @if (plan.clarifications.length > 0) {
+            <div class="mt-3 space-y-2">
+              @for (item of plan.clarifications; track $index) {
+                @switch (item.kind) {
+                  @case ('choice') {
+                    <div class="space-y-1">
+                      @for (opt of item.options; track opt) {
+                        <button
+                          class="btn btn-sm btn-outline btn-block justify-start text-left text-xs whitespace-normal break-words leading-tight h-auto min-h-[2rem] py-1.5"
+                          (click)="sendClarification.emit(opt)"
+                        >
+                          {{ opt }}
+                        </button>
+                      }
+                    </div>
+                  }
+                  @case ('question') {
+                    <div>
+                      <p class="text-xs opacity-70 mb-1">{{ item.text }}</p>
+                      <div class="flex gap-1.5">
+                        <input
+                          type="text"
+                          class="input input-xs input-bordered flex-1 text-xs"
+                          [placeholder]="'AI_CHAT.ANSWER_PLACEHOLDER' | translate"
+                          [ngModel]="getQuestionInput($index)"
+                          (ngModelChange)="updateQuestionInput($index, $event)"
+                          (keydown.enter)="sendQuestionAnswer($index)"
+                        />
+                        <button
+                          class="btn btn-xs btn-primary"
+                          [disabled]="!getQuestionInput($index).trim()"
+                          (click)="sendQuestionAnswer($index)"
+                        >
+                          {{ 'AI_CHAT.SEND' | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  }
                 }
-                @if (plan.clarificationQuestions.length > maxVisibleQuestions) {
-                  <button
-                    class="btn btn-xs btn-ghost btn-block opacity-60"
-                    (click)="showAllQuestions.set(!showAllQuestions())"
-                  >
-                    {{ showAllQuestions() ? ('AI_CHAT.SHOW_LESS' | translate) : ('AI_CHAT.SHOW_MORE' | translate : { count: plan.clarificationQuestions.length - maxVisibleQuestions }) }}
-                  </button>
-                }
-              </div>
+              }
 
               <!-- Custom response input -->
-              <div class="mt-2 flex gap-1.5">
+              <div class="flex gap-1.5">
                 <input
                   type="text"
                   class="input input-xs input-bordered flex-1 text-xs"
@@ -152,8 +170,7 @@ export class ChatPlanMessageComponent {
   private readonly toast = inject(ToastService);
 
   readonly customInput = signal('');
-  readonly showAllQuestions = signal(false);
-  readonly maxVisibleQuestions = MAX_VISIBLE_QUESTIONS;
+  readonly questionInputs = signal<Record<number, string>>({});
 
   plan() {
     const p = this.message().payload;
@@ -174,8 +191,19 @@ export class ChatPlanMessageComponent {
     this.toggleConfirm.emit({ stepId, checked });
   }
 
-  visibleQuestions(all: string[]): string[] {
-    return this.showAllQuestions() ? all : all.slice(0, MAX_VISIBLE_QUESTIONS);
+  getQuestionInput(index: number): string {
+    return this.questionInputs()[index] ?? '';
+  }
+
+  updateQuestionInput(index: number, value: string): void {
+    this.questionInputs.update(inputs => ({ ...inputs, [index]: value }));
+  }
+
+  sendQuestionAnswer(index: number): void {
+    const text = (this.questionInputs()[index] ?? '').trim();
+    if (!text) return;
+    this.questionInputs.update(inputs => ({ ...inputs, [index]: '' }));
+    this.sendClarification.emit(text);
   }
 
   sendCustom(): void {

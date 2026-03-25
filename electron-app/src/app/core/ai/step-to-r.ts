@@ -6,6 +6,7 @@
  */
 
 import { TEMPLATE_CODEGEN_DIALOG_IDS } from './dialog-registry-view';
+import { getDialogSpec } from './generic-dialog/operation-spec.registry';
 import { buildSort } from '../dialogs/builders/data-manipulation';
 import type { SortColumn } from '../dialogs/builders/data-manipulation';
 import { buildRename, buildCalculate, buildRecode } from '../dialogs/builders/data-manipulation';
@@ -32,6 +33,14 @@ function isPlaceholder(script: string): boolean {
  */
 export function compileStepToR(dialogId: string, state: Record<string, unknown>): string | null {
   if (!TEMPLATE_CODEGEN_DIALOG_IDS.has(dialogId)) {
+    // Not a built-in template dialog — try the spec's build() (covers imported dialogs)
+    const spec = getDialogSpec(dialogId);
+    if (spec?.build) {
+      try {
+        const result = spec.build(state);
+        if (result && !isPlaceholder(result)) return result;
+      } catch { /* fall through */ }
+    }
     return null;
   }
 

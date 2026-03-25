@@ -1,43 +1,31 @@
 import type { IPCBridge } from '../ipc/ipc-bridge';
 import type { LLMProvider, LLMRequest, LLMResponse } from './llm-provider';
 
-interface OpenAIResponsePayload {
-  choices?: Array<{ message?: { content?: string } }>;
-  error?: { message?: string };
-}
-
 export class OpenAIProvider implements LLMProvider {
-  readonly id = 'openai';
+  readonly id = 'openai' as const;
 
   constructor(private readonly ipc: IPCBridge) {}
 
   async call(apiKey: string, request: LLMRequest): Promise<LLMResponse> {
     if (!this.ipc.isAiAvailable()) {
-      throw new Error(
-        'OpenAI requires Electron IPC bridge. Restart the Electron app and open AI Assist inside the Electron window.'
-      );
+      throw new Error('OpenAI requires Electron IPC bridge. Restart the Electron app.');
     }
 
-    const response = await this.ipc.openaiChat({
+    const result = await this.ipc.rawChat({
+      provider: 'openai',
       apiKey,
-      system: request.systemPrompt,
+      systemPrompt: request.systemPrompt,
       userMessage: request.userMessage,
+      responseFormat: request.responseFormat,
       model: request.model ?? 'gpt-4o-mini',
       temperature: request.temperature ?? 0.2,
-      responseFormat: request.responseFormat === 'json' ? 'json_object' : 'text',
+      maxTokens: request.maxTokens,
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: HTTP ${response.status}`);
+    if (!result.ok || !result.content) {
+      throw new Error(result.error ?? 'Empty response from OpenAI');
     }
 
-    const payload = response.data as OpenAIResponsePayload;
-    const content = payload.choices?.[0]?.message?.content?.trim();
-    if (!content) {
-      const reason = payload.error?.message ?? 'Empty response from OpenAI';
-      throw new Error(reason);
-    }
-
-    return { content };
+    return { content: result.content };
   }
 }

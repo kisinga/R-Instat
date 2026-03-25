@@ -3,12 +3,17 @@ import type { DialogSchema } from './dialog-schema.registry';
 import { validateCatalogDescriptor } from './dialog-catalog-validator';
 import { AIDialogClassRegistry } from './dialog-class-registry';
 import { DialogBase } from '../../features/dialogs/dialog-base';
-import { getGenericDialogContracts } from './generic-dialog/operation-spec.registry';
+import { getGenericDialogContracts, onSpecsChanged } from './generic-dialog/operation-spec.registry';
 
 let cachedCatalog: DialogContract[] | null = null;
 
 // Invalidate catalog cache when new dialog classes register
 AIDialogClassRegistry.onClassesChanged(() => {
+  cachedCatalog = null;
+});
+
+// Invalidate catalog cache when generic specs change (import/remove)
+onSpecsChanged(() => {
   cachedCatalog = null;
 });
 

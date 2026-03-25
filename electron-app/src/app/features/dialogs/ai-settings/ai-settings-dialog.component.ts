@@ -7,7 +7,7 @@ import { Component, Output, EventEmitter, Input, inject, signal, OnInit } from '
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { AIConfigService, type AIProvider } from '../../../core/services/ai-config.service';
+import { AIConfigService, type AIProvider, type HydrationMode } from '../../../core/services/ai-config.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -111,6 +111,18 @@ import { ToastService } from '../../../core/services/toast.service';
             />
             <span class="text-xs">{{ 'AI_SETTINGS.VERBOSE_DIAGNOSTICS' | translate }}</span>
           </label>
+
+          <label class="form-label text-xs mt-3">{{ 'AI_SETTINGS.HYDRATION_MODE' | translate }}</label>
+          <select
+            class="select select-bordered w-full select-sm"
+            [ngModel]="aiConfig.hydrationMode()"
+            (ngModelChange)="onHydrationModeChange($event)"
+          >
+            <option value="on-launch">{{ 'AI_SETTINGS.HYDRATION_ON_LAUNCH' | translate }}</option>
+            <option value="on-ai-panel">{{ 'AI_SETTINGS.HYDRATION_ON_AI_PANEL' | translate }}</option>
+            <option value="disabled">{{ 'AI_SETTINGS.HYDRATION_DISABLED' | translate }}</option>
+          </select>
+          <p class="text-xs text-base-content/50 mt-1">{{ 'AI_SETTINGS.HYDRATION_HINT' | translate }}</p>
         </section>
       </div>
     </ng-template>
@@ -176,6 +188,10 @@ export class AiSettingsDialogComponent implements OnInit {
 
   toPercent(value: number): string {
     return `${Math.round(value * 100)}%`;
+  }
+
+  onHydrationModeChange(value: string): void {
+    this.aiConfig.setHydrationMode(value as HydrationMode);
   }
 
   private loadMaskedKey(provider: AIProvider): void {

@@ -5,6 +5,7 @@ export type {
   AIDialogPlanStep,
   AICodePlanStep,
   AIBasePlanStep,
+  ClarificationItem,
 } from './ai-plan.types';
 export type {
   AICallResult,

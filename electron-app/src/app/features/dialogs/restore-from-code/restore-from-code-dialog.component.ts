@@ -4,16 +4,17 @@
  * Dialog for pasting R code and restoring the dialog state that generated it.
  */
 
-import { Component, signal, computed, effect } from '@angular/core';
+import { Component, signal, computed, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { extractMetadata, stripMetadata, hasMetadata } from '../../../core/r-codegen/metadata-parser';
+import { extractMetadata, extractDefinition, stripMetadata, hasMetadata, hasDefinition } from '../../../core/r-codegen/metadata-parser';
 import { DialogMetadata } from '../../../core/r-codegen/dialog-metadata';
 import { isKnownDialogId } from '../../../core/ai/dialog-identity.registry';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
+import { DialogLibraryService } from '../../../core/services/dialog-library.service';
 
 @Component({
   selector: 'app-restore-from-code-dialog',
@@ -123,11 +124,19 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
     return extractMetadata(code);
   });
 
+  /** Embedded definition (if present in pasted code) */
+  embeddedDefinition = computed(() => {
+    const code = this.codeInput();
+    if (!code) return null;
+    return extractDefinition(code);
+  });
+
   canRestore = computed(() => {
     if (this.syntaxError()) return false;
     const meta = this.metadata();
     if (!meta) return false;
-    return isKnownDialogId(meta.dialogId);
+    // Known dialog OR embedded definition that can be auto-imported
+    return isKnownDialogId(meta.dialogId) || this.embeddedDefinition() !== null;
   });
 
   hasMetadata(code: string): boolean {
@@ -141,6 +150,8 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
       .join(' ');
   }
 
+  private readonly dialogLibrary = inject(DialogLibraryService);
+
   async restoreDialog(): Promise<void> {
     const metadata = this.metadata();
     if (!metadata) {
@@ -149,9 +160,21 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
     }
 
     const dialogId = metadata.dialogId;
+
+    // Auto-import embedded definition if dialog is unknown
     if (!isKnownDialogId(dialogId)) {
-      this.toastService.error(`Unknown dialog: ${dialogId}`);
-      return;
+      const definition = this.embeddedDefinition();
+      if (definition) {
+        const result = this.dialogLibrary.importFromJson(JSON.stringify(definition));
+        if (!result.valid) {
+          this.toastService.error(`Failed to import dialog: ${result.errors[0]}`);
+          return;
+        }
+        this.toastService.success(`Imported dialog "${definition.title}"`);
+      } else {
+        this.toastService.error(`Unknown dialog: ${dialogId}`);
+        return;
+      }
     }
 
     // Check if dataframe exists (if specified in state)

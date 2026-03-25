@@ -41,7 +41,7 @@ describe('pii guard', () => {
     const aliasedPlan: AIPlan = {
       goal: 'test',
       assumptions: [],
-      clarificationQuestions: [],
+      clarifications: [],
       overallConfidence: 0.8,
       requiresConfirmation: false,
       executionMode: 'component_codegen',

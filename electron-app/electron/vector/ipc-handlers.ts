@@ -40,9 +40,12 @@ function buildDialogText(contract: DialogContractForIndex): string {
   ].join(' ');
 }
 
+type RExecuteFn = (code: string) => Promise<{ success: boolean; result?: { value?: string } }>;
+
 export function registerVectorHandlers(
   embedding: EmbeddingService,
-  store: VectorStoreService
+  store: VectorStoreService,
+  rExecuteProvider?: () => RExecuteFn | null
 ): void {
   // Lazy init: start services on first call that needs them
   let initPromise: Promise<void> | null = null;
@@ -155,13 +158,24 @@ export function registerVectorHandlers(
   // --- R signature indexing (triggered after R is ready) ---
   ipcMain.handle(
     'vector:indexRSignatures',
-    async (_event, rExecuteFn?: unknown) => {
-      // rExecuteFn is not passed via IPC - the caller in main.ts wires this directly
-      // This handler is for renderer to check status / trigger via a different mechanism
+    async () => {
       const info = await store.tableInfo('r_signatures');
       return { indexed: info.rowCount, exists: info.exists };
     }
   );
+
+  // --- R signature hydration (force re-index from renderer) ---
+  ipcMain.handle('vector:hydrateRSignatures', async () => {
+    await ensureStarted();
+    const rExecute = rExecuteProvider?.();
+    if (!rExecute) {
+      return { indexed: 0 };
+    }
+    // Drop existing to force re-index
+    await store.dropTable('r_signatures');
+    const result = await indexRSignatures(rExecute, embedding, store);
+    return { indexed: result.indexed };
+  });
 
   // --- Table info ---
   ipcMain.handle('vector:tableInfo', async (_event, table: string) => {

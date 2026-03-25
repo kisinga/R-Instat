@@ -20,6 +20,7 @@ export function getDefaultValue(param: DialogParamSchema): any {
     case 'column[]':
     case 'string[]':
     case 'object[]':
+    case 'checklist':
       return [];
     case 'enum':
       return param.enumValues?.[0] ?? '';

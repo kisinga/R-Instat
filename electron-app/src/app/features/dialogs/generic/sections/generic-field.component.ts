@@ -10,6 +10,7 @@
  * - boolean   → <checkbox>
  * - number    → <input type="number"> with min/max
  * - string    → <input type="text">
+ * - checklist → ChecklistComponent (multi-select from options palette)
  *
  * The 'dataframe' kind is handled by the shell, not this component.
  */
@@ -19,11 +20,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { DialogParamSchema } from '../../../../core/ai/dialog-schema.registry';
 import type { ColumnInfo } from '../../../../core/models/r.model';
+import { ChecklistComponent } from '../../../../shared/components/checklist';
 
 @Component({
   selector: 'app-generic-field',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ChecklistComponent],
   template: `
     <!-- Boolean renders its own label inline -->
     @if (param.kind === 'boolean') {
@@ -58,6 +60,14 @@ import type { ColumnInfo } from '../../../../core/models/r.model';
             <input type="text" class="input input-bordered w-full"
               [placeholder]="'Enter ' + formatLabel(param.name) + '...'"
               [ngModel]="value()" (ngModelChange)="value.set($event)" />
+          }
+          @case ('checklist') {
+            <app-checklist
+              [options]="param.options ?? []"
+              [reorderable]="!!param.reorderable"
+              [selected]="value() || []"
+              (selectedChange)="value.set($event)"
+            />
           }
         }
       </div>

@@ -1,22 +1,27 @@
-import type { IPCBridge, AIProxyResponse } from './ipc-bridge';
+import type {
+  IPCBridge,
+  StructuredPlanResult,
+  RawChatResult,
+  VectorSearchResult,
+} from './ipc-bridge';
 
 /**
  * No-op IPC bridge for testing. Returns configurable canned responses.
  */
 export class NoopIPCBridge implements IPCBridge {
-  /** Override to provide custom AI responses in tests. */
-  aiResponse: AIProxyResponse = { ok: true, status: 200, data: {} };
+  structuredPlanResponse: StructuredPlanResult = { ok: false, error: 'NoopIPCBridge' };
+  rawChatResponse: RawChatResult = { ok: false, error: 'NoopIPCBridge' };
 
   isAiAvailable(): boolean {
     return true;
   }
 
-  async anthropicMessage(): Promise<AIProxyResponse> {
-    return this.aiResponse;
+  async structuredPlan(): Promise<StructuredPlanResult> {
+    return this.structuredPlanResponse;
   }
 
-  async openaiChat(): Promise<AIProxyResponse> {
-    return this.aiResponse;
+  async rawChat(): Promise<RawChatResult> {
+    return this.rawChatResponse;
   }
 
   isVectorAvailable(): boolean {

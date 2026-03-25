@@ -30,7 +30,7 @@ export function buildUserMessage(input: PromptBuilderInput): string {
       : '';
   const categoryBlock =
     input.category != null && input.category !== 'unclear'
-      ? `\nCurrent intent category: ${input.category}. Do not offer clarifications that switch category. Any clarificationQuestions must stay within this category and each item must be a short intent statement (what the user is choosing), not a question—that text is sent as the next message.\n\n`
+      ? `\nCurrent intent category: ${input.category}. Do not offer clarifications that switch category. All clarification items must stay within this category. Choice options must be short intent statements; question items must use direct 2nd-person phrasing.\n\n`
       : '';
   const memoryBlock =
     input.pastInteractions && input.pastInteractions.length > 0

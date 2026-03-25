@@ -30,6 +30,7 @@ import { AiAssistPlanResultComponent } from './ai-assist-plan-result.component';
 import { AiAssistDisambiguationComponent } from './ai-assist-disambiguation.component';
 import { AiAssistErrorCardComponent } from './ai-assist-error-card.component';
 import { AiAssistYouSentComponent } from './ai-assist-you-sent.component';
+import { HydrationService } from '../../../core/vector/hydration.service';
 
 @Component({
   selector: 'app-ai-assist-dialog',
@@ -153,6 +154,7 @@ export class AIAssistDialogComponent implements OnInit {
   private readonly educationStore = inject(EducationStoreService);
   private readonly educationPipeline = inject(EducationPipeline);
   private readonly languageService = inject(LanguageService);
+  private readonly hydrationService = inject(HydrationService);
 
   userInput = signal('');
   apiKeyInput = signal('');
@@ -176,6 +178,9 @@ export class AIAssistDialogComponent implements OnInit {
     if (this.planQueue.hasPlan()) {
       this.resolveResult.set({ ok: true, plan: this.planQueue.plan()! });
     }
+
+    // Hydrate vector indexes if configured for on-ai-panel
+    this.hydrationService.hydrateIfNeeded('on-ai-panel');
   }
 
   saveApiKey(): void {
@@ -473,7 +478,7 @@ export class AIAssistDialogComponent implements OnInit {
     const plan = this.resolveResult()?.plan;
     if (!plan) return false;
     // If clarifications are still open, require explicit per-step confirmation before execution.
-    if (plan.clarificationQuestions.length > 0) {
+    if (plan.clarifications.length > 0) {
       return this.isStepConfirmed(step.step.stepId);
     }
     const settings = this.gateSettings();

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
-import { listDialogIds } from '../../core/ai/dialog-identity.registry';
+import { isKnownDialogId } from '../../core/ai/dialog-identity.registry';
 import { getDialogSpec } from '../../core/ai/generic-dialog/operation-spec.registry';
 
 // Import all dialog components
@@ -220,8 +220,6 @@ import { SettingsDialogComponent } from './settings/settings-dialog.component';
   `,
 })
 export class DialogHostComponent implements OnInit, OnDestroy {
-  private static readonly HOST_DIALOG_IDS = new Set(listDialogIds());
-
   private readonly rService = inject(RService);
   private subscription?: Subscription;
 
@@ -234,7 +232,7 @@ export class DialogHostComponent implements OnInit, OnDestroy {
     this.subscription = this.rService.dialog$.subscribe(({ action, dialog }) => {
       console.log('[DialogHost] Dialog action:', action, 'dialog:', dialog);
       if (action === 'open') {
-        if (!DialogHostComponent.HOST_DIALOG_IDS.has(dialog)) {
+        if (!isKnownDialogId(dialog)) {
           console.warn('[DialogHost] Unknown dialog id:', dialog);
           return;
         }

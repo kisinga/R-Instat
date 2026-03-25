@@ -10,6 +10,7 @@ import { getOperationRegistry } from './operation-registry';
 import { listDialogIds } from './dialog-identity.registry';
 import { DIALOG_PARITY_EVIDENCE } from './dialog-parity-evidence.registry';
 import { AIDialogClassRegistry } from './dialog-class-registry';
+import { onSpecsChanged } from './generic-dialog/operation-spec.registry';
 
 export interface DialogRegistryView {
   hostIds: Set<string>;
@@ -23,6 +24,10 @@ export interface DialogRegistryView {
 let cachedView: DialogRegistryView | null = null;
 
 AIDialogClassRegistry.onClassesChanged(() => {
+  cachedView = null;
+});
+
+onSpecsChanged(() => {
   cachedView = null;
 });
 

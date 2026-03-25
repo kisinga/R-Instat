@@ -595,6 +595,7 @@
     "CODE_FAILED": "Failed",
     "SEND": "Send",
     "CUSTOM_RESPONSE_PLACEHOLDER": "Type your own response...",
+    "ANSWER_PLACEHOLDER": "Type your answer...",
     "SHOW_MORE": "Show {{count}} more...",
     "SHOW_LESS": "Show less"
   },
@@ -621,6 +622,11 @@
     "REQUIRE_CONFIRM": "Require confirmation for inferred fields",
     "SECTION_ADVANCED": "Advanced",
     "PII_REDACTION": "PII redaction (anonymize data before sending to AI)",
-    "VERBOSE_DIAGNOSTICS": "Verbose AI diagnostics"
+    "VERBOSE_DIAGNOSTICS": "Verbose AI diagnostics",
+    "HYDRATION_MODE": "Vector index refresh",
+    "HYDRATION_ON_LAUNCH": "On app launch",
+    "HYDRATION_ON_AI_PANEL": "When AI panel opens",
+    "HYDRATION_DISABLED": "Disabled (manual only)",
+    "HYDRATION_HINT": "Controls when dialog contracts and R function signatures are re-indexed for AI search."
   }
 }

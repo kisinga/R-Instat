@@ -39,10 +39,10 @@ export class DataQualityRecipeBuilder implements RecipeBuilder {
         : 'A user/group column is not explicit; workflow defaults to row-level quality scoring until clarified.',
     ];
 
-    const clarificationQuestions = groupColumn
+    const clarifications = groupColumn
       ? []
       : [
-          'Which column identifies the user/entity to score (for example user_id, owner, contributor, or w_name)?',
+          { kind: 'question' as const, text: 'Which column identifies the user/entity to score (for example user_id, owner, contributor, or w_name)?' },
         ];
 
     const selectedColumns = allColumnNames.slice(0, 20);
@@ -109,9 +109,9 @@ export class DataQualityRecipeBuilder implements RecipeBuilder {
     return {
       goal: `Assess data quality${groupColumn ? ` by ${groupColumn}` : ''} and rank effectiveness using a completeness score`,
       assumptions,
-      clarificationQuestions,
+      clarifications,
       overallConfidence: groupColumn ? 0.88 : 0.74,
-      requiresConfirmation: clarificationQuestions.length > 0,
+      requiresConfirmation: clarifications.length > 0,
       executionMode: 'component_codegen',
       modeReason: 'Deterministic quality recipe matched request intent.',
       modeConfidence: 0.9,

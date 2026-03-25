@@ -123,33 +123,38 @@ const electronAPI = {
       ipcRenderer.invoke('app:setLanguage', lang),
   },
 
-  // AI provider APIs
+  // AI provider APIs — Instructor.js structured extraction + raw chat
   ai: {
-    anthropicMessage: (request: {
+    structuredPlan: (request: {
+      provider: 'openai' | 'claude';
       apiKey: string;
-      system: string;
+      systemPrompt: string;
       userMessage: string;
       model?: string;
+      temperature?: number;
       maxTokens?: number;
-      temperature?: number;
-      responseFormat?: 'json' | 'text';
       timeoutMs?: number;
-    }): Promise<{ ok: boolean; status: number; data: unknown }> =>
-      ipcRenderer.invoke('ai:anthropicMessage', request),
-    openaiChat: (request: {
+    }): Promise<{ ok: boolean; plan?: unknown; error?: string }> =>
+      ipcRenderer.invoke('ai:structuredPlan', request),
+    rawChat: (request: {
+      provider: 'openai' | 'claude';
       apiKey: string;
-      system: string;
+      systemPrompt: string;
       userMessage: string;
+      responseFormat: 'json' | 'text';
       model?: string;
       temperature?: number;
-      responseFormat?: 'json_object' | 'text';
+      maxTokens?: number;
       timeoutMs?: number;
-    }): Promise<{ ok: boolean; status: number; data: unknown }> =>
-      ipcRenderer.invoke('ai:openaiChat', request),
+    }): Promise<{ ok: boolean; content?: string; error?: string }> =>
+      ipcRenderer.invoke('ai:rawChat', request),
   },
 
-  // File APIs for output export
+  // File APIs for import/export
   file: {
+    readText: (filePath: string): Promise<{ success: boolean; content?: string; error?: string }> =>
+      ipcRenderer.invoke('file:readText', filePath),
+
     writeText: (filePath: string, content: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('file:writeText', filePath, content),
 
@@ -207,6 +212,9 @@ const electronAPI = {
 
     tableInfo: (table: string): Promise<{ exists: boolean; rowCount: number }> =>
       ipcRenderer.invoke('vector:tableInfo', table),
+
+    hydrateRSignatures: (): Promise<{ indexed: number }> =>
+      ipcRenderer.invoke('vector:hydrateRSignatures'),
   },
 };
 

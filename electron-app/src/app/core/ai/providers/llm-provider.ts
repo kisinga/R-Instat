@@ -12,6 +12,6 @@ export interface LLMResponse {
 }
 
 export interface LLMProvider {
-  readonly id: string;
+  readonly id: 'openai' | 'claude';
   call(apiKey: string, request: LLMRequest): Promise<LLMResponse>;
 }

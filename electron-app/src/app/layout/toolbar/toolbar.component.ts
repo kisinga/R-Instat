@@ -5,6 +5,7 @@ import { RService } from '../../core/services/r.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/services/language.service';
 import { DomainExpertService } from '../../core/services/domain-expert.service';
+import { DialogLibraryService } from '../../core/services/dialog-library.service';
 
 interface MenuItem {
   labelKey: string;
@@ -154,6 +155,7 @@ export class ToolbarComponent {
   readonly themeService = inject(ThemeService);
   readonly languageService = inject(LanguageService);
   readonly domainService = inject(DomainExpertService);
+  readonly dialogLibrary = inject(DialogLibraryService);
 
   /** Static menus that don't change */
   readonly staticMenus: MenuGroup[] = [
@@ -246,9 +248,23 @@ export class ToolbarComponent {
     };
   });
 
-  /** All menus including dynamic Domain Expert */
+  /** Imported dialogs menu — appears only when user has imported dialogs */
+  readonly importedDialogsMenu = computed<MenuGroup | null>(() => {
+    const specs = this.dialogLibrary.importedSpecs();
+    if (specs.length === 0) return null;
+    return {
+      labelKey: 'TOOLBAR.MENU_IMPORTED',
+      icon: '📦',
+      items: specs.map(s => ({ labelKey: s.title, action: s.dialogId })),
+    };
+  });
+
+  /** All menus including dynamic Domain Expert and imported dialogs */
   readonly menus = computed<MenuGroup[]>(() => {
-    return [...this.staticMenus, this.domainExpertMenu()];
+    const base = [...this.staticMenus, this.domainExpertMenu()];
+    const imported = this.importedDialogsMenu();
+    if (imported) base.push(imported);
+    return base;
   });
 
   handleAction(action: string): void {

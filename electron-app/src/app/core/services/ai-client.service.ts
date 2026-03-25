@@ -20,6 +20,7 @@ export type {
   AICodePlanStep,
   AIBasePlanStep,
   AICallResult,
+  ClarificationItem,
   DisambiguationSuggestion,
 } from '../ai/types';
 

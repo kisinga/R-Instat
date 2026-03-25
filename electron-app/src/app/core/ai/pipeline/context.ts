@@ -63,10 +63,7 @@ export interface PipelineState {
   apiKey?: string;
   provider?: 'openai' | 'claude';
 
-  // LLM owns
-  llmResponse?: string;
-
-  // Parse owns
+  // LLM owns (plan is Zod-validated by Instructor in main process)
   parsedPlan?: AIPlan;
 
   // PostGuards / Dealias owns

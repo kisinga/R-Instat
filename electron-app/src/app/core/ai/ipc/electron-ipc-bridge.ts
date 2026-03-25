@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import type {
   IPCBridge,
-  AIProxyResponse,
-  AnthropicMessageRequest,
-  OpenAIChatRequest,
+  StructuredPlanRequest,
+  StructuredPlanResult,
+  RawChatRequest,
+  RawChatResult,
   VectorDialogContract,
   VectorSearchResult,
   VectorInteractionRecord,
@@ -17,22 +18,18 @@ export class ElectronIPCBridge implements IPCBridge {
     return !!window.electronAPI?.ai;
   }
 
-  async anthropicMessage(request: AnthropicMessageRequest): Promise<AIProxyResponse> {
-    if (!window.electronAPI?.ai?.anthropicMessage) {
-      throw new Error(
-        'Claude requires Electron IPC bridge. Restart the Electron app and open AI Assist inside the Electron window.'
-      );
+  async structuredPlan(request: StructuredPlanRequest): Promise<StructuredPlanResult> {
+    if (!window.electronAPI?.ai?.structuredPlan) {
+      throw new Error('AI requires Electron IPC bridge. Restart the Electron app.');
     }
-    return window.electronAPI.ai.anthropicMessage(request);
+    return window.electronAPI.ai.structuredPlan(request);
   }
 
-  async openaiChat(request: OpenAIChatRequest): Promise<AIProxyResponse> {
-    if (!window.electronAPI?.ai?.openaiChat) {
-      throw new Error(
-        'OpenAI requires Electron IPC bridge. Restart the Electron app and open AI Assist inside the Electron window.'
-      );
+  async rawChat(request: RawChatRequest): Promise<RawChatResult> {
+    if (!window.electronAPI?.ai?.rawChat) {
+      throw new Error('AI requires Electron IPC bridge. Restart the Electron app.');
     }
-    return window.electronAPI.ai.openaiChat(request);
+    return window.electronAPI.ai.rawChat(request);
   }
 
   // ── Vector ──

@@ -21,7 +21,6 @@ import { ScopeStage } from './stages/scope.stage';
 import { RecipeInterceptStage } from './stages/recipe-intercept.stage';
 import { ValidateKeyStage } from './stages/validate-key.stage';
 import { LlmCallStage } from './stages/llm-call.stage';
-import { ParseResponseStage } from './stages/parse-response.stage';
 import { DealiasStage } from './stages/dealias.stage';
 import { PostGuardsStage } from './stages/post-guards.stage';
 import { MemoryRecordStage } from './stages/memory-record.stage';
@@ -39,7 +38,6 @@ export class AIPipeline {
     inject(RecipeInterceptStage),
     inject(ValidateKeyStage),
     inject(LlmCallStage),
-    inject(ParseResponseStage),
     inject(DealiasStage),
     inject(PostGuardsStage),
     inject(MemoryRecordStage),

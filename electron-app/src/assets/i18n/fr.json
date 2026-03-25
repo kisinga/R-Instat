@@ -554,6 +554,7 @@
     "CODE_FAILED": "Échoué",
     "SEND": "Envoyer",
     "CUSTOM_RESPONSE_PLACEHOLDER": "Tapez votre propre réponse...",
+    "ANSWER_PLACEHOLDER": "Tapez votre réponse...",
     "SHOW_MORE": "Afficher {{count}} de plus...",
     "SHOW_LESS": "Afficher moins"
   },
@@ -580,6 +581,11 @@
     "REQUIRE_CONFIRM": "Exiger la confirmation pour les champs inférés",
     "SECTION_ADVANCED": "Avancé",
     "PII_REDACTION": "Anonymisation des données (anonymiser avant envoi à l'IA)",
-    "VERBOSE_DIAGNOSTICS": "Diagnostics IA détaillés"
+    "VERBOSE_DIAGNOSTICS": "Diagnostics IA détaillés",
+    "HYDRATION_MODE": "Rafraîchissement des index vectoriels",
+    "HYDRATION_ON_LAUNCH": "Au démarrage de l'application",
+    "HYDRATION_ON_AI_PANEL": "À l'ouverture du panneau IA",
+    "HYDRATION_DISABLED": "Désactivé (manuel uniquement)",
+    "HYDRATION_HINT": "Contrôle quand les contrats de dialogues et les signatures R sont ré-indexés pour la recherche IA."
   }
 }

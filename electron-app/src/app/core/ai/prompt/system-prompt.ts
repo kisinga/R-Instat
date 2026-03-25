@@ -8,7 +8,11 @@ const JSON_SCHEMA = `Return STRICT JSON only, wrapped in the standard envelope:
   "body": {
     "goal": string,
     "assumptions": string[],
-    "clarificationQuestions": string[],
+    "clarifications": [
+      { "kind": "choice", "options": ["intent statement A", "intent statement B"] }
+      // OR
+      { "kind": "question", "text": "Which column should be the grouping variable?" }
+    ],
     "overallConfidence": number, // 0..1
     "requiresConfirmation": boolean,
     "executionMode": "component_codegen",
@@ -35,8 +39,13 @@ const RULES = `Rules:
 - For each dialogId, use ONLY the param names listed in the "Dialog param names reference" (state keys must match exactly).
 - Respect parameter types/required/conditions from schemas.
 - Set dependsOnStepId when a step requires output/preparation from a previous step.
-- If uncertain, set requiresConfirmation=true and add clarificationQuestions.
-- Clarification options (clarificationQuestions): Each item is a **clickable option**; when the user clicks it, that **exact string is sent as the next user message**. So each item MUST be a **short statement of intent** (e.g. "I want to understand one-sample t-tests", "Use column age for the grouping variable"), NOT a question (e.g. do not use "Are you interested in X or Y?"). Otherwise the next turn will be classified as unclear. Keep the same intent category: do NOT use clarification to let the user choose between different categories (e.g. "understand vs perform"). Category is already fixed; only narrow **within** that category (e.g. for education_question: which concept or type to explain; for open_dialog: which column or which dialog param). Prefer few options (2–4) that are clear intent phrases. For clear education intents (e.g. "explain what a t-test tells us"), prefer answering directly with an informational goal; if you must clarify, use only within-education options (e.g. "Explain one-sample t-test", "Explain two-sample t-test", "Explain paired t-test").
+- If uncertain, set requiresConfirmation=true and add clarifications.
+- Clarifications come in two kinds:
+  - "choice": mutually exclusive paths — the user picks ONE option and the rest are discarded. Each option MUST be a short statement of intent (e.g. "Perform a one-sample t-test", "Use column age for grouping"). The selected option is sent verbatim as the next user message. 2-5 options per choice item.
+  - "question": the user needs to provide a specific answer (column name, threshold, etc.). Use direct 2nd-person phrasing (e.g. "Which column should be the dependent variable?"). The user types their answer and it is sent as the next message.
+  - Prefer "choice" when there is a small finite set of distinct paths. Prefer "question" when the answer is open-ended.
+  - Keep clarifications minimal: 1-3 items total. Do NOT include both a choice and a question about the same parameter.
+  - Stay within the current intent category. Do NOT use clarifications to switch categories (e.g. "understand vs perform").
 - Multi-step plans are allowed when prerequisite transformation is needed.
 - For education_question category: return an EMPTY steps array. Put the explanation in the "goal" field. Do NOT invent operationIds or dialogIds for educational content.
 - For data quality/effectiveness requests, prefer a composed workflow: summary by group, missing-record filter, calculate quality score, then sort/rank.

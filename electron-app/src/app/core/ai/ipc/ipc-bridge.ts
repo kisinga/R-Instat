@@ -1,27 +1,38 @@
 import { InjectionToken } from '@angular/core';
 
-// Re-declare the Electron IPC types locally so we don't depend on global ambient declarations.
-// These mirror the shapes in electron.d.ts but are owned by the bridge abstraction.
-
-export interface AnthropicMessageRequest {
+export interface StructuredPlanRequest {
+  provider: 'openai' | 'claude';
   apiKey: string;
-  system: string;
+  systemPrompt: string;
   userMessage: string;
   model?: string;
-  maxTokens?: number;
   temperature?: number;
-  responseFormat?: 'json' | 'text';
+  maxTokens?: number;
   timeoutMs?: number;
 }
 
-export interface OpenAIChatRequest {
+export interface StructuredPlanResult {
+  ok: boolean;
+  plan?: unknown;
+  error?: string;
+}
+
+export interface RawChatRequest {
+  provider: 'openai' | 'claude';
   apiKey: string;
-  system: string;
+  systemPrompt: string;
   userMessage: string;
+  responseFormat: 'json' | 'text';
   model?: string;
   temperature?: number;
-  responseFormat?: 'json_object' | 'text';
+  maxTokens?: number;
   timeoutMs?: number;
+}
+
+export interface RawChatResult {
+  ok: boolean;
+  content?: string;
+  error?: string;
 }
 
 export interface VectorDialogContract {
@@ -50,17 +61,11 @@ export interface VectorInteractionRecord {
   confidence?: number;
 }
 
-export interface AIProxyResponse {
-  ok: boolean;
-  status: number;
-  data: unknown;
-}
-
 export interface IPCBridge {
-  // AI provider calls
+  // AI calls
   isAiAvailable(): boolean;
-  anthropicMessage(request: AnthropicMessageRequest): Promise<AIProxyResponse>;
-  openaiChat(request: OpenAIChatRequest): Promise<AIProxyResponse>;
+  structuredPlan(request: StructuredPlanRequest): Promise<StructuredPlanResult>;
+  rawChat(request: RawChatRequest): Promise<RawChatResult>;
 
   // Vector operations
   isVectorAvailable(): boolean;

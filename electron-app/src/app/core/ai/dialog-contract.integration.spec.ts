@@ -130,7 +130,7 @@ describe('intent resolver integration', () => {
       plan: {
         goal: 'Plot a histogram',
         assumptions: [],
-        clarificationQuestions: [],
+        clarifications: [],
         overallConfidence: 0.9,
         requiresConfirmation: false,
         executionMode: 'component_codegen',
@@ -179,7 +179,7 @@ describe('intent resolver integration', () => {
       plan: {
         goal: 'Bar chart values by species',
         assumptions: [],
-        clarificationQuestions: [],
+        clarifications: [],
         overallConfidence: 0.9,
         requiresConfirmation: false,
         executionMode: 'component_codegen',
@@ -232,7 +232,7 @@ describe('intent resolver integration', () => {
       plan: {
         goal: 'Bar chart value mode without y',
         assumptions: [],
-        clarificationQuestions: [],
+        clarifications: [],
         overallConfidence: 0.9,
         requiresConfirmation: false,
         executionMode: 'component_codegen',

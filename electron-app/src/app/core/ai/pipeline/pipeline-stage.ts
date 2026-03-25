@@ -32,7 +32,6 @@ export interface PipelineContext {
   apiKey?: string;
   provider?: 'openai' | 'claude';
   userMessage?: string;
-  llmResponse?: string;
 
   parsedPlan?: AIPlan;
   finalPlan?: AIPlan;
