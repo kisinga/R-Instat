@@ -23,6 +23,7 @@ interface AnthropicMessageRequest {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  responseFormat?: 'json' | 'text';
   timeoutMs?: number;
 }
 
@@ -429,7 +430,15 @@ function setupIPC(): void {
 
   // AI provider bridge (main process avoids renderer CORS restrictions)
   ipcMain.handle('ai:anthropicMessage', async (_event, request: AnthropicMessageRequest) => {
-    return postJsonWithTimeout(
+    const messages: Array<{ role: string; content: string }> = [
+      { role: 'user', content: request.userMessage },
+    ];
+    // Assistant prefill forces Claude to respond with JSON
+    if (request.responseFormat === 'json') {
+      messages.push({ role: 'assistant', content: '{' });
+    }
+
+    const result = await postJsonWithTimeout(
       'https://api.anthropic.com/v1/messages',
       {
         'content-type': 'application/json',
@@ -441,10 +450,24 @@ function setupIPC(): void {
         max_tokens: request.maxTokens ?? 1800,
         temperature: request.temperature ?? 0.2,
         system: request.system,
-        messages: [{ role: 'user', content: request.userMessage }],
+        messages,
       },
       request.timeoutMs ?? 45000
     );
+
+    // When using prefill, the response content doesn't include the prefilled "{",
+    // so we prepend it to form valid JSON
+    if (request.responseFormat === 'json' && result.ok && result.data) {
+      const payload = result.data as { content?: Array<{ type?: string; text?: string }> };
+      if (payload.content) {
+        const textBlock = payload.content.find(c => c.type === 'text');
+        if (textBlock?.text) {
+          textBlock.text = '{' + textBlock.text;
+        }
+      }
+    }
+
+    return result;
   });
 
   ipcMain.handle('ai:openaiChat', async (_event, request: OpenAIChatRequest) => {

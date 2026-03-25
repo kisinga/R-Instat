@@ -14,8 +14,8 @@ const OTHER_DIALOG_IDENTITY: Readonly<Record<string, string>> = {
   'domain-selector': 'DomainSelectorComponent',
   'define-climatic-data': 'DefineClimaticDataDialogComponent',
   'export': 'ExportDialogComponent',
-  'ai-assist': 'AIAssistDialogComponent',
   'ai-settings': 'AiSettingsDialogComponent',
+  'settings': 'SettingsDialogComponent',
 };
 
 let _identityMap: Readonly<Record<string, string>> | null = null;
@@ -65,7 +65,7 @@ const NON_ANALYTICAL_DIALOGS = new Set<string>([
   'export',
   'domain-selector',
   'restore-from-code',
-  'ai-assist',
+  'settings',
 ]);
 
 function normalizeComponentType(componentType: string): string {

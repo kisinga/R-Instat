@@ -76,6 +76,7 @@ interface AnthropicMessageRequest {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  responseFormat?: 'json' | 'text';
   timeoutMs?: number;
 }
 

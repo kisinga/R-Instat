@@ -132,6 +132,7 @@ const electronAPI = {
       model?: string;
       maxTokens?: number;
       temperature?: number;
+      responseFormat?: 'json' | 'text';
       timeoutMs?: number;
     }): Promise<{ ok: boolean; status: number; data: unknown }> =>
       ipcRenderer.invoke('ai:anthropicMessage', request),

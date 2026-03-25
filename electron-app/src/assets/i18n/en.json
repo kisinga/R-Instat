@@ -49,8 +49,7 @@
     "CORRELATION": "Correlation",
     "TTEST": "t-Test",
     "REGRESSION": "Linear Regression",
-    "AI_ASSIST": "AI Assist",
-    "AI_SETTINGS": "AI Settings"
+    "SETTINGS": "Settings"
   },
   "AI_ASSIST": {
     "TITLE": "AI Assist",
@@ -591,6 +590,16 @@
     "CODE_SUCCESS": "Executed",
     "CODE_FAILED": "Failed"
   },
+  "SETTINGS": {
+    "TITLE": "Settings",
+    "TAB_GENERAL": "General",
+    "TAB_AI": "AI",
+    "SECTION_APPEARANCE": "Appearance",
+    "THEME": "Theme",
+    "THEME_LIGHT": "Light",
+    "THEME_DARK": "Dark",
+    "LANGUAGE": "Language"
+  },
   "AI_SETTINGS": {
     "TITLE": "AI Settings",
     "SECTION_PROVIDER": "AI Provider",
@@ -604,9 +613,6 @@
     "REQUIRE_CONFIRM": "Require confirmation for inferred fields",
     "SECTION_ADVANCED": "Advanced",
     "PII_REDACTION": "PII redaction (anonymize data before sending to AI)",
-    "VERBOSE_DIAGNOSTICS": "Verbose AI diagnostics",
-    "SECTION_APPEARANCE": "Appearance",
-    "THEME": "Theme",
-    "LANGUAGE": "Language"
+    "VERBOSE_DIAGNOSTICS": "Verbose AI diagnostics"
   }
 }

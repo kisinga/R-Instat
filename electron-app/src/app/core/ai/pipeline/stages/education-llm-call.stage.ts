@@ -60,6 +60,7 @@ export class EducationLlmCallStage implements PipelineStage {
 
     const parsed = this.parseResponse(response.content, ctx);
     if (!parsed) {
+      console.warn('[EducationLlmCall] Failed to parse JSON from AI response:', response.content);
       return Stage.terminate({
         success: false,
         error: 'Failed to parse education response from AI.',

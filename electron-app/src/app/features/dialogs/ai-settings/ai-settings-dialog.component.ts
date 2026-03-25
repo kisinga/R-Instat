@@ -1,8 +1,9 @@
 /**
- * AI Settings Dialog — modal for AI configuration and appearance.
+ * AI Settings — can be used standalone as a dialog or embedded in a parent container.
+ * Set [embedded]="true" to suppress the dialog chrome (header/footer).
  */
 
-import { Component, Output, EventEmitter, inject, signal, OnInit } from '@angular/core';
+import { Component, Output, EventEmitter, Input, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -16,13 +17,8 @@ import { ToastService } from '../../../core/services/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   template: `
-    <div class="dialog-content ai-settings-dialog" (click)="$event.stopPropagation()">
-      <div class="dialog-header">
-        <h2 class="text-lg font-semibold">{{ 'AI_SETTINGS.TITLE' | translate }}</h2>
-        <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
-      </div>
-
-      <div class="dialog-body space-y-6 max-h-[70vh] overflow-y-auto">
+    <ng-template #settingsBody>
+      <div class="space-y-6">
         <!-- AI Provider Section -->
         <section>
           <h3 class="text-sm font-semibold mb-2">{{ 'AI_SETTINGS.SECTION_PROVIDER' | translate }}</h3>
@@ -116,42 +112,31 @@ import { ToastService } from '../../../core/services/toast.service';
             <span class="text-xs">{{ 'AI_SETTINGS.VERBOSE_DIAGNOSTICS' | translate }}</span>
           </label>
         </section>
-
-        <!-- Appearance -->
-        <section>
-          <h3 class="text-sm font-semibold mb-2">{{ 'AI_SETTINGS.SECTION_APPEARANCE' | translate }}</h3>
-
-          <div class="flex items-center justify-between">
-            <span class="text-xs">{{ 'AI_SETTINGS.THEME' | translate }}</span>
-            <button class="btn btn-sm btn-ghost" (click)="themeService.toggleTheme()">
-              {{ themeService.isDark() ? 'Light' : 'Dark' }}
-            </button>
-          </div>
-
-          <div class="flex items-center justify-between mt-2">
-            <span class="text-xs">{{ 'AI_SETTINGS.LANGUAGE' | translate }}</span>
-            <select
-              class="select select-bordered select-xs"
-              [ngModel]="languageService.currentLang()"
-              (ngModelChange)="languageService.setLanguage($event)"
-            >
-              @for (lang of languageService.supportedLanguages; track lang.code) {
-                <option [value]="lang.code">{{ lang.nativeName }}</option>
-              }
-            </select>
-          </div>
-        </section>
       </div>
+    </ng-template>
 
-      <div class="dialog-footer">
-        <div class="flex-1"></div>
-        <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CLOSE' | translate }}</button>
+    @if (embedded) {
+      <ng-container *ngTemplateOutlet="settingsBody" />
+    } @else {
+      <div class="dialog-content ai-settings-dialog" (click)="$event.stopPropagation()">
+        <div class="dialog-header">
+          <h2 class="text-lg font-semibold">{{ 'AI_SETTINGS.TITLE' | translate }}</h2>
+          <button class="btn btn-ghost btn-sm btn-square" (click)="close.emit()">✕</button>
+        </div>
+        <div class="dialog-body max-h-[70vh] overflow-y-auto">
+          <ng-container *ngTemplateOutlet="settingsBody" />
+        </div>
+        <div class="dialog-footer">
+          <div class="flex-1"></div>
+          <button class="btn btn-ghost" (click)="close.emit()">{{ 'DIALOG.CLOSE' | translate }}</button>
+        </div>
       </div>
-    </div>
+    }
   `,
   styles: [`.ai-settings-dialog { width: 420px; max-width: 90vw; }`],
 })
 export class AiSettingsDialogComponent implements OnInit {
+  @Input() embedded = false;
   @Output() close = new EventEmitter<void>();
 
   readonly aiConfig = inject(AIConfigService);

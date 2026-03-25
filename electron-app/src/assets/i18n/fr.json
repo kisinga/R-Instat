@@ -45,8 +45,7 @@
     "CORRELATION": "Corrélation",
     "TTEST": "Test t",
     "REGRESSION": "Régression linéaire",
-    "AI_ASSIST": "Assistance IA",
-    "AI_SETTINGS": "Paramètres IA"
+    "SETTINGS": "Paramètres"
   },
   "AI_ASSIST": {
     "TITLE": "Assistance IA",
@@ -554,6 +553,16 @@
     "CODE_SUCCESS": "Exécuté",
     "CODE_FAILED": "Échoué"
   },
+  "SETTINGS": {
+    "TITLE": "Paramètres",
+    "TAB_GENERAL": "Général",
+    "TAB_AI": "IA",
+    "SECTION_APPEARANCE": "Apparence",
+    "THEME": "Thème",
+    "THEME_LIGHT": "Clair",
+    "THEME_DARK": "Sombre",
+    "LANGUAGE": "Langue"
+  },
   "AI_SETTINGS": {
     "TITLE": "Paramètres IA",
     "SECTION_PROVIDER": "Fournisseur IA",
@@ -567,9 +576,6 @@
     "REQUIRE_CONFIRM": "Exiger la confirmation pour les champs inférés",
     "SECTION_ADVANCED": "Avancé",
     "PII_REDACTION": "Anonymisation des données (anonymiser avant envoi à l'IA)",
-    "VERBOSE_DIAGNOSTICS": "Diagnostics IA détaillés",
-    "SECTION_APPEARANCE": "Apparence",
-    "THEME": "Thème",
-    "LANGUAGE": "Langue"
+    "VERBOSE_DIAGNOSTICS": "Diagnostics IA détaillés"
   }
 }

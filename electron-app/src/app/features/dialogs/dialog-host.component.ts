@@ -43,7 +43,6 @@ import { UnstackDialogComponent } from './unstack/unstack-dialog.component';
 import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component';
 import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
 import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
-import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component';
 import { GenericDialogComponent } from './generic/generic-dialog.component';
 
 // Import generic dialog specs (side-effect: registers them)
@@ -52,6 +51,7 @@ import '../../core/ai/generic-dialog/specs/permute-column';
 import '../../core/ai/generic-dialog/specs/delete-columns';
 import '../../core/ai/generic-dialog/specs/insert-column';
 import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.component';
+import { SettingsDialogComponent } from './settings/settings-dialog.component';
 
 @Component({
   selector: 'app-dialog-host',
@@ -93,8 +93,8 @@ import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.comp
     LinePlotDialogComponent,
     DotPlotDialogComponent,
     RestoreFromCodeDialogComponent,
-    AIAssistDialogComponent,
     AiSettingsDialogComponent,
+    SettingsDialogComponent,
     GenericDialogComponent,
   ],
   template: `
@@ -206,11 +206,11 @@ import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.comp
           @case ('restore-from-code') {
             <app-restore-from-code-dialog (close)="closeDialog()" />
           }
-          @case ('ai-assist') {
-            <app-ai-assist-dialog (close)="closeDialog()" />
-          }
           @case ('ai-settings') {
             <app-ai-settings-dialog (close)="closeDialog()" />
+          }
+          @case ('settings') {
+            <app-settings-dialog (close)="closeDialog()" />
           }
           @default {
             @if (resolvedSpec()) {

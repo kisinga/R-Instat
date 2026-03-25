@@ -5,7 +5,6 @@ import { RService } from '../../core/services/r.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/services/language.service';
 import { DomainExpertService } from '../../core/services/domain-expert.service';
-import { AppStateService } from '../../core/services/app-state.service';
 
 interface MenuItem {
   labelKey: string;
@@ -58,6 +57,18 @@ interface MenuGroup {
       }
 
       <div class="flex-1"></div>
+
+      <!-- Settings Button -->
+      <button
+        class="menu-trigger"
+        (click)="openSettings()"
+        [attr.title]="'TOOLBAR.SETTINGS' | translate"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
 
       <!-- Language Selector Dropdown -->
       <div class="dropdown dropdown-end">
@@ -143,7 +154,6 @@ export class ToolbarComponent {
   readonly themeService = inject(ThemeService);
   readonly languageService = inject(LanguageService);
   readonly domainService = inject(DomainExpertService);
-  private readonly appState = inject(AppStateService);
 
   /** Static menus that don't change */
   readonly staticMenus: MenuGroup[] = [
@@ -172,8 +182,6 @@ export class ToolbarComponent {
       labelKey: 'TOOLBAR.MENU_ANALYZE',
       icon: '📊',
       items: [
-        { labelKey: 'TOOLBAR.AI_ASSIST', action: 'ai-assist' },
-        { labelKey: 'TOOLBAR.AI_SETTINGS', action: 'ai-settings', dividerAfter: true },
         { labelKey: 'TOOLBAR.DESCRIBE', action: 'describe', shortcut: 'Ctrl+D' },
         { labelKey: 'TOOLBAR.SUMMARY', action: 'summary' },
       ]
@@ -246,12 +254,11 @@ export class ToolbarComponent {
     if (action === 'save') {
       return;
     }
-    if (action === 'ai-assist') {
-      // Redirect to chat tab instead of opening modal
-      this.appState.emitPanelEvent('output', 'show-chat');
-      return;
-    }
     this.rService.openDialog(action);
+  }
+
+  openSettings(): void {
+    this.rService.openDialog('settings');
   }
 
   toggleTheme(): void {

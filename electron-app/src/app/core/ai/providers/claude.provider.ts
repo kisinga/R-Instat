@@ -25,6 +25,7 @@ export class ClaudeProvider implements LLMProvider {
       model: request.model ?? 'claude-haiku-4-5',
       maxTokens: request.maxTokens ?? 1800,
       temperature: request.temperature ?? 0.2,
+      responseFormat: request.responseFormat,
     });
 
     const payload = response.data as ClaudeResponsePayload;
