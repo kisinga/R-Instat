@@ -10,21 +10,81 @@ export interface RetrievedDialogCandidate extends DialogPromptContract {
   reasons: string[];
 }
 
+/** Pre-ranked candidates from vector search (optional, provided by VectorIndexService). */
+export interface PreRankedCandidate {
+  dialogId: string;
+  score: number;
+  reasons: string[];
+}
+
 /**
  * Run retrieval over contracts, optionally restricted to a dialog family.
  * When family is set, only contracts with contract.family === family are scored.
+ *
+ * When preRankedCandidates is provided (from vector search), uses those scores
+ * instead of keyword matching, but still applies column-type compatibility boost.
+ * When not provided, uses the existing keyword-based scoring (full backward compat).
  */
 export function retrieveDialogContractsTopK(
   userInput: string,
   contracts: DialogPromptContract[],
   dataContext: RetrievalDataContext,
   topK: number,
-  family?: DialogFamily
+  family?: DialogFamily,
+  preRankedCandidates?: PreRankedCandidate[]
 ): RetrievedDialogCandidate[] {
   const subset = family
     ? contracts.filter((c) => c.family === family)
     : contracts;
+
+  if (preRankedCandidates && preRankedCandidates.length > 0) {
+    return applyPreRankedScores(subset, dataContext, topK, preRankedCandidates);
+  }
+
   return retrieveDialogContractsTopKInternal(userInput, subset, dataContext, topK);
+}
+
+/**
+ * Use pre-ranked vector scores, then apply column-type compatibility boost.
+ */
+function applyPreRankedScores(
+  contracts: DialogPromptContract[],
+  dataContext: RetrievalDataContext,
+  topK: number,
+  preRanked: PreRankedCandidate[]
+): RetrievedDialogCandidate[] {
+  const scoreMap = new Map(preRanked.map(c => [c.dialogId, c]));
+  const activeColumns = dataContext.activeDataframe
+    ? dataContext.columnsByDataframe[dataContext.activeDataframe] ?? []
+    : [];
+  const hasNumeric = activeColumns.some((x) => mapColumnType(x.type) === 'numeric');
+  const hasFactor = activeColumns.some((x) => mapColumnType(x.type) === 'factor');
+
+  const scored = contracts.map((contract) => {
+    const preRankedEntry = scoreMap.get(contract.dialogId);
+    let score = preRankedEntry?.score ?? 0;
+    const reasons = [...(preRankedEntry?.reasons ?? ['no vector match'])];
+
+    // Apply column-type compatibility boost (same as keyword path)
+    const requiredColumnTypes = contract.params
+      .filter((p) => p.required && p.kind === 'column' && p.columnType && p.columnType !== 'any')
+      .map((p) => p.columnType);
+    if (requiredColumnTypes.includes('numeric') && hasNumeric) {
+      score += 0.05; // Smaller boost since vector scores are 0-1 range
+      reasons.push('numeric compatibility');
+    }
+    if (requiredColumnTypes.includes('factor') && hasFactor) {
+      score += 0.05;
+      reasons.push('factor compatibility');
+    }
+
+    return { ...contract, score, reasons };
+  });
+
+  return scored
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(1, topK));
 }
 
 function retrieveDialogContractsTopKInternal(

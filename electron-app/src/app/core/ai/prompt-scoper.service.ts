@@ -14,6 +14,7 @@ import { getDialogContractsForPrompt } from './dialog-identity.registry';
 import {
   retrieveDialogContractsTopK,
   type RetrievalDataContext,
+  type PreRankedCandidate,
 } from './dialog-context-retriever';
 
 export type ExecutionMode = 'component_codegen' | 'structured_codegen' | 'direct_r';
@@ -33,19 +34,24 @@ export class PromptScoperService {
   /**
    * Produce contract set and optional current-dialogue context for the planner.
    */
+  /**
+   * Produce contract set and optional current-dialogue context for the planner.
+   * Accepts optional preRankedCandidates from vector search (caller pre-fetches async).
+   */
   scope(
     category: PromptCategory,
     family: DialogFamily | undefined,
     userInput: string,
     dataContext: RetrievalDataContext,
-    topK: number = DEFAULT_TOP_K
+    topK: number = DEFAULT_TOP_K,
+    preRankedCandidates?: PreRankedCandidate[]
   ): ScopedPromptContext {
     switch (category) {
       case 'refine_current_dialog': {
         const descriptor = this.registry.getCurrentDescriptor();
         const currentContext = this.registry.getCurrentContext();
         if (!descriptor || !currentContext) {
-          return this.scopeOpenDialog(userInput, family, dataContext, topK);
+          return this.scopeOpenDialog(userInput, family, dataContext, topK, preRankedCandidates);
         }
         const allContracts = getDialogContractsForPrompt();
         const contract = allContracts.find((c) => c.dialogId === descriptor.id);
@@ -58,7 +64,7 @@ export class PromptScoperService {
       }
 
       case 'open_dialog':
-        return this.scopeOpenDialog(userInput, family, dataContext, topK);
+        return this.scopeOpenDialog(userInput, family, dataContext, topK, preRankedCandidates);
 
       case 'run_code':
         return {
@@ -82,7 +88,7 @@ export class PromptScoperService {
         };
 
       default:
-        return this.scopeOpenDialog(userInput, undefined, dataContext, topK);
+        return this.scopeOpenDialog(userInput, undefined, dataContext, topK, preRankedCandidates);
     }
   }
 
@@ -90,7 +96,8 @@ export class PromptScoperService {
     userInput: string,
     family: DialogFamily | undefined,
     dataContext: RetrievalDataContext,
-    topK: number
+    topK: number,
+    preRankedCandidates?: PreRankedCandidate[]
   ): ScopedPromptContext {
     const allContracts = getDialogContractsForPrompt();
     const candidates = retrieveDialogContractsTopK(
@@ -98,7 +105,8 @@ export class PromptScoperService {
       allContracts,
       dataContext,
       topK,
-      family
+      family,
+      preRankedCandidates
     );
     const contracts =
       candidates.length > 0

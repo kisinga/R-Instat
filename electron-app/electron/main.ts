@@ -14,6 +14,7 @@ import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { RBridge } from './r-bridge';
+import { EmbeddingService, VectorStoreService, registerVectorHandlers } from './vector';
 
 interface AnthropicMessageRequest {
   apiKey: string;
@@ -468,10 +469,19 @@ function setupIPC(): void {
     );
   });
 
+  // Vector embedding + store services (optional, non-blocking)
+  // Instantiate but don't start yet - services are lazy-initialized on first IPC call
+  const embeddingService = new EmbeddingService();
+  const vectorStore = new VectorStoreService();
+  registerVectorHandlers(embeddingService, vectorStore);
+
   // Start R process
   rBridge.start().catch((err) => {
     console.error('Failed to start R:', err);
   });
+
+  // Vector services start lazily on first use via IPC, not at app startup.
+  // This avoids native module crashes blocking the app and defers the ~3s model load.
 }
 
 // App lifecycle

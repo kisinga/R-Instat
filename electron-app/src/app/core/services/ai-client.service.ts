@@ -8,6 +8,8 @@
 
 import { Injectable, inject } from '@angular/core';
 import { AIConfigService } from './ai-config.service';
+import { VectorIndexService } from '../vector/vector-index.service';
+import { VectorMemoryService } from '../vector/vector-memory.service';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
 import { compileStepToR as compileStepToRFromAdapter } from '../ai/step-to-r';
 import {
@@ -159,6 +161,10 @@ export class AIClientService {
   private readonly scoper = inject(PromptScoperService);
   private readonly categorizer = inject(PromptCategorizerService);
 
+  // Optional vector services - null if not available
+  private readonly vectorIndex = inject(VectorIndexService, { optional: true });
+  private readonly vectorMemory = inject(VectorMemoryService, { optional: true });
+
   private static readonly SYSTEM_PROMPT = `You are an orchestration planner for an R-based statistics app.
 Return STRICT JSON only with this shape:
 {
@@ -193,6 +199,7 @@ Rules:
 - If uncertain, set requiresConfirmation=true and add clarificationQuestions.
 - Clarification options (clarificationQuestions): Each item is a **clickable option**; when the user clicks it, that **exact string is sent as the next user message**. So each item MUST be a **short statement of intent** (e.g. "I want to understand one-sample t-tests", "Use column age for the grouping variable"), NOT a question (e.g. do not use "Are you interested in X or Y?"). Otherwise the next turn will be classified as unclear. Keep the same intent category: do NOT use clarification to let the user choose between different categories (e.g. "understand vs perform"). Category is already fixed; only narrow **within** that category (e.g. for education_question: which concept or type to explain; for open_dialog: which column or which dialog param). Prefer few options (2–4) that are clear intent phrases. For clear education intents (e.g. "explain what a t-test tells us"), prefer answering directly with an informational goal; if you must clarify, use only within-education options (e.g. "Explain one-sample t-test", "Explain two-sample t-test", "Explain paired t-test").
 - Multi-step plans are allowed when prerequisite transformation is needed.
+- For education_question category: return an EMPTY steps array. Put the explanation in the "goal" field. Do NOT invent operationIds or dialogIds for educational content.
 - For data quality/effectiveness requests, prefer a composed workflow: summary by group, missing-record filter, calculate quality score, then sort/rank.
 - Keep steps minimal and executable.`;
 
@@ -219,18 +226,36 @@ Rules:
       };
     }
 
-    // Layer 2: Scope
+    // Layer 2: Scope (with optional vector pre-ranking)
     const settings = this.aiConfig.retrievalSettings();
     const retrievalContext = {
       activeDataframe: aliasedContext.activeDataframe,
       columnsByDataframe: aliasedContext.columnsByDataframe,
     };
+
+    // Pre-fetch vector rankings if available (async, before sync scope call)
+    let preRankedCandidates: import('../ai/dialog-context-retriever').PreRankedCandidate[] | undefined;
+    if (settings.useDialogContractRetrieval && this.vectorIndex) {
+      // Lazily ensure index is built on first use
+      await this.vectorIndex.ensureIndexed().catch(() => {});
+      try {
+        preRankedCandidates = await this.vectorIndex.preRankDialogs(
+          aliasedInput,
+          settings.topKContracts,
+          family
+        );
+      } catch {
+        // Vector search failed - fall back to keyword matching
+      }
+    }
+
     const scoped = this.scoper.scope(
       category,
       family,
       aliasedInput,
       retrievalContext,
-      settings.topKContracts
+      settings.topKContracts,
+      preRankedCandidates
     );
 
     const currentDialogId = this.currentDialogueRegistry.getCurrentDescriptor()?.id ?? 'none';
@@ -278,6 +303,23 @@ Rules:
     const contractsJson = JSON.stringify(compactContracts);
     const operationsJson = JSON.stringify(scopedOperations);
 
+    // Retrieve similar past interactions for few-shot examples (optional)
+    let pastInteractions: Array<{ query: string; dialogId: string; state: Record<string, unknown> }> | undefined;
+    if (this.vectorMemory?.isReady()) {
+      try {
+        const similar = await this.vectorMemory.getSimilarInteractions(aliasedInput, 3);
+        if (similar.length > 0) {
+          pastInteractions = similar.map(s => ({
+            query: s.query,
+            dialogId: s.dialogId,
+            state: s.state,
+          }));
+        }
+      } catch {
+        // Memory retrieval failed - continue without few-shot examples
+      }
+    }
+
     const userMessage = this.buildUserMessage(
       aliasedInput,
       aliasedContext,
@@ -286,7 +328,8 @@ Rules:
       modeDecision.mode,
       scoped.currentDialogContext,
       scopedDialogIds,
-      category
+      category,
+      pastInteractions
     );
 
     try {
@@ -317,6 +360,11 @@ Rules:
 
       const normalizedPlan = deAliasPlan(parsed.plan, maps);
 
+      // Guard: education questions should never have steps (strip hallucinated ones)
+      if (category === 'education_question' && normalizedPlan.steps.length > 0) {
+        normalizedPlan.steps = [];
+      }
+
       if (modeDecision.mode === 'structured_codegen') {
         const structuredPlan = this.buildStructuredCodePlan(normalizedPlan, modeDecision);
         return {
@@ -325,6 +373,19 @@ Rules:
           retrievalReport,
           privacyReport,
         };
+      }
+
+      // Record interaction for future few-shot retrieval (fire-and-forget)
+      if (this.vectorMemory && normalizedPlan?.steps?.length > 0) {
+        const firstStep = normalizedPlan.steps[0];
+        if (firstStep.stepType === 'dialog') {
+          const dialogStep = firstStep as AIDialogPlanStep;
+          this.vectorMemory.recordInteraction(
+            userInput, dialogStep.dialogId, dialogStep.operationId,
+            (dialogStep.state ?? {}) as Record<string, unknown>,
+            true, modeDecision.mode, dialogStep.confidence
+          ).catch(() => {});
+        }
       }
 
       return { ...parsed, plan: normalizedPlan, retrievalReport, privacyReport };
@@ -365,7 +426,8 @@ Rules:
     mode: ExecutionMode,
     currentDialogContext?: DialogueAIContext | null,
     scopedDialogIds: string[] = [],
-    category?: PromptCategory
+    category?: PromptCategory,
+    pastInteractions?: Array<{ query: string; dialogId: string; state: Record<string, unknown> }>
   ): string {
     const inferenceHints = this.buildDataInferenceHints(dataContext);
     const paramReference = this.buildDialogParamReference(scopedDialogIds);
@@ -376,6 +438,10 @@ Rules:
     const categoryBlock =
       category != null && category !== 'unclear'
         ? `\nCurrent intent category: ${category}. Do not offer clarifications that switch category. Any clarificationQuestions must stay within this category and each item must be a short intent statement (what the user is choosing), not a question—that text is sent as the next message.\n\n`
+        : '';
+    const memoryBlock =
+      pastInteractions && pastInteractions.length > 0
+        ? `\nSimilar past interactions (for reference, not binding):\n${pastInteractions.map((p, i) => `${i + 1}. "${p.query}" -> dialogId: "${p.dialogId}", state: ${JSON.stringify(p.state)}`).join('\n')}\n\n`
         : '';
     return `Data context:
 - dataframes: ${JSON.stringify(dataContext.dataframes)}
@@ -388,7 +454,7 @@ Dialog contracts: ${contractsJson}
 
 Dialog param names reference (use ONLY these keys in state for each dialogId; no other keys allowed):
 ${paramReference}
-${currentStateBlock}${categoryBlock}User request: ${userInput}
+${currentStateBlock}${categoryBlock}${memoryBlock}User request: ${userInput}
 Target execution mode: ${mode}
 
 Privacy note:

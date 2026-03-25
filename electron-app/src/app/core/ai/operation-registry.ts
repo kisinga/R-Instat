@@ -160,30 +160,81 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
   },
 ];
 
-function applyCatalogOperationMappings(
+/**
+ * Build the operation registry from catalog contracts as primary source.
+ * Legacy entries provide metadata (label, kind, description) for known operations.
+ * New operations from the catalog that aren't in the legacy list are auto-discovered
+ * with inferred metadata from the dialog's family.
+ */
+function buildRegistryFromCatalog(
   catalog: DialogPromptContract[],
   legacy: OperationDefinition[]
 ): OperationDefinition[] {
-  const byId = new Map(
-    legacy.map((op) => [op.id, { ...op, mappedDialogs: [...op.mappedDialogs] }])
-  );
+  const legacyById = new Map(legacy.map((op) => [op.id, op]));
+  const resultById = new Map<string, OperationDefinition>();
+
+  // Seed from legacy (preserves metadata for known operations)
+  for (const op of legacy) {
+    resultById.set(op.id, { ...op, mappedDialogs: [...op.mappedDialogs] });
+  }
+
+  // Merge catalog: add dialog mappings + discover new operations
   for (const entry of catalog) {
     for (const operationId of entry.operations) {
-      const op = byId.get(operationId);
-      if (!op) continue;
-      if (!op.mappedDialogs.includes(entry.dialogId)) {
-        op.mappedDialogs.push(entry.dialogId);
+      const existing = resultById.get(operationId);
+      if (existing) {
+        // Known operation - add dialog if not already mapped
+        if (!existing.mappedDialogs.includes(entry.dialogId)) {
+          existing.mappedDialogs.push(entry.dialogId);
+        }
+      } else {
+        // New operation from catalog - infer metadata from dialog family
+        resultById.set(operationId, {
+          id: operationId,
+          label: operationId.replace(/\./g, ' ').replace(/_/g, ' '),
+          primaryKind: inferPrimaryKind(entry.family),
+          derivedKind: inferDerivedKind(operationId),
+          description: `${entry.description} (auto-discovered from ${entry.dialogId})`,
+          mappedDialogs: [entry.dialogId],
+        });
       }
     }
   }
-  return [...byId.values()].map((op) => ({
+
+  return [...resultById.values()].map((op) => ({
     ...op,
     mappedDialogs: [...new Set(op.mappedDialogs)],
   }));
 }
 
+function inferPrimaryKind(family: string): PrimaryKind {
+  switch (family) {
+    case 'plotting': return 'descriptive';
+    case 'data-preparation': return 'data-preparation';
+    case 'inferential': return 'inferential';
+    case 'predictive': return 'predictive';
+    case 'climatic': return 'domain-specific';
+    default: return 'descriptive';
+  }
+}
+
+function inferDerivedKind(operationId: string): DerivedKind {
+  if (operationId.includes('reshape') || operationId.includes('merge')) return 'reshape';
+  if (operationId.includes('transform') || operationId.includes('filter') || operationId.includes('sort')) return 'transform';
+  if (operationId.includes('quality') || operationId.includes('missing')) return 'quality';
+  if (operationId.includes('distribution')) return 'distribution';
+  if (operationId.includes('comparison')) return 'comparison';
+  if (operationId.includes('association')) return 'association';
+  if (operationId.includes('hypothesis') || operationId.includes('test')) return 'hypothesis-test';
+  if (operationId.includes('regression')) return 'regression';
+  if (operationId.includes('climatic') && operationId.includes('summary')) return 'climatic-summary';
+  if (operationId.includes('climatic') && operationId.includes('threshold')) return 'climatic-threshold';
+  if (operationId.includes('climatic') && operationId.includes('extreme')) return 'climatic-extremes';
+  return 'transform';
+}
+
 export const OPERATION_REGISTRY: OperationDefinition[] =
-  applyCatalogOperationMappings(
+  buildRegistryFromCatalog(
     getDialogContractsForPrompt(),
     LEGACY_OPERATION_REGISTRY
   );

@@ -151,9 +151,61 @@ const electronAPI = {
   file: {
     writeText: (filePath: string, content: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('file:writeText', filePath, content),
-    
+
     writeBase64: (filePath: string, base64Data: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('file:writeBase64', filePath, base64Data),
+  },
+
+  // Vector embedding + search APIs (optional AI enhancement layer)
+  vector: {
+    status: (): Promise<{ embedding: unknown; vectorStore: unknown }> =>
+      ipcRenderer.invoke('vector:status'),
+
+    indexDialogs: (contracts: Array<{
+      dialogId: string;
+      description: string;
+      family: string;
+      operations: string[];
+      keywords: string[];
+      paramNames: string[];
+    }>): Promise<{ indexed: number }> =>
+      ipcRenderer.invoke('vector:indexDialogs', contracts),
+
+    searchDialogs: (query: string, topK: number, family?: string): Promise<Array<{
+      id: string;
+      score: number;
+      metadata: Record<string, unknown>;
+    }>> =>
+      ipcRenderer.invoke('vector:searchDialogs', query, topK, family),
+
+    storeInteraction: (interaction: {
+      id: string;
+      query: string;
+      dialogId: string;
+      operationId?: string;
+      state: string;
+      success: boolean;
+      executionMode?: string;
+      confidence?: number;
+    }): Promise<{ stored: boolean }> =>
+      ipcRenderer.invoke('vector:storeInteraction', interaction),
+
+    searchInteractions: (query: string, topK: number): Promise<Array<{
+      id: string;
+      score: number;
+      metadata: Record<string, unknown>;
+    }>> =>
+      ipcRenderer.invoke('vector:searchInteractions', query, topK),
+
+    searchRSignatures: (query: string, topK: number): Promise<Array<{
+      id: string;
+      score: number;
+      metadata: Record<string, unknown>;
+    }>> =>
+      ipcRenderer.invoke('vector:searchRSignatures', query, topK),
+
+    tableInfo: (table: string): Promise<{ exists: boolean; rowCount: number }> =>
+      ipcRenderer.invoke('vector:tableInfo', table),
   },
 };
 

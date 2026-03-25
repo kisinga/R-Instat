@@ -11,6 +11,7 @@ import type { DialogParamSchema } from '../ai/dialog-schema.registry';
 import { buildDialogMetadata } from '../ai/dialog-metadata-builder';
 import { PARAM_ALIAS_CONFIG } from '../ai/param-alias.config';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
+import { extractStepDelta, applyDeltasToContext, type StepOutputDelta } from '../ai/step-output-delta';
 import { ResolverTransformPipeline } from './intent-resolver.pipeline';
 import type {
   AICallResult,
@@ -101,6 +102,7 @@ export class IntentResolverService {
     const allowedOperations = new Set(OPERATION_REGISTRY.map((x) => x.id));
     const warnings: string[] = [];
     const resolvedSteps: ResolvedPlanStep[] = [];
+    const accumulatedDeltas: StepOutputDelta[] = [];
     const stepIdToIndex = new Map<string, number>();
     for (let i = 0; i < result.plan.steps.length; i++) {
       const step = result.plan.steps[i];
@@ -169,11 +171,17 @@ export class IntentResolverService {
         }
       }
 
+      // Apply accumulated deltas from previous steps to data context
+      // so columns created by step N-1 are visible to step N's validation.
+      const augmentedContext = accumulatedDeltas.length > 0
+        ? applyDeltasToContext(dataContext, accumulatedDeltas, (dialogStep.state as Record<string, unknown>)?.['dataframe'] as string | undefined) as DataContext
+        : dataContext;
+
       const state = this.applyStateTransforms(
         dialogStep.dialogId,
         schema.params,
         (dialogStep.state ?? {}) as Record<string, unknown>,
-        dataContext,
+        augmentedContext,
         warnings
       );
       const allowedParams = new Set(schema.params.map((x) => x.name));
@@ -195,7 +203,7 @@ export class IntentResolverService {
         }
         if (value === undefined || value === null || value === '') continue;
 
-        const typeError = this.validateParamType(param, value, state, dataContext);
+        const typeError = this.validateParamType(param, value, state, augmentedContext);
         if (typeError) {
           return { ok: false, error: `Param "${param.name}" invalid for ${dialogStep.dialogId}: ${typeError}` };
         }
@@ -215,6 +223,10 @@ export class IntentResolverService {
       if (dialogStep.confidence < 0 || dialogStep.confidence > 1) {
         warnings.push(`Step confidence out of range for ${dialogStep.dialogId}; clamped by UI`);
       }
+
+      // Extract output delta for subsequent steps
+      const delta = extractStepDelta(dialogStep.dialogId, state);
+      accumulatedDeltas.push(delta);
 
       resolvedSteps.push({ kind: 'dialog', step: dialogStep, metadata });
     }

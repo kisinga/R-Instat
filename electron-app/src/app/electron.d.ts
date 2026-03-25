@@ -129,8 +129,43 @@ interface ElectronAPI {
     writeText: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
     writeBase64: (filePath: string, base64Data: string) => Promise<{ success: boolean; error?: string }>;
   };
+  vector?: {
+    status: () => Promise<{ embedding: unknown; vectorStore: unknown }>;
+    indexDialogs: (contracts: VectorDialogContract[]) => Promise<{ indexed: number }>;
+    searchDialogs: (query: string, topK: number, family?: string) => Promise<VectorSearchResult[]>;
+    storeInteraction: (interaction: VectorInteractionRecord) => Promise<{ stored: boolean }>;
+    searchInteractions: (query: string, topK: number) => Promise<VectorSearchResult[]>;
+    searchRSignatures: (query: string, topK: number) => Promise<VectorSearchResult[]>;
+    tableInfo: (table: string) => Promise<{ exists: boolean; rowCount: number }>;
+  };
   onMenuCommand: (callback: (command: string, data?: unknown) => void) => () => void;
   platform: string;
+}
+
+interface VectorDialogContract {
+  dialogId: string;
+  description: string;
+  family: string;
+  operations: string[];
+  keywords: string[];
+  paramNames: string[];
+}
+
+interface VectorSearchResult {
+  id: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
+
+interface VectorInteractionRecord {
+  id: string;
+  query: string;
+  dialogId: string;
+  operationId?: string;
+  state: string;
+  success: boolean;
+  executionMode?: string;
+  confidence?: number;
 }
 
 declare global {
