@@ -43,6 +43,10 @@ export interface PipelineContext {
   // Short-circuit
   earlyResult?: AICallResult;
 
+  // Education-specific (optional, set only by EducationPipeline)
+  educationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  educationResponse?: import('../../models/education-chat.model').EducationAIResponse;
+
   // Diagnostics
   warnings: string[];
   debugLog: string[];

@@ -17,11 +17,42 @@ const EDUCATION_PROBES = [
   'tell us',
   'why do we',
   'why does',
-  'explain what a t-test',
-  'explain what a regression',
   'explain what',
   'meaning of',
   'understand',
+  'difference between',
+  'when should i use',
+  'when to use',
+  'help me understand',
+  'can you explain',
+  'teach me',
+  'what is the purpose of',
+  'assumptions of',
+  'how to interpret',
+  'how to read',
+  'what does it mean when',
+  'define ',
+  'definition of',
+  'in simple terms',
+  'basics of',
+  'fundamentals of',
+  'concept of',
+  'introduction to',
+];
+
+/** Action-intent phrases that override education classification when co-occurring. */
+const ACTION_OVERRIDE_PROBES = [
+  'perform',
+  'run a',
+  'create a',
+  'make a',
+  'do a',
+  'show me a',
+  'generate a',
+  'plot a',
+  'on my data',
+  'using my',
+  'with my data',
 ];
 
 const RUN_CODE_PROBES = [
@@ -101,7 +132,11 @@ export function ruleBasedCategorizer(
   }
 
   // 1. education_question first (so "explain what a t-test" is not open_dialog)
+  //    But defer to LLM if the user also shows action intent (e.g. "on my data")
   if (hasAny(norm, EDUCATION_PROBES)) {
+    if (hasAny(norm, ACTION_OVERRIDE_PROBES)) {
+      return null; // ambiguous — let LLM categorizer decide
+    }
     return { category: 'education_question' };
   }
 

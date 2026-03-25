@@ -5,6 +5,7 @@ import { RService } from '../../core/services/r.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/services/language.service';
 import { DomainExpertService } from '../../core/services/domain-expert.service';
+import { AppStateService } from '../../core/services/app-state.service';
 
 interface MenuItem {
   labelKey: string;
@@ -142,6 +143,7 @@ export class ToolbarComponent {
   readonly themeService = inject(ThemeService);
   readonly languageService = inject(LanguageService);
   readonly domainService = inject(DomainExpertService);
+  private readonly appState = inject(AppStateService);
 
   /** Static menus that don't change */
   readonly staticMenus: MenuGroup[] = [
@@ -167,6 +169,7 @@ export class ToolbarComponent {
       icon: '📊',
       items: [
         { labelKey: 'TOOLBAR.AI_ASSIST', action: 'ai-assist' },
+        { labelKey: 'TOOLBAR.AI_SETTINGS', action: 'ai-settings', dividerAfter: true },
         { labelKey: 'TOOLBAR.DESCRIBE', action: 'describe', shortcut: 'Ctrl+D' },
         { labelKey: 'TOOLBAR.SUMMARY', action: 'summary' },
       ]
@@ -235,9 +238,13 @@ export class ToolbarComponent {
   handleAction(action: string): void {
     // Close dropdown
     (document.activeElement as HTMLElement)?.blur();
-    
+
     if (action === 'save') {
-      // Handle save action
+      return;
+    }
+    if (action === 'ai-assist') {
+      // Redirect to chat tab instead of opening modal
+      this.appState.emitPanelEvent('output', 'show-chat');
       return;
     }
     this.rService.openDialog(action);

@@ -1,8 +1,17 @@
+/**
+ * AI Pipeline — thin wrapper over PipelineOrchestrator.
+ *
+ * Composes the action-planning stage sequence and result mapper.
+ * All orchestration logic lives in PipelineOrchestrator.
+ */
+
 import { Injectable, inject } from '@angular/core';
-import type { PipelineStage, PipelineContext } from './pipeline-stage';
-import { createPipelineContext } from './pipeline-stage';
-import type { DataContext } from '../types/data-context.types';
+import type { PipelineInputs } from './context';
+import type { PipelineStage } from './stage';
+import { PipelineOrchestrator } from './pipeline-orchestrator';
 import type { AICallResult } from '../types/ai-result.types';
+import type { DataContext } from '../types/data-context.types';
+import type { ConversationTurn } from './context';
 import { AIConfigService } from '../../services/ai-config.service';
 
 import { PiiGuardStage } from './stages/pii-guard.stage';
@@ -19,6 +28,7 @@ import { MemoryRecordStage } from './stages/memory-record.stage';
 
 @Injectable({ providedIn: 'root' })
 export class AIPipeline {
+  private readonly orchestrator = inject(PipelineOrchestrator);
   private readonly aiConfig = inject(AIConfigService);
 
   private readonly stages: PipelineStage[] = [
@@ -38,97 +48,25 @@ export class AIPipeline {
   async execute(
     userInput: string,
     dataContext: DataContext,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; conversationHistory?: ConversationTurn[] }
   ): Promise<AICallResult> {
-    const ctx = createPipelineContext(userInput, dataContext, {
-      verbose: this.aiConfig.verboseAiDiagnostics(),
+    const inputs: PipelineInputs = {
+      userInput,
+      dataContext,
+      conversationHistory: options?.conversationHistory ?? [],
       signal: options?.signal,
-    });
+      verbose: this.aiConfig.verboseAiDiagnostics(),
+    };
 
-    for (const stage of this.stages) {
-      if (ctx.signal?.aborted) {
-        return {
-          success: false,
-          error: 'Request cancelled',
-          privacyReport: ctx.privacyReport,
-        };
-      }
-
-      try {
-        const shouldContinue = await stage.execute(ctx);
-        if (!shouldContinue) {
-          return this.attachDiagnostics(ctx.earlyResult!, ctx);
-        }
-      } catch (err) {
-        const msg = `[AI:${stage.id}] ${err instanceof Error ? err.message : String(err)}`;
-        ctx.debugLog.push(msg);
-
-        switch (stage.errorPolicy) {
-          case 'fatal':
-            return this.buildErrorResult(msg, ctx);
-          case 'warn':
-            ctx.warnings.push(msg);
-            break;
-          case 'silent':
-            break;
-        }
-      }
-    }
-
-    return this.attachDiagnostics(
-      {
+    return this.orchestrator.execute<AICallResult>(inputs, {
+      label: 'AI',
+      stages: this.stages,
+      resultMapper: (state, _diagnostics) => ({
         success: true,
-        plan: ctx.finalPlan,
-        retrievalReport: ctx.retrievalReport,
-        privacyReport: ctx.privacyReport,
-      },
-      ctx
-    );
-  }
-
-  private buildErrorResult(message: string, ctx: PipelineContext): AICallResult {
-    // Detect common API error patterns for user-friendly messages
-    const lower = message.toLowerCase();
-    const is401 =
-      message.includes('401') ||
-      message.includes('403') ||
-      lower.includes('incorrect api key') ||
-      lower.includes('invalid x-api-key');
-    const is429 =
-      message.includes('429') ||
-      lower.includes('quota') ||
-      lower.includes('rate limit') ||
-      lower.includes('insufficient_quota');
-
-    let error: string;
-    if (is401) {
-      error = 'Invalid API key. Check your key in Settings.';
-    } else if (is429) {
-      const provider = ctx.provider ?? 'openai';
-      error = provider === 'openai'
-        ? 'OpenAI quota exceeded (429). Check your OpenAI billing/plan, or switch provider to Claude in AI Assist settings.'
-        : 'Claude quota/rate limit reached (429). Check your Anthropic billing/plan, or switch provider to OpenAI in AI Assist settings.';
-    } else {
-      error = message;
-    }
-
-    return this.attachDiagnostics(
-      {
-        success: false,
-        error,
-        privacyReport: ctx.privacyReport,
-      },
-      ctx
-    );
-  }
-
-  private attachDiagnostics(result: AICallResult, ctx: PipelineContext): AICallResult {
-    if (ctx.warnings.length > 0) {
-      result.warnings = ctx.warnings;
-    }
-    if (ctx.verbose && ctx.debugLog.length > 0) {
-      result.debugLog = ctx.debugLog;
-    }
-    return result;
+        plan: state.finalPlan,
+        retrievalReport: state.retrievalReport,
+        privacyReport: state.privacyReport,
+      }),
+    });
   }
 }

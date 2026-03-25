@@ -73,9 +73,16 @@ export class AppStateService {
   // ═══════════════════════════════════════════════════════════════════════════
   // DIALOG COORDINATION
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   private readonly _dialog$ = new Subject<{ action: 'open' | 'close'; dialog: string }>();
   readonly dialog$ = this._dialog$.asObservable();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PANEL EVENTS (cross-component panel navigation, e.g. switch output tab)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private readonly _panelEvent$ = new Subject<{ panel: string; action: string }>();
+  readonly panelEvent$ = this._panelEvent$.asObservable();
 
   constructor(private ngZone: NgZone) {}
 
@@ -261,5 +268,12 @@ export class AppStateService {
    */
   closeDialog(dialogName: string): void {
     this._dialog$.next({ action: 'close', dialog: dialogName });
+  }
+
+  /**
+   * Emit a panel-level navigation event (e.g. switch output tab to education).
+   */
+  emitPanelEvent(panel: string, action: string): void {
+    this._panelEvent$.next({ panel, action });
   }
 }

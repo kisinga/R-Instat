@@ -1,11 +1,15 @@
 import { Injectable, inject } from '@angular/core';
-import type { PipelineStage, PipelineContext } from '../pipeline-stage';
+import type { PipelineStage, StageResult } from '../stage';
+import { Stage } from '../stage';
+import type { PipelineContext } from '../context';
 import { AIConfigService } from '../../../services/ai-config.service';
 import { LLMProviderFactory } from '../../providers/llm-provider.factory';
 import { PLANNER_SYSTEM_PROMPT, DIRECT_R_SYSTEM_PROMPT } from '../../prompt/system-prompt';
 import { buildDirectRPrompt } from '../../prompt/prompt-builder';
 import { deAliasScript } from '../../pii-guard';
 import type { AIPlan } from '../../types/ai-plan.types';
+import type { LLMProvider } from '../../providers/llm-provider';
+import type { LLMModelConfig } from '../../../services/ai-config.service';
 
 @Injectable({ providedIn: 'root' })
 export class LlmCallStage implements PipelineStage {
@@ -15,36 +19,36 @@ export class LlmCallStage implements PipelineStage {
   private readonly aiConfig = inject(AIConfigService);
   private readonly llmFactory = inject(LLMProviderFactory);
 
-  async execute(ctx: PipelineContext): Promise<boolean> {
+  async execute(ctx: PipelineContext): Promise<StageResult> {
     const provider = this.llmFactory.getProvider();
     const modelConfig = this.aiConfig.modelConfig();
 
-    if (ctx.modeDecision!.mode === 'direct_r') {
+    if (ctx.state.modeDecision!.mode === 'direct_r') {
       return this.handleDirectR(ctx, provider, modelConfig);
     }
 
     // Standard planner call
-    const response = await provider.call(ctx.apiKey!, {
+    const response = await provider.call(ctx.state.apiKey!, {
       systemPrompt: PLANNER_SYSTEM_PROMPT,
-      userMessage: ctx.userMessage!,
+      userMessage: ctx.state.userMessage!,
       responseFormat: 'json',
       model: modelConfig.plannerModel,
       temperature: modelConfig.plannerTemperature,
       maxTokens: modelConfig.plannerMaxTokens,
     });
 
-    ctx.llmResponse = response.content;
-    return true;
+    ctx.state.llmResponse = response.content;
+    return Stage.continue();
   }
 
   private async handleDirectR(
     ctx: PipelineContext,
-    provider: import('../../providers/llm-provider').LLMProvider,
-    modelConfig: import('../../../services/ai-config.service').LLMModelConfig
-  ): Promise<boolean> {
-    const prompt = buildDirectRPrompt(ctx.aliasedInput!, ctx.aliasedContext!);
+    provider: LLMProvider,
+    modelConfig: LLMModelConfig
+  ): Promise<StageResult> {
+    const prompt = buildDirectRPrompt(ctx.state.aliasedInput!, ctx.state.aliasedContext!);
 
-    const response = await provider.call(ctx.apiKey!, {
+    const response = await provider.call(ctx.state.apiKey!, {
       systemPrompt: DIRECT_R_SYSTEM_PROMPT,
       userMessage: prompt,
       responseFormat: 'text',
@@ -53,17 +57,17 @@ export class LlmCallStage implements PipelineStage {
       maxTokens: modelConfig.codegenMaxTokens,
     });
 
-    const script = deAliasScript(response.content.trim(), ctx.aliasMaps!);
+    const script = deAliasScript(response.content.trim(), ctx.state.aliasMaps!);
 
     const plan: AIPlan = {
-      goal: ctx.rawUserInput,
+      goal: ctx.inputs.userInput,
       assumptions: ['Direct script generated for uncovered or advanced intent.'],
       clarificationQuestions: [],
       overallConfidence: 0.68,
       requiresConfirmation: true,
       executionMode: 'direct_r',
-      modeReason: ctx.modeDecision!.reason,
-      modeConfidence: ctx.modeDecision!.confidence,
+      modeReason: ctx.state.modeDecision!.reason,
+      modeConfidence: ctx.state.modeDecision!.confidence,
       steps: [
         {
           stepType: 'code',
@@ -79,12 +83,11 @@ export class LlmCallStage implements PipelineStage {
       ],
     };
 
-    ctx.earlyResult = {
+    return Stage.terminate({
       success: true,
       plan,
-      retrievalReport: ctx.retrievalReport,
-      privacyReport: ctx.privacyReport,
-    };
-    return false;
+      retrievalReport: ctx.state.retrievalReport,
+      privacyReport: ctx.state.privacyReport,
+    });
   }
 }

@@ -45,7 +45,8 @@
     "CORRELATION": "Correlation",
     "TTEST": "t-Test",
     "REGRESSION": "Linear Regression",
-    "AI_ASSIST": "AI Assist"
+    "AI_ASSIST": "AI Assist",
+    "AI_SETTINGS": "AI Settings"
   },
   "AI_ASSIST": {
     "TITLE": "AI Assist",
@@ -567,5 +568,41 @@
     "CENTER": "Center",
     "UP": "Up",
     "DOWN": "Down"
+  },
+  "AI_CHAT": {
+    "TAB_LABEL": "AI Chat",
+    "NEW_CONVERSATION": "New conversation",
+    "NO_CONVERSATIONS": "No conversations yet",
+    "EMPTY_MESSAGE": "Ask me anything about statistics or tell me what you want to do with your data.",
+    "EMPTY_HINT": "I can explain concepts, create charts, run analyses, and more.",
+    "INPUT_PLACEHOLDER": "Ask a question or describe what you want to do...",
+    "RELATED_IN_RINSTAT": "Related in R-Instat",
+    "OPEN_DIALOG": "Open",
+    "SETTINGS": "AI Settings",
+    "PLAN": "Plan",
+    "CONFIDENCE": "Confidence",
+    "ASSUMPTIONS": "Assumptions",
+    "QUESTIONS": "Questions",
+    "APPLY": "Apply",
+    "CODE_SUCCESS": "Executed",
+    "CODE_FAILED": "Failed"
+  },
+  "AI_SETTINGS": {
+    "TITLE": "AI Settings",
+    "SECTION_PROVIDER": "AI Provider",
+    "PROVIDER": "Provider",
+    "API_KEY": "API Key",
+    "SAVE_KEY": "Save",
+    "GET_KEY": "Get an API key",
+    "SECTION_THRESHOLDS": "Confidence Thresholds",
+    "HIGH_THRESHOLD": "High confidence",
+    "LOW_THRESHOLD": "Low confidence",
+    "REQUIRE_CONFIRM": "Require confirmation for inferred fields",
+    "SECTION_ADVANCED": "Advanced",
+    "PII_REDACTION": "PII redaction (anonymize data before sending to AI)",
+    "VERBOSE_DIAGNOSTICS": "Verbose AI diagnostics",
+    "SECTION_APPEARANCE": "Appearance",
+    "THEME": "Theme",
+    "LANGUAGE": "Language"
   }
 }

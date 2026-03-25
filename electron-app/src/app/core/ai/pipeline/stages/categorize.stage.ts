@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import type { PipelineStage, PipelineContext } from '../pipeline-stage';
+import type { PipelineStage, StageResult } from '../stage';
+import { Stage } from '../stage';
+import type { PipelineContext } from '../context';
 import { PromptCategorizerService } from '../../prompt-categorizer.service';
 import { CurrentDialogueRegistryService } from '../../current-dialogue-registry.service';
 import type { PromptCategory } from '../../pipeline-types';
@@ -42,25 +44,24 @@ export class CategorizeStage implements PipelineStage {
   private readonly categorizer = inject(PromptCategorizerService);
   private readonly dialogRegistry = inject(CurrentDialogueRegistryService);
 
-  async execute(ctx: PipelineContext): Promise<boolean> {
+  async execute(ctx: PipelineContext): Promise<StageResult> {
     const hasCurrent = this.dialogRegistry.hasCurrent();
     const { category, family } = await this.categorizer.categorize(
-      ctx.aliasedInput!,
+      ctx.state.aliasedInput!,
       hasCurrent
     );
 
     if (category === 'unclear') {
-      ctx.earlyResult = {
+      return Stage.terminate({
         success: false,
         needsDisambiguation: true,
         disambiguationSuggestions: buildDisambiguationSuggestions(hasCurrent),
-        privacyReport: ctx.privacyReport,
-      };
-      return false;
+        privacyReport: ctx.state.privacyReport,
+      });
     }
 
-    ctx.category = category;
-    ctx.family = family;
-    return true;
+    ctx.state.category = category;
+    ctx.state.family = family;
+    return Stage.continue();
   }
 }

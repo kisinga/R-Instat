@@ -45,7 +45,8 @@
     "CORRELATION": "Corrélation",
     "TTEST": "Test t",
     "REGRESSION": "Régression linéaire",
-    "AI_ASSIST": "Assistance IA"
+    "AI_ASSIST": "Assistance IA",
+    "AI_SETTINGS": "Paramètres IA"
   },
   "AI_ASSIST": {
     "TITLE": "Assistance IA",
@@ -534,5 +535,41 @@
     "CENTER": "Centre",
     "UP": "Haut",
     "DOWN": "Bas"
+  },
+  "AI_CHAT": {
+    "TAB_LABEL": "Chat IA",
+    "NEW_CONVERSATION": "Nouvelle conversation",
+    "NO_CONVERSATIONS": "Aucune conversation",
+    "EMPTY_MESSAGE": "Posez-moi des questions sur les statistiques ou décrivez ce que vous voulez faire avec vos données.",
+    "EMPTY_HINT": "Je peux expliquer des concepts, créer des graphiques, exécuter des analyses, et plus encore.",
+    "INPUT_PLACEHOLDER": "Posez une question ou décrivez ce que vous voulez faire...",
+    "RELATED_IN_RINSTAT": "Lié dans R-Instat",
+    "OPEN_DIALOG": "Ouvrir",
+    "SETTINGS": "Paramètres IA",
+    "PLAN": "Plan",
+    "CONFIDENCE": "Confiance",
+    "ASSUMPTIONS": "Hypothèses",
+    "QUESTIONS": "Questions",
+    "APPLY": "Appliquer",
+    "CODE_SUCCESS": "Exécuté",
+    "CODE_FAILED": "Échoué"
+  },
+  "AI_SETTINGS": {
+    "TITLE": "Paramètres IA",
+    "SECTION_PROVIDER": "Fournisseur IA",
+    "PROVIDER": "Fournisseur",
+    "API_KEY": "Clé API",
+    "SAVE_KEY": "Enregistrer",
+    "GET_KEY": "Obtenir une clé API",
+    "SECTION_THRESHOLDS": "Seuils de confiance",
+    "HIGH_THRESHOLD": "Confiance élevée",
+    "LOW_THRESHOLD": "Confiance basse",
+    "REQUIRE_CONFIRM": "Exiger la confirmation pour les champs inférés",
+    "SECTION_ADVANCED": "Avancé",
+    "PII_REDACTION": "Anonymisation des données (anonymiser avant envoi à l'IA)",
+    "VERBOSE_DIAGNOSTICS": "Diagnostics IA détaillés",
+    "SECTION_APPEARANCE": "Apparence",
+    "THEME": "Thème",
+    "LANGUAGE": "Langue"
   }
 }

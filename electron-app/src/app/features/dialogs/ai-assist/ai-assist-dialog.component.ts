@@ -16,8 +16,15 @@ import { IntentResolverService, type ResolveResult, type ResolvedPlanStep } from
 import { DialogRestoreService } from '../../../core/services/dialog-restore.service';
 import { RService } from '../../../core/services/r.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { AppStateService } from '../../../core/services/app-state.service';
 import { AIPlanQueueService } from '../../../core/services/ai-plan-queue.service';
 import { AIEvalService } from '../../../core/services/ai-eval.service';
+import { EducationStoreService } from '../../../core/services/education-store.service';
+import { EducationPipeline } from '../../../core/ai/pipeline/education-pipeline';
+import { enrichHighlights } from '../../../core/ai/highlight-enricher';
+import { DialogMenuResolver, STANDARD_MENU_GROUPS } from '../../../core/ai/dialog-menu-resolver';
+import { LanguageService } from '../../../core/services/language.service';
+import { ruleBasedCategorizer } from '../../../core/ai/categorizer-rules';
 import { AiAssistSettingsComponent } from './ai-assist-settings.component';
 import { AiAssistPlanResultComponent } from './ai-assist-plan-result.component';
 import { AiAssistDisambiguationComponent } from './ai-assist-disambiguation.component';
@@ -140,8 +147,12 @@ export class AIAssistDialogComponent implements OnInit {
   private readonly dialogRestore = inject(DialogRestoreService);
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
+  private readonly appState = inject(AppStateService);
   private readonly planQueue = inject(AIPlanQueueService);
   private readonly aiEval = inject(AIEvalService);
+  private readonly educationStore = inject(EducationStoreService);
+  private readonly educationPipeline = inject(EducationPipeline);
+  private readonly languageService = inject(LanguageService);
 
   userInput = signal('');
   apiKeyInput = signal('');
@@ -280,6 +291,13 @@ export class AIAssistDialogComponent implements OnInit {
     const input = this.userInput().trim();
     if (!input) return;
 
+    // Check if this is an education question — redirect to Learn tab
+    const ruleResult = ruleBasedCategorizer(input, false);
+    if (ruleResult?.category === 'education_question') {
+      await this.redirectToEducation(input);
+      return;
+    }
+
     this.lastSentMessage.set(input);
     this.resetStateForSend();
     this.isLoading.set(true);
@@ -302,6 +320,41 @@ export class AIAssistDialogComponent implements OnInit {
       this.errorMessage.set(err instanceof Error ? err.message : String(err));
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  /**
+   * Redirect an education question to the Learn tab.
+   * Appends the user message, fires the pipeline, switches tab, and closes the modal.
+   */
+  private async redirectToEducation(input: string): Promise<void> {
+    this.educationStore.appendUserMessage(input);
+    this.appState.emitPanelEvent('output', 'show-education');
+    this.close.emit();
+
+    // Fire education pipeline in background (response will appear in Learn tab)
+    try {
+      const dataContext = await this.buildDataContext();
+      const history = this.educationStore.activeConversation()?.messages
+        .slice(-6)
+        .map(m => ({ role: m.role, content: m.content })) ?? [];
+
+      const result = await this.educationPipeline.execute(input, dataContext, history);
+
+      if (result.success && result.response) {
+        const menuResolver = new DialogMenuResolver(
+          STANDARD_MENU_GROUPS,
+          (key: string) => this.languageService.instant(key)
+        );
+        const highlights = enrichHighlights(result.response.highlights, menuResolver);
+        this.educationStore.appendAssistantMessage(
+          result.response.explanation,
+          highlights,
+          result.response.followUpSuggestions
+        );
+      }
+    } catch {
+      // Errors will be visible in the Learn tab on next interaction
     }
   }
 

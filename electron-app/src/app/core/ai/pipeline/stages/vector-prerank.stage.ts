@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import type { PipelineStage, PipelineContext } from '../pipeline-stage';
+import type { PipelineStage, StageResult } from '../stage';
+import { Stage } from '../stage';
+import type { PipelineContext } from '../context';
 import { AIConfigService } from '../../../services/ai-config.service';
 import { VectorIndexService } from '../../../vector/vector-index.service';
 
@@ -11,23 +13,23 @@ export class VectorPreRankStage implements PipelineStage {
   private readonly aiConfig = inject(AIConfigService);
   private readonly vectorIndex = inject(VectorIndexService, { optional: true });
 
-  async execute(ctx: PipelineContext): Promise<boolean> {
+  async execute(ctx: PipelineContext): Promise<StageResult> {
     const settings = this.aiConfig.retrievalSettings();
     if (!settings.useDialogContractRetrieval || !this.vectorIndex) {
-      return true;
+      return Stage.continue();
     }
 
     await this.vectorIndex.ensureIndexed();
 
-    ctx.preRankedCandidates = await this.vectorIndex.preRankDialogs(
-      ctx.aliasedInput!,
+    ctx.state.preRankedCandidates = await this.vectorIndex.preRankDialogs(
+      ctx.state.aliasedInput!,
       settings.topKContracts,
-      ctx.family
+      ctx.state.family
     );
 
-    ctx.debugLog.push(
-      `[vector-prerank] Got ${ctx.preRankedCandidates?.length ?? 0} pre-ranked candidates`
+    ctx.diagnostics.debugLog.push(
+      `[vector-prerank] Got ${ctx.state.preRankedCandidates?.length ?? 0} pre-ranked candidates`
     );
-    return true;
+    return Stage.continue();
   }
 }

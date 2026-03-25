@@ -15,6 +15,7 @@ const OTHER_DIALOG_IDENTITY: Readonly<Record<string, string>> = {
   'define-climatic-data': 'DefineClimaticDataDialogComponent',
   'export': 'ExportDialogComponent',
   'ai-assist': 'AIAssistDialogComponent',
+  'ai-settings': 'AiSettingsDialogComponent',
 };
 
 let _identityMap: Readonly<Record<string, string>> | null = null;

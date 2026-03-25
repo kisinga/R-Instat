@@ -43,6 +43,7 @@ import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component'
 import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
 import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
 import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component';
+import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.component';
 
 @Component({
   selector: 'app-dialog-host',
@@ -85,6 +86,7 @@ import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component'
     DotPlotDialogComponent,
     RestoreFromCodeDialogComponent,
     AIAssistDialogComponent,
+    AiSettingsDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -197,6 +199,9 @@ import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component'
           }
           @case ('ai-assist') {
             <app-ai-assist-dialog (close)="closeDialog()" />
+          }
+          @case ('ai-settings') {
+            <app-ai-settings-dialog (close)="closeDialog()" />
           }
         }
       </div>

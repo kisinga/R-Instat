@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import type { PipelineStage, PipelineContext } from '../pipeline-stage';
+import type { PipelineStage, StageResult } from '../stage';
+import { Stage } from '../stage';
+import type { PipelineContext } from '../context';
 import { AIConfigService } from '../../../services/ai-config.service';
 import {
   aliasDataContext,
@@ -15,20 +17,20 @@ export class PiiGuardStage implements PipelineStage {
 
   private readonly aiConfig = inject(AIConfigService);
 
-  async execute(ctx: PipelineContext): Promise<boolean> {
-    const { context: aliasedContext, maps } = aliasDataContext(ctx.rawDataContext);
+  async execute(ctx: PipelineContext): Promise<StageResult> {
+    const { context: aliasedContext, maps } = aliasDataContext(ctx.inputs.dataContext);
 
     if (this.aiConfig.piiRedactionEnabled()) {
-      const redacted = redactUserInput(ctx.rawUserInput);
-      ctx.aliasedInput = applyAliasesToInput(redacted.value, maps);
-      ctx.privacyReport = buildPrivacyReport(redacted.patterns, maps);
+      const redacted = redactUserInput(ctx.inputs.userInput);
+      ctx.state.aliasedInput = applyAliasesToInput(redacted.value, maps);
+      ctx.state.privacyReport = buildPrivacyReport(redacted.patterns, maps);
     } else {
-      ctx.aliasedInput = applyAliasesToInput(ctx.rawUserInput, maps);
-      ctx.privacyReport = buildPrivacyReport([], maps);
+      ctx.state.aliasedInput = applyAliasesToInput(ctx.inputs.userInput, maps);
+      ctx.state.privacyReport = buildPrivacyReport([], maps);
     }
 
-    ctx.aliasedContext = aliasedContext;
-    ctx.aliasMaps = maps;
-    return true;
+    ctx.state.aliasedContext = aliasedContext;
+    ctx.state.aliasMaps = maps;
+    return Stage.continue();
   }
 }

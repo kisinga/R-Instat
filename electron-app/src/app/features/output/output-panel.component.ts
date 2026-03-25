@@ -5,41 +5,60 @@ import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
 import { ToastService } from '../../core/services/toast.service';
 import { LanguageService } from '../../core/services/language.service';
+import { AppStateService } from '../../core/services/app-state.service';
 import { OutputEntry } from '../../core/models/r.model';
 import { extractMetadata, stripMetadata } from '../../core/r-codegen/metadata-parser';
 import { DialogMetadata } from '../../core/r-codegen/dialog-metadata';
+import { ChatTabComponent } from './chat-tab/chat-tab.component';
 
 @Component({
   selector: 'app-output-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ChatTabComponent],
   template: `
     <div class="output-panel-container flex flex-col bg-base-100">
-      <!-- Header -->
-      <div class="flex-shrink-0 panel-header bg-base-200 border-b border-base-300">
-        <div class="flex items-center gap-2">
-          <span class="font-medium">{{ 'OUTPUT.TITLE' | translate }}</span>
-          <span class="badge badge-sm badge-ghost">{{ entries().length }}</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button 
-            class="btn btn-ghost btn-xs"
-            (click)="toggleCodeDisplay()"
-            [class.btn-active]="showCode()"
-            [title]="'OUTPUT.TOGGLE_CODE' | translate"
+      <!-- Tab Bar -->
+      <div class="flex-shrink-0 flex items-center justify-between bg-base-200 border-b border-base-300 px-2">
+        <div role="tablist" class="tabs tabs-boxed bg-transparent p-0 gap-1">
+          <button
+            role="tab"
+            class="tab tab-sm"
+            [class.tab-active]="activeTab() === 'output'"
+            (click)="activeTab.set('output')"
           >
-            <span class="text-xs font-mono">&lt;/&gt;</span>
+            {{ 'OUTPUT.TITLE' | translate }}
+            <span class="badge badge-sm badge-ghost ml-1">{{ entries().length }}</span>
           </button>
-          <button 
-            class="btn btn-ghost btn-xs"
-            (click)="clearOutput()"
-            [title]="'OUTPUT.CLEAR' | translate"
+          <button
+            role="tab"
+            class="tab tab-sm"
+            [class.tab-active]="activeTab() === 'chat'"
+            (click)="activeTab.set('chat')"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            {{ 'AI_CHAT.TAB_LABEL' | translate }}
           </button>
         </div>
+        @if (activeTab() === 'output') {
+          <div class="flex items-center gap-1">
+            <button
+              class="btn btn-ghost btn-xs"
+              (click)="toggleCodeDisplay()"
+              [class.btn-active]="showCode()"
+              [title]="'OUTPUT.TOGGLE_CODE' | translate"
+            >
+              <span class="text-xs font-mono">&lt;/&gt;</span>
+            </button>
+            <button
+              class="btn btn-ghost btn-xs"
+              (click)="clearOutput()"
+              [title]="'OUTPUT.CLEAR' | translate"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        }
       </div>
 
       <!-- Maximized Plot Modal -->
@@ -71,8 +90,13 @@ import { DialogMetadata } from '../../core/r-codegen/dialog-metadata';
         </dialog>
       }
 
+      <!-- Education Tab -->
+      @if (activeTab() === 'chat') {
+        <app-chat-tab />
+      }
+
       <!-- Output Content -->
-      <div class="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div class="flex-1 min-h-0 overflow-y-auto p-4 space-y-4" [class.hidden]="activeTab() !== 'output'">
         @if (entries().length === 0) {
           <div class="text-center text-base-content/50 py-12">
             <div class="text-4xl mb-2">📋</div>
@@ -233,21 +257,32 @@ export class OutputPanelComponent implements OnInit, OnDestroy {
   private readonly rService = inject(RService);
   private readonly toastService = inject(ToastService);
   private readonly languageService = inject(LanguageService);
+  private readonly appState = inject(AppStateService);
   private subscription?: Subscription;
+  private panelSub?: Subscription;
 
   entries = signal<OutputEntry[]>([]);
   showCode = signal(true);
   maximizedPlotUrl = signal<string | null>(null);
+  activeTab = signal<'output' | 'chat'>('output');
   private maximizedEntry: OutputEntry | null = null;
 
   ngOnInit(): void {
     this.subscription = this.rService.output$.subscribe(entries => {
       this.entries.set(entries);
     });
+
+    // Listen for panel events (e.g. AI Assist redirecting to education tab)
+    this.panelSub = this.appState.panelEvent$.subscribe(event => {
+      if (event.panel === 'output' && event.action === 'show-chat') {
+        this.activeTab.set('chat');
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.panelSub?.unsubscribe();
   }
 
   toggleCodeDisplay(): void {
