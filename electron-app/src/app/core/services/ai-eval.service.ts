@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import type { AIPlan, ExecutionMode } from './ai-client.service';
+import type { AIPlan } from '../ai/types/ai-plan.types';
+import type { ExecutionMode } from '../ai/types/data-context.types';
 
 const STORAGE_KEY = 'r-instat-ai-eval-telemetry-v1';
 

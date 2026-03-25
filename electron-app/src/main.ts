@@ -6,12 +6,15 @@ import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
 import { TranslateHttpLoader, provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
+import { IPC_BRIDGE } from './app/core/ai/ipc/ipc-bridge';
+import { ElectronIPCBridge } from './app/core/ai/ipc/electron-ipc-bridge';
 
 bootstrapApplication(AppComponent, {
   providers: [
     provideRouter(routes),
     provideAnimations(),
     provideHttpClient(),
+    { provide: IPC_BRIDGE, useClass: ElectronIPCBridge },
     provideTranslateService({
       defaultLanguage: 'en',
     }),

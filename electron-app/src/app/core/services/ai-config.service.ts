@@ -27,6 +27,43 @@ export interface RetrievalSettings {
   topKContracts: number;
 }
 
+export interface LLMModelConfig {
+  plannerModel: string;
+  plannerTemperature: number;
+  plannerMaxTokens: number;
+  categorizerModel: string;
+  categorizerTemperature: number;
+  categorizerMaxTokens: number;
+  codegenModel: string;
+  codegenTemperature: number;
+  codegenMaxTokens: number;
+}
+
+const DEFAULT_MODEL_CONFIG: Record<AIProvider, LLMModelConfig> = {
+  claude: {
+    plannerModel: 'claude-haiku-4-5',
+    plannerTemperature: 0.2,
+    plannerMaxTokens: 1800,
+    categorizerModel: 'claude-haiku-4-5',
+    categorizerTemperature: 0.1,
+    categorizerMaxTokens: 120,
+    codegenModel: 'claude-haiku-4-5',
+    codegenTemperature: 0.1,
+    codegenMaxTokens: 2048,
+  },
+  openai: {
+    plannerModel: 'gpt-4o-mini',
+    plannerTemperature: 0.2,
+    plannerMaxTokens: 2048,
+    categorizerModel: 'gpt-4o-mini',
+    categorizerTemperature: 0.1,
+    categorizerMaxTokens: 120,
+    codegenModel: 'gpt-4o-mini',
+    codegenTemperature: 0.1,
+    codegenMaxTokens: 2048,
+  },
+};
+
 const DEFAULT_GATE_SETTINGS: ConfidenceGateSettings = {
   highConfidenceThreshold: 0.8,
   lowConfidenceThreshold: 0.55,
@@ -54,6 +91,10 @@ export class AIConfigService {
   readonly gateSettings = this._gateSettings.asReadonly();
   private readonly _retrievalSettings = signal<RetrievalSettings>({ ...DEFAULT_RETRIEVAL_SETTINGS });
   readonly retrievalSettings = this._retrievalSettings.asReadonly();
+
+  readonly modelConfig = computed<LLMModelConfig>(() => DEFAULT_MODEL_CONFIG[this._provider()]);
+  readonly verboseAiDiagnostics = signal(false);
+  readonly piiRedactionEnabled = signal(true);
 
   constructor() {
     const storedProvider = localStorage.getItem(PROVIDER_STORAGE_KEY);

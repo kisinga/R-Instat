@@ -6,7 +6,8 @@
  * Completely optional - consumers check isReady() before use.
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
+import { IPC_BRIDGE } from '../ai/ipc/ipc-bridge';
 
 export interface RSignature {
   functionName: string;
@@ -17,6 +18,7 @@ export interface RSignature {
 
 @Injectable({ providedIn: 'root' })
 export class VectorRContextService {
+  private readonly ipc = inject(IPC_BRIDGE);
   private readonly _ready = signal(false);
   readonly isReady = computed(() => this._ready());
 
@@ -25,9 +27,9 @@ export class VectorRContextService {
   }
 
   private async checkAvailability(): Promise<void> {
-    if (!window.electronAPI?.vector) return;
+    if (!this.ipc.isVectorAvailable()) return;
     try {
-      const info = await window.electronAPI.vector.tableInfo('r_signatures');
+      const info = await this.ipc.vectorTableInfo('r_signatures');
       if (info.exists && info.rowCount > 0) {
         this._ready.set(true);
       }
@@ -41,10 +43,10 @@ export class VectorRContextService {
    * Returns empty array if service unavailable or no signatures indexed.
    */
   async getRelevantSignatures(query: string, topK = 8): Promise<RSignature[]> {
-    if (!window.electronAPI?.vector || !this._ready()) return [];
+    if (!this.ipc.isVectorAvailable() || !this._ready()) return [];
 
     try {
-      const results = await window.electronAPI.vector.searchRSignatures(query, topK);
+      const results = await this.ipc.vectorSearchRSignatures(query, topK);
 
       return results.map(r => ({
         functionName: String(r.metadata['functionName'] ?? r.id),

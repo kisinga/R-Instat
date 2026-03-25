@@ -1,4 +1,5 @@
-import type { DataContext, AIPlan } from '../services/ai-client.service';
+import type { DataContext } from './types/data-context.types';
+import type { AIPlan } from './types/ai-plan.types';
 
 export interface AliasMaps {
   readonly dataframeToAlias: Readonly<Record<string, string>>;
@@ -24,9 +25,11 @@ export function redactUserInput(input: string): { value: string; patterns: strin
 
   const replacers: Array<{ name: string; regex: RegExp; replacement: string }> = [
     { name: 'email', regex: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, replacement: '[REDACTED_EMAIL]' },
-    { name: 'phone', regex: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)\d{3,4}[-.\s]?\d{3,4}\b/g, replacement: '[REDACTED_PHONE]' },
+    // Phone: require country code or area-code format (min 10 digits with separators)
+    { name: 'phone', regex: /\b(?:\+\d{1,3}[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, replacement: '[REDACTED_PHONE]' },
     { name: 'ssn', regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[REDACTED_SSN]' },
-    { name: 'credit_card', regex: /\b(?:\d[ -]*?){13,19}\b/g, replacement: '[REDACTED_CARD]' },
+    // Credit card: require 4-digit groups with separators (avoids matching arbitrary digit sequences)
+    { name: 'credit_card', regex: /\b\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}\b/g, replacement: '[REDACTED_CARD]' },
     { name: 'ipv4', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, replacement: '[REDACTED_IP]' },
   ];
 

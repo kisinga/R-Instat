@@ -1,5 +1,5 @@
 import type { DialogParamSchema } from '../ai/dialog-schema.registry';
-import type { DataContext } from './ai-client.service';
+import type { DataContext } from '../ai/types/data-context.types';
 import { getCatalogContract } from '../ai/dialog-catalog-aggregator';
 
 export type ResolverTransformScope = 'global' | 'family' | 'dialog';

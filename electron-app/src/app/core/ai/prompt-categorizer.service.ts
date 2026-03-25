@@ -8,6 +8,8 @@ import type { DialogFamily } from './dialog-catalog';
 import type { CategorizerResult, PromptCategory } from './pipeline-types';
 import { ruleBasedCategorizer } from './categorizer-rules';
 import { AIConfigService } from '../services/ai-config.service';
+import { LLMProviderFactory } from './providers/llm-provider.factory';
+import { extractJson } from './shared/json-extractor';
 
 const VALID_CATEGORIES: PromptCategory[] = [
   'open_dialog',
@@ -43,6 +45,7 @@ Family (include only when category is open_dialog): one of plotting, data-prepar
 @Injectable({ providedIn: 'root' })
 export class PromptCategorizerService {
   private readonly aiConfig = inject(AIConfigService);
+  private readonly llmFactory = inject(LLMProviderFactory);
 
   /**
    * Categorize: try rule-based strategy first; if no match, call LLM.
@@ -59,20 +62,25 @@ export class PromptCategorizerService {
     }
 
     const apiKey = this.aiConfig.apiKey();
-    const provider = this.aiConfig.provider();
     if (!apiKey?.trim()) {
       return { category: 'unclear' };
     }
 
+    const modelConfig = this.aiConfig.modelConfig();
     const userMessage = `User message:\n${trimmed}\n\nDialog currently open: ${hasCurrentDialog}`;
 
     try {
-      const raw =
-        provider === 'claude'
-          ? await this.callClaude(apiKey, CLASSIFICATION_SYSTEM, userMessage)
-          : await this.callOpenAI(apiKey, CLASSIFICATION_SYSTEM, userMessage);
+      const provider = this.llmFactory.getProvider();
+      const response = await provider.call(apiKey, {
+        systemPrompt: CLASSIFICATION_SYSTEM,
+        userMessage,
+        responseFormat: 'json',
+        model: modelConfig.categorizerModel,
+        temperature: modelConfig.categorizerTemperature,
+        maxTokens: modelConfig.categorizerMaxTokens,
+      });
 
-      const json = this.extractJson(raw);
+      const json = extractJson(response.content);
       const parsed = JSON.parse(json) as { category?: string; family?: string };
       const category = this.normalizeCategory(parsed?.category);
       const family = this.normalizeFamily(parsed?.family, category);
@@ -92,55 +100,5 @@ export class PromptCategorizerService {
     if (category !== 'open_dialog') return undefined;
     const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
     return VALID_FAMILIES.includes(s as DialogFamily) ? (s as DialogFamily) : undefined;
-  }
-
-  private extractJson(content: string): string {
-    const trimmed = content.trim();
-    const first = trimmed.indexOf('{');
-    const last = trimmed.lastIndexOf('}');
-    if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
-    return trimmed;
-  }
-
-  private async callClaude(apiKey: string, system: string, userMessage: string): Promise<string> {
-    if (!window.electronAPI?.ai?.anthropicMessage) {
-      throw new Error('Claude IPC unavailable');
-    }
-    const response = await window.electronAPI.ai.anthropicMessage({
-      apiKey,
-      system,
-      userMessage,
-      model: 'claude-haiku-4-5',
-      maxTokens: 120,
-      temperature: 0.1,
-    });
-    if (!response.ok) throw new Error(`Claude error: ${response.status}`);
-    const data = response.data as { content?: Array<{ type?: string; text?: string }> };
-    const text = (data?.content ?? [])
-      .filter((c) => c.type === 'text' && typeof c.text === 'string')
-      .map((c) => c.text ?? '')
-      .join('\n')
-      .trim();
-    if (!text) throw new Error('Empty Claude response');
-    return text;
-  }
-
-  private async callOpenAI(apiKey: string, system: string, userMessage: string): Promise<string> {
-    if (!window.electronAPI?.ai?.openaiChat) {
-      throw new Error('OpenAI IPC unavailable');
-    }
-    const response = await window.electronAPI.ai.openaiChat({
-      apiKey,
-      system,
-      userMessage,
-      model: 'gpt-4o-mini',
-      temperature: 0.1,
-      responseFormat: 'json_object',
-    });
-    if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
-    const data = response.data as { choices?: Array<{ message?: { content?: string } }> };
-    const text = data?.choices?.[0]?.message?.content?.trim();
-    if (!text) throw new Error('Empty OpenAI response');
-    return text;
   }
 }

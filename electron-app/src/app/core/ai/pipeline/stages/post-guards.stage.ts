@@ -1,0 +1,63 @@
+import { Injectable } from '@angular/core';
+import type { PipelineStage, PipelineContext } from '../pipeline-stage';
+import type { AICodePlanStep, AIDialogPlanStep } from '../../types/ai-plan.types';
+import { compileStepToR } from '../../step-to-r';
+
+@Injectable({ providedIn: 'root' })
+export class PostGuardsStage implements PipelineStage {
+  readonly id = 'post-guards';
+  readonly errorPolicy = 'warn' as const;
+
+  async execute(ctx: PipelineContext): Promise<boolean> {
+    if (ctx.modeDecision!.mode !== 'structured_codegen') {
+      return true;
+    }
+
+    const dialogPlan = ctx.finalPlan!;
+    const steps: AICodePlanStep[] = [];
+
+    for (const step of dialogPlan.steps) {
+      if (step.stepType === 'code') continue;
+
+      const dialogStep = step as AIDialogPlanStep;
+      const script = compileStepToR(dialogStep.dialogId, dialogStep.state ?? {});
+      if (!script) continue;
+
+      steps.push({
+        stepType: 'code',
+        stepId: `${step.stepId}-code`,
+        dependsOnStepId: step.dependsOnStepId ? `${step.dependsOnStepId}-code` : undefined,
+        executionMode: 'structured_codegen',
+        script,
+        expectedOutputs: [`Result of ${dialogStep.dialogId}`],
+        safetyFlags: ['template_compiled'],
+        operationId: dialogStep.operationId,
+        dialogId: dialogStep.dialogId,
+        state: dialogStep.state,
+        inferredFields: step.inferredFields,
+        confidence: Math.max(0.55, step.confidence - 0.05),
+        rationale: step.rationale,
+      });
+    }
+
+    if (steps.length === 0) {
+      ctx.finalPlan = {
+        ...dialogPlan,
+        executionMode: 'component_codegen',
+        modeReason: 'Structured templates unavailable for generated steps; fallback to component mode.',
+        modeConfidence: 0.6,
+      };
+      ctx.warnings.push('Structured codegen fallback to component mode — no templates matched');
+    } else {
+      ctx.finalPlan = {
+        ...dialogPlan,
+        executionMode: 'structured_codegen',
+        modeReason: ctx.modeDecision!.reason,
+        modeConfidence: ctx.modeDecision!.confidence,
+        steps,
+      };
+    }
+
+    return true;
+  }
+}

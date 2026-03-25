@@ -5,7 +5,8 @@
  * Completely optional - consumers check isReady() before use.
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
+import { IPC_BRIDGE } from '../ai/ipc/ipc-bridge';
 
 export interface PastInteraction {
   query: string;
@@ -17,6 +18,7 @@ export interface PastInteraction {
 
 @Injectable({ providedIn: 'root' })
 export class VectorMemoryService {
+  private readonly ipc = inject(IPC_BRIDGE);
   private readonly _ready = signal(false);
   readonly isReady = computed(() => this._ready());
 
@@ -25,9 +27,9 @@ export class VectorMemoryService {
   }
 
   private async checkAvailability(): Promise<void> {
-    if (!window.electronAPI?.vector) return;
+    if (!this.ipc.isVectorAvailable()) return;
     try {
-      const status = await window.electronAPI.vector.status();
+      const status = await this.ipc.vectorStatus();
       const vsStatus = status.vectorStore as { status?: string } | undefined;
       if (vsStatus?.status === 'ready') {
         this._ready.set(true);
@@ -49,10 +51,10 @@ export class VectorMemoryService {
     executionMode?: string,
     confidence?: number
   ): Promise<void> {
-    if (!window.electronAPI?.vector) return;
+    if (!this.ipc.isVectorAvailable()) return;
 
     try {
-      await window.electronAPI.vector.storeInteraction({
+      await this.ipc.vectorStoreInteraction({
         id: crypto.randomUUID(),
         query,
         dialogId,
@@ -73,10 +75,10 @@ export class VectorMemoryService {
    * Returns empty array if service is unavailable.
    */
   async getSimilarInteractions(query: string, topK = 3): Promise<PastInteraction[]> {
-    if (!window.electronAPI?.vector) return [];
+    if (!this.ipc.isVectorAvailable()) return [];
 
     try {
-      const results = await window.electronAPI.vector.searchInteractions(query, topK);
+      const results = await this.ipc.vectorSearchInteractions(query, topK);
 
       return results.map(r => ({
         query: String(r.metadata['query'] ?? ''),

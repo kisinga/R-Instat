@@ -9,10 +9,12 @@ import { DialogMetadata } from '../r-codegen/dialog-metadata';
 import { getSchema } from '../ai/dialog-catalog-aggregator';
 import type { DialogParamSchema } from '../ai/dialog-schema.registry';
 import { buildDialogMetadata } from '../ai/dialog-metadata-builder';
-import { PARAM_ALIAS_CONFIG } from '../ai/param-alias.config';
 import { OPERATION_REGISTRY } from '../ai/operation-registry';
 import { extractStepDelta, applyDeltasToContext, type StepOutputDelta } from '../ai/step-output-delta';
 import { ResolverTransformPipeline } from './intent-resolver.pipeline';
+import { createDefaultTransforms } from '../ai/transforms';
+import { mapColumnType } from '../ai/shared/column-type-mapper';
+import { isValidOperationId } from '../ai/shared/operation-validator';
 import type {
   AICallResult,
   AICodePlanStep,
@@ -20,7 +22,7 @@ import type {
   AIPlanStep,
   DataContext,
   ExecutionMode,
-} from './ai-client.service';
+} from '../ai/types';
 
 export interface ResolveResult {
   ok: boolean;
@@ -59,40 +61,9 @@ export interface ResolvedPlan {
 
 @Injectable({ providedIn: 'root' })
 export class IntentResolverService {
-  private readonly stateTransformPipeline = new ResolverTransformPipeline([
-    {
-      id: 'infer-missing-fields',
-      scope: 'global',
-      run: (dialogId, params, state, dataContext, warnings) =>
-        this.inferMissingFields(dialogId, params, state, dataContext, warnings),
-    },
-    {
-      id: 'normalize-filter-combine-logic',
-      scope: 'dialog',
-      dialogId: 'filter',
-      run: (_dialogId, params, state, dataContext, warnings) =>
-        this.normalizeFilterCombineLogic('filter', params, state, dataContext, warnings),
-    },
-    {
-      id: 'normalize-column-references',
-      scope: 'global',
-      run: (dialogId, params, state, dataContext, warnings) =>
-        this.normalizeColumnReferences(dialogId, params, state, dataContext, warnings),
-    },
-    {
-      id: 'plotting-normalize-bar-chart-state',
-      scope: 'dialog',
-      dialogId: 'bar-chart',
-      run: (_dialogId, params, state, dataContext, warnings) =>
-        this.normalizeBarChartState('bar-chart', params, state, dataContext, warnings),
-    },
-    {
-      id: 'param-aliases',
-      scope: 'global',
-      run: (dialogId, _params, state, _dataContext, warnings) =>
-        this.applyParamAliases(dialogId, state, warnings),
-    },
-  ]);
+  private readonly stateTransformPipeline = new ResolverTransformPipeline(
+    createDefaultTransforms()
+  );
 
   resolve(result: AICallResult, dataContext: DataContext): ResolveResult {
     if (!result.success || !result.plan) {
@@ -137,7 +108,7 @@ export class IntentResolverService {
 
       const dialogStep = step as AIDialogPlanStep;
       const rawOpId = dialogStep.operationId;
-      if (this.isPlaceholderOperationId(rawOpId)) {
+      if (!isValidOperationId(rawOpId)) {
         return {
           ok: false,
           error:
@@ -171,19 +142,21 @@ export class IntentResolverService {
         }
       }
 
-      // Apply accumulated deltas from previous steps to data context
-      // so columns created by step N-1 are visible to step N's validation.
       const augmentedContext = accumulatedDeltas.length > 0
         ? applyDeltasToContext(dataContext, accumulatedDeltas, (dialogStep.state as Record<string, unknown>)?.['dataframe'] as string | undefined) as DataContext
         : dataContext;
 
-      const state = this.applyStateTransforms(
+      const { state, diagnostics } = this.stateTransformPipeline.apply(
         dialogStep.dialogId,
         schema.params,
         (dialogStep.state ?? {}) as Record<string, unknown>,
         augmentedContext,
         warnings
       );
+      if (diagnostics.appliedTransformIds.length === 0) {
+        warnings.push(`No resolver transforms applied for "${dialogStep.dialogId}"`);
+      }
+
       const allowedParams = new Set(schema.params.map((x) => x.name));
 
       for (const key of Object.keys(state)) {
@@ -192,7 +165,6 @@ export class IntentResolverService {
         }
       }
 
-      // Validate required and conditional params
       for (const param of schema.params) {
         const active = this.isConditionActive(param, state);
         if (!active) continue;
@@ -224,7 +196,6 @@ export class IntentResolverService {
         warnings.push(`Step confidence out of range for ${dialogStep.dialogId}; clamped by UI`);
       }
 
-      // Extract output delta for subsequent steps
       const delta = extractStepDelta(dialogStep.dialogId, state);
       accumulatedDeltas.push(delta);
 
@@ -248,231 +219,6 @@ export class IntentResolverService {
     };
   }
 
-  /** Treats null, undefined, empty string, and placeholders like "N/A" or "none" as invalid. */
-  private isPlaceholderOperationId(value: unknown): boolean {
-    if (value === null || value === undefined) return true;
-    const s = String(value).trim().toLowerCase();
-    return s === '' || ['n/a', 'none', 'null'].includes(s);
-  }
-
-  private applyStateTransforms(
-    dialogId: string,
-    params: DialogParamSchema[],
-    initial: Record<string, unknown>,
-    dataContext: DataContext,
-    warnings: string[]
-  ): Record<string, unknown> {
-    const { state, diagnostics } = this.stateTransformPipeline.apply(
-      dialogId,
-      params,
-      initial,
-      dataContext,
-      warnings
-    );
-    if (diagnostics.appliedTransformIds.length === 0) {
-      warnings.push(`No resolver transforms applied for "${dialogId}"`);
-    }
-    return state;
-  }
-
-  private normalizeFilterCombineLogic(
-    dialogId: string,
-    _params: DialogParamSchema[],
-    state: Record<string, unknown>,
-    _dataContext: DataContext,
-    _warnings: string[]
-  ): Record<string, unknown> {
-    if (dialogId !== 'filter') {
-      return state;
-    }
-
-    const normalized = { ...state };
-    const combineLogic = normalized['combineLogic'];
-    if (combineLogic === 'and') {
-      normalized['combineLogic'] = '&';
-    } else if (combineLogic === 'or') {
-      normalized['combineLogic'] = '|';
-    }
-    return normalized;
-  }
-
-  private normalizeBarChartState(
-    dialogId: string,
-    _params: DialogParamSchema[],
-    state: Record<string, unknown>,
-    _dataContext: DataContext,
-    warnings: string[]
-  ): Record<string, unknown> {
-    if (dialogId !== 'bar-chart') {
-      return state;
-    }
-
-    const normalized = { ...state };
-    const chartType = normalized['chartType'];
-    const hasYVariable = typeof normalized['yVariable'] === 'string' && normalized['yVariable'] !== '';
-
-    // If model provides yVariable but omits chartType, infer value mode.
-    if (!chartType && hasYVariable) {
-      normalized['chartType'] = 'value';
-      warnings.push('Inferred "chartType" as "value" for bar-chart because "yVariable" is set');
-    }
-
-    // If frequency is explicitly chosen, drop stray yVariable for deterministic restore behavior.
-    if (normalized['chartType'] === 'frequency' && hasYVariable) {
-      delete normalized['yVariable'];
-      warnings.push('Removed "yVariable" for bar-chart because chartType is "frequency"');
-    }
-
-    return normalized;
-  }
-
-  /**
-   * Apply param aliases from config (single transform for all dialogs with alias rules).
-   */
-  private applyParamAliases(
-    dialogId: string,
-    state: Record<string, unknown>,
-    warnings: string[]
-  ): Record<string, unknown> {
-    const entries = PARAM_ALIAS_CONFIG.get(dialogId);
-    if (!entries?.length) return state;
-    const out = { ...state };
-    for (const { alias, schemaKey } of entries) {
-      const value = out[alias];
-      if (value === undefined || value === null || value === '') continue;
-      if (out[schemaKey] !== undefined && out[schemaKey] !== null && out[schemaKey] !== '') {
-        delete (out as Record<string, unknown>)[alias];
-        continue;
-      }
-      (out as Record<string, unknown>)[schemaKey] = value;
-      warnings.push(`Mapped param "${alias}" → "${schemaKey}"`);
-      delete (out as Record<string, unknown>)[alias];
-    }
-    return out;
-  }
-
-  private inferMissingFields(
-    dialogId: string,
-    params: DialogParamSchema[],
-    state: Record<string, unknown>,
-    dataContext: DataContext,
-    warnings: string[]
-  ): Record<string, unknown> {
-    const normalized = { ...state };
-
-    // Ensure dataframe is present for dialogs that require one.
-    const dataframeParam = params.find((p) => p.name === 'dataframe');
-    if (dataframeParam?.required && !normalized['dataframe']) {
-      const fallbackDf = dataContext.activeDataframe ?? dataContext.dataframes[0];
-      if (fallbackDf) {
-        normalized['dataframe'] = fallbackDf;
-        warnings.push(`Auto-selected dataframe "${fallbackDf}" for ${dialogId}`);
-      }
-    }
-
-    const dfName = (normalized['dataframe'] as string) || dataContext.activeDataframe;
-    const columns = dfName ? dataContext.columnsByDataframe[dfName] ?? [] : [];
-    if (columns.length === 0) return normalized;
-
-    for (const param of params) {
-      const active = this.isConditionActive(param, normalized);
-      if (!active || !param.required) continue;
-      const current = normalized[param.name];
-      if (current !== undefined && current !== null && current !== '') continue;
-
-      if (param.kind === 'column') {
-        const inferred = this.pickColumnForParam(param, columns, normalized);
-        if (inferred) {
-          normalized[param.name] = inferred;
-          warnings.push(`Inferred "${param.name}" as "${inferred}" for ${dialogId}`);
-        }
-      } else if (param.kind === 'column[]') {
-        const inferredMany = this.pickColumnsForParam(param, columns, normalized);
-        if (inferredMany.length > 0) {
-          normalized[param.name] = inferredMany;
-          warnings.push(`Inferred "${param.name}" as [${inferredMany.join(', ')}] for ${dialogId}`);
-        }
-      } else if (param.kind === 'enum' && Array.isArray(param.enumValues) && param.enumValues.length > 0) {
-        normalized[param.name] = param.enumValues[0];
-        warnings.push(`Defaulted enum "${param.name}" to "${param.enumValues[0]}" for ${dialogId}`);
-      }
-    }
-
-    return normalized;
-  }
-
-  private normalizeColumnReferences(
-    dialogId: string,
-    params: DialogParamSchema[],
-    state: Record<string, unknown>,
-    dataContext: DataContext,
-    warnings: string[]
-  ): Record<string, unknown> {
-    const normalized = { ...state };
-    const dfName = (state['dataframe'] as string) || dataContext.activeDataframe;
-    if (!dfName) return normalized;
-
-    const columns = dataContext.columnsByDataframe[dfName] ?? [];
-    if (columns.length === 0) return normalized;
-    const columnNames = columns.map((c) => c.name);
-
-    const processed = new Set<string>();
-    for (const param of params) {
-      if (processed.has(param.name)) continue;
-      processed.add(param.name);
-
-      if (param.kind !== 'column' && param.kind !== 'column[]') continue;
-      const value = normalized[param.name];
-      if (value === undefined || value === null || value === '') continue;
-
-      if (param.kind === 'column' && typeof value === 'string') {
-        const resolved = this.resolveColumnName(value, columnNames);
-        if (resolved && resolved !== value) {
-          normalized[param.name] = resolved;
-          warnings.push(`Adjusted column "${value}" to "${resolved}" for ${dialogId}`);
-        }
-
-        // Summary grouping expects a categorical/factor-like column.
-        // If model picks numeric/date, fallback to a better group candidate or clear it.
-        if (dialogId === 'summary' && param.name === 'groupByColumn') {
-          const currentName = normalized[param.name];
-          if (typeof currentName === 'string' && currentName) {
-            const currentCol = columns.find((c) => c.name === currentName);
-            const currentType = currentCol ? this.mapColumnType(currentCol.type) : 'any';
-            if (currentType !== 'factor') {
-              const fallback = this.findFallbackGroupColumn(columns, currentName);
-              if (fallback) {
-                normalized[param.name] = fallback;
-                warnings.push(
-                  `Adjusted summary groupByColumn from "${currentName}" to categorical column "${fallback}"`
-                );
-              } else {
-                delete normalized[param.name];
-                warnings.push(
-                  `Removed summary groupByColumn "${currentName}" because it is not categorical`
-                );
-              }
-            }
-          }
-        }
-      }
-
-      if (param.kind === 'column[]' && Array.isArray(value)) {
-        const updated = value.map((item) => {
-          if (typeof item !== 'string') return item;
-          const resolved = this.resolveColumnName(item, columnNames);
-          if (resolved && resolved !== item) {
-            warnings.push(`Adjusted column "${item}" to "${resolved}" for ${dialogId}`);
-            return resolved;
-          }
-          return item;
-        });
-        normalized[param.name] = updated;
-      }
-    }
-    return normalized;
-  }
-
   private validateCodeStep(step: AICodePlanStep): string | null {
     if (!step.script || !step.script.trim()) {
       return `Code step "${step.stepId}" has empty script`;
@@ -492,58 +238,6 @@ export class IntentResolverService {
       return `Code step "${step.stepId}" contains blocked side-effect commands`;
     }
     return null;
-  }
-
-  private resolveColumnName(candidate: string, availableColumns: string[]): string | null {
-    if (availableColumns.includes(candidate)) {
-      return candidate;
-    }
-
-    const lower = candidate.toLowerCase();
-    const caseInsensitive = availableColumns.filter((c) => c.toLowerCase() === lower);
-    if (caseInsensitive.length === 1) {
-      return caseInsensitive[0];
-    }
-
-    const normCandidate = this.normalizeColumnToken(candidate);
-    const normalizedMatches = availableColumns.filter(
-      (c) => this.normalizeColumnToken(c) === normCandidate
-    );
-    if (normalizedMatches.length === 1) {
-      return normalizedMatches[0];
-    }
-
-    const tokenMatch = availableColumns.filter((c) => {
-      const norm = this.normalizeColumnToken(c);
-      return norm.includes(normCandidate) || normCandidate.includes(norm);
-    });
-    if (tokenMatch.length === 1) {
-      return tokenMatch[0];
-    }
-
-    return null;
-  }
-
-  private normalizeColumnToken(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-
-  private findFallbackGroupColumn(
-    columns: Array<{ name: string; type: string }>,
-    originalName: string
-  ): string | null {
-    const factorColumns = columns.filter((c) => this.mapColumnType(c.type) === 'factor');
-    if (factorColumns.length === 0) return null;
-
-    // Prefer entity-like columns for grouping.
-    const preferred = factorColumns.find((c) =>
-      /(user|name|group|owner|contributor|entity|region|country|sector|type|category|id)/i.test(c.name)
-    );
-    if (preferred) return preferred.name;
-
-    // Secondary preference: any factor column not equal to original.
-    const alternate = factorColumns.find((c) => c.name !== originalName);
-    return (alternate ?? factorColumns[0]).name;
   }
 
   private isConditionActive(param: DialogParamSchema, state: Record<string, unknown>): boolean {
@@ -571,7 +265,7 @@ export class IntentResolverService {
         const col = cols.find((c) => c.name === value);
         if (!col) return `column "${value}" not found in dataframe "${dfName}"`;
         if (param.columnType && param.columnType !== 'any') {
-          const mappedType = this.mapColumnType(col.type);
+          const mappedType = mapColumnType(col.type);
           if (mappedType !== param.columnType) {
             return `column "${value}" has type "${col.type}", expected ${param.columnType}`;
           }
@@ -588,7 +282,7 @@ export class IntentResolverService {
           const col = cols.find((c) => c.name === item);
           if (!col) return `column "${item}" not found in dataframe "${dfName}"`;
           if (param.columnType && param.columnType !== 'any') {
-            const mappedType = this.mapColumnType(col.type);
+            const mappedType = mapColumnType(col.type);
             if (mappedType !== param.columnType) {
               return `column "${item}" has type "${col.type}", expected ${param.columnType}`;
             }
@@ -624,96 +318,5 @@ export class IntentResolverService {
       default:
         return 'unsupported param type';
     }
-  }
-
-  private mapColumnType(rawType: string): 'numeric' | 'factor' | 'date' | 'any' {
-    const t = rawType.toLowerCase();
-    if (['numeric', 'integer', 'double'].some((x) => t.includes(x))) return 'numeric';
-    if (['factor', 'character'].some((x) => t.includes(x))) return 'factor';
-    if (['date', 'posix'].some((x) => t.includes(x))) return 'date';
-    return 'any';
-  }
-
-  private pickColumnForParam(
-    param: DialogParamSchema,
-    columns: Array<{ name: string; type: string }>,
-    state: Record<string, unknown>
-  ): string | null {
-    const requiredType = param.columnType ?? 'any';
-    const used = this.getUsedColumnNames(state);
-    const candidates = columns.filter((col) => {
-      const mapped = this.mapColumnType(col.type);
-      return (requiredType === 'any' || mapped === requiredType) && !used.has(col.name);
-    });
-    if (candidates.length === 0) return null;
-
-    const scored = candidates
-      .map((col) => ({ col, score: this.scoreColumnForParamName(col.name, param.name) }))
-      .sort((a, b) => b.score - a.score);
-    return scored[0]?.col.name ?? candidates[0].name;
-  }
-
-  private pickColumnsForParam(
-    param: DialogParamSchema,
-    columns: Array<{ name: string; type: string }>,
-    state: Record<string, unknown>
-  ): string[] {
-    const requiredType = param.columnType ?? 'any';
-    const used = this.getUsedColumnNames(state);
-    const candidates = columns.filter((col) => {
-      const mapped = this.mapColumnType(col.type);
-      return (requiredType === 'any' || mapped === requiredType) && !used.has(col.name);
-    });
-    if (candidates.length === 0) return [];
-
-    const sorted = candidates
-      .map((col) => ({ col, score: this.scoreColumnForParamName(col.name, param.name) }))
-      .sort((a, b) => b.score - a.score)
-      .map((x) => x.col.name);
-
-    // Pick at least one, and up to two for better defaults in multivariate dialogs.
-    return sorted.slice(0, Math.min(2, sorted.length));
-  }
-
-  private getUsedColumnNames(state: Record<string, unknown>): Set<string> {
-    const used = new Set<string>();
-    for (const value of Object.values(state)) {
-      if (typeof value === 'string') {
-        used.add(value);
-      } else if (Array.isArray(value)) {
-        for (const item of value) {
-          if (typeof item === 'string') used.add(item);
-        }
-      }
-    }
-    return used;
-  }
-
-  private scoreColumnForParamName(columnName: string, paramName: string): number {
-    const c = columnName.toLowerCase();
-    const p = paramName.toLowerCase();
-
-    let score = 0;
-    if (c === p) score += 100;
-    if (c.includes(p) || p.includes(c)) score += 40;
-
-    const semanticBuckets: Array<{ keys: string[]; weight: number }> = [
-      { keys: ['date', 'time', 'year', 'month', 'day'], weight: 30 },
-      { keys: ['group', 'category', 'type', 'class', 'species'], weight: 24 },
-      { keys: ['x', 'horizontal'], weight: 18 },
-      { keys: ['y', 'value', 'measure', 'amount', 'height', 'weight', 'score'], weight: 20 },
-      { keys: ['station', 'site', 'region', 'country'], weight: 20 },
-      { keys: ['rain', 'temp', 'tmax', 'tmin'], weight: 18 },
-    ];
-
-    for (const bucket of semanticBuckets) {
-      const matchesParam = bucket.keys.some((k) => p.includes(k));
-      const matchesColumn = bucket.keys.some((k) => c.includes(k));
-      if (matchesParam && matchesColumn) {
-        score += bucket.weight;
-      }
-    }
-
-    return score;
   }
 }

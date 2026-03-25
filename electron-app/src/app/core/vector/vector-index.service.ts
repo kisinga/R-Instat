@@ -8,9 +8,10 @@
  * Fully optional: all consumers check isReady() before use.
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { getDialogContractsForPrompt } from '../ai/dialog-catalog-aggregator';
 import type { DialogPromptContract } from '../ai/dialog-catalog';
+import { IPC_BRIDGE, type IPCBridge } from '../ai/ipc/ipc-bridge';
 
 export interface PreRankedCandidate {
   dialogId: string;
@@ -22,6 +23,7 @@ export type VectorStatus = 'idle' | 'indexing' | 'ready' | 'unavailable' | 'erro
 
 @Injectable({ providedIn: 'root' })
 export class VectorIndexService {
+  private readonly ipc = inject(IPC_BRIDGE);
   private readonly _status = signal<VectorStatus>('idle');
   private readonly _error = signal<string | null>(null);
   private _indexedHash: string | null = null;
@@ -36,7 +38,7 @@ export class VectorIndexService {
    * Safe to call multiple times.
    */
   async indexDialogContracts(): Promise<void> {
-    if (!window.electronAPI?.vector) {
+    if (!this.ipc.isVectorAvailable()) {
       this._status.set('unavailable');
       return;
     }
@@ -60,7 +62,7 @@ export class VectorIndexService {
         paramNames: c.params.map(p => p.name),
       }));
 
-      await window.electronAPI.vector.indexDialogs(indexData);
+      await this.ipc.vectorIndexDialogs(indexData);
       this._indexedHash = hash;
       this._status.set('ready');
       this._error.set(null);
@@ -79,12 +81,12 @@ export class VectorIndexService {
     topK: number,
     family?: string
   ): Promise<PreRankedCandidate[]> {
-    if (!window.electronAPI?.vector || this._status() !== 'ready') {
+    if (!this.ipc.isVectorAvailable() || this._status() !== 'ready') {
       return [];
     }
 
     try {
-      const results = await window.electronAPI.vector.searchDialogs(query, topK, family);
+      const results = await this.ipc.vectorSearchDialogs(query, topK, family);
 
       return results.map(r => ({
         dialogId: r.id,

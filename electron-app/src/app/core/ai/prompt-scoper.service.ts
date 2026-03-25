@@ -17,7 +17,9 @@ import {
   type PreRankedCandidate,
 } from './dialog-context-retriever';
 
-export type ExecutionMode = 'component_codegen' | 'structured_codegen' | 'direct_r';
+import type { ExecutionMode } from './types/data-context.types';
+
+export type { ExecutionMode };
 
 export interface ScopedPromptContext {
   contracts: DialogPromptContract[];

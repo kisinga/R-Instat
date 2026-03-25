@@ -1,4 +1,5 @@
-import type { AIPlan, DataContext } from '../services/ai-client.service';
+import type { AIPlan } from './types/ai-plan.types';
+import type { DataContext } from './types/data-context.types';
 import {
   aliasDataContext,
   applyAliasesToInput,
