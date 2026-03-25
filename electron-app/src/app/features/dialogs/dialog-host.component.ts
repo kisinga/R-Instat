@@ -1,8 +1,9 @@
-import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
 import { listDialogIds } from '../../core/ai/dialog-identity.registry';
+import { getOperationSpec } from '../../core/ai/generic-dialog/operation-spec.registry';
 
 // Import all dialog components
 import { ImportDialogComponent } from './import-dialog/import-dialog.component';
@@ -43,6 +44,13 @@ import { LinePlotDialogComponent } from './line-plot/line-plot-dialog.component'
 import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
 import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
 import { AIAssistDialogComponent } from './ai-assist/ai-assist-dialog.component';
+import { GenericDialogComponent } from './generic/generic-dialog.component';
+
+// Import generic dialog specs (side-effect: registers them)
+import '../../core/ai/generic-dialog/specs/duplicate-columns';
+import '../../core/ai/generic-dialog/specs/permute-column';
+import '../../core/ai/generic-dialog/specs/delete-columns';
+import '../../core/ai/generic-dialog/specs/insert-column';
 import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.component';
 
 @Component({
@@ -87,6 +95,7 @@ import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.comp
     RestoreFromCodeDialogComponent,
     AIAssistDialogComponent,
     AiSettingsDialogComponent,
+    GenericDialogComponent,
   ],
   template: `
     @if (activeDialog()) {
@@ -203,6 +212,11 @@ import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.comp
           @case ('ai-settings') {
             <app-ai-settings-dialog (close)="closeDialog()" />
           }
+          @default {
+            @if (resolvedSpec()) {
+              <app-generic-dialog [spec]="resolvedSpec()!" (close)="closeDialog()" />
+            }
+          }
         }
       </div>
     }
@@ -215,6 +229,9 @@ export class DialogHostComponent implements OnInit, OnDestroy {
   private subscription?: Subscription;
 
   activeDialog = signal<string | null>(null);
+
+  /** Resolves the OperationSpec for the active dialog (if it's a generic dialog). */
+  readonly resolvedSpec = computed(() => getOperationSpec(this.activeDialog() ?? ''));
 
   ngOnInit(): void {
     this.subscription = this.rService.dialog$.subscribe(({ action, dialog }) => {

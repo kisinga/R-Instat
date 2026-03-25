@@ -8,9 +8,9 @@ A senior engineering assessment of where we are, what's better, what's worse, an
 
 | Metric | VB.NET | Electron |
 |---|---|---|
-| Dialogs implemented | 627 | 32 (~5%) |
+| Dialogs implemented | 627 | 32 custom + 4 generic-spec (~5%) |
 | Sub-dialogs | 170 | 0 |
-| Reusable controls | 116 (ucr* classes) | ~5 (ColumnPicker, ControlBase, etc.) |
+| Reusable controls | 116 (ucr* classes) | ~5 (ColumnPicker, ControlBase, etc.) + generic renderer |
 | R functions callable | 500+ | ~60 |
 | Languages supported | 7 | 2 |
 | Platforms | Windows only | Windows, macOS, Linux |
@@ -98,7 +98,19 @@ Additionally, the form field registry pattern gives automatic save/restore of di
 
 **Verdict**: A differentiating feature, though it requires API key configuration which limits accessibility.
 
-### 2.7 Cross-Platform (Strategic Win)
+### 2.7 Generic Dialog System (Novel, Experimental)
+
+**VB.NET**: Every dialog is a hand-coded WinForms class with pixel-positioned controls. No generic rendering capability — WinForms has no layout engine that can produce forms from metadata.
+
+**Electron**: An experimental **intent-driven generic dialog renderer** that generates dialogs from declarative `OperationSpec` definitions (schema + builder reference). A single `GenericDialogComponent` renders forms from `DialogParamSchema[]`, handling 7 control types (dataframe, column, column[], enum, boolean, number, string) with conditional visibility (`when` conditions). The system is composable: shell (chrome + lifecycle) delegates to `GenericFormSectionComponent` which delegates to `GenericFieldComponent`, allowing future extensions (steps, subpaths, grouped sections) without rewriting existing components.
+
+Analysis of all 342 VB.NET dialogs shows: 55% are simple enough for pure spec-driven rendering, 23% need moderate flow control (steps/subpaths), and only 22% require custom Angular components. The generic system runs in parallel with existing custom dialogs — a `@default` case in `DialogHostComponent` renders specs for any dialog ID not matched by a custom `@case`, and custom components automatically shadow generic specs when added.
+
+4 pilot dialogs (Duplicate Column, Permute Column, Delete Columns, Insert Column) demonstrate the approach. Each is ~25 lines of spec + a builder function, versus ~200+ lines for a hand-written component.
+
+**Verdict**: If validated, this reduces the per-dialog effort for ~78% of operations from ~200 lines of Angular to ~30-50 lines of declarative spec. The remaining 22% (complex ggplot, climatic workflows, calculator) still need custom components. See `FEATURE_PARITY_STRATEGY.md` for the full classification and validation approach.
+
+### 2.8 Cross-Platform (Strategic Win)
 
 **VB.NET**: Windows-only. The `IGrid` abstraction layer attempted Linux support but never materialized beyond stubs.
 
@@ -357,11 +369,12 @@ The remaining ~550 dialogs are specialist tools (climate domain, survey analysis
 
 The Electron rewrite has made **correct architectural decisions** at every layer: immutable R code generation, signal-based reactivity, process isolation, enforced dialog lifecycle, and dependency injection. These choices will pay dividends as the dialog count grows.
 
-The gap is not architectural - it's **volume and domain knowledge**. The 595 missing dialogs each represent domain-specific R code that must be manually encoded in builder functions. No framework change eliminates this work.
+The gap is not architectural - it's **volume and domain knowledge**. The missing dialogs each represent domain-specific R code that must be manually encoded in builder functions. No framework change eliminates this work — but the generic dialog system significantly reduces the per-dialog effort for the ~78% of operations that fit a standard form pattern.
 
 The fastest path to usable coverage:
 1. Build the infrastructure (enhanced ColumnPicker, cell editing, script window, project save) - **~10 weeks**
-2. Port the top 60 most-used dialogs - **~15 weeks**
-3. This gets you to **~85% of daily user workflows** in **~6 months**
+2. Validate and expand the generic dialog system for simple/moderate operations - **ongoing, parallel**
+3. Port the top 60 most-used dialogs (mix of generic specs and custom components) - **~15 weeks**
+4. This gets you to **~85% of daily user workflows** in **~6 months**
 
-The remaining long tail of specialist dialogs can be ported incrementally over the following year, prioritized by actual user demand.
+The remaining long tail of specialist dialogs can be ported incrementally over the following year, prioritized by actual user demand. See `FEATURE_PARITY_STRATEGY.md` for the full strategy, dialog classification, and validation approach.

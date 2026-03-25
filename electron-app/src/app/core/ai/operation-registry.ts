@@ -158,6 +158,39 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
     description: 'Count days matching threshold criteria.',
     mappedDialogs: ['day-count', 'spell-lengths'],
   },
+  // Generic dialog pilots
+  {
+    id: 'data.duplicate_column',
+    label: 'Duplicate column',
+    primaryKind: 'data-preparation',
+    derivedKind: 'transform',
+    description: 'Copy a column under a new name.',
+    mappedDialogs: ['duplicate-columns'],
+  },
+  {
+    id: 'data.permute_column',
+    label: 'Permute column',
+    primaryKind: 'data-preparation',
+    derivedKind: 'transform',
+    description: 'Randomly shuffle column values.',
+    mappedDialogs: ['permute-column'],
+  },
+  {
+    id: 'data.delete_columns',
+    label: 'Delete columns',
+    primaryKind: 'data-preparation',
+    derivedKind: 'transform',
+    description: 'Remove columns from a dataframe.',
+    mappedDialogs: ['delete-columns'],
+  },
+  {
+    id: 'data.insert_column',
+    label: 'Insert column',
+    primaryKind: 'data-preparation',
+    derivedKind: 'transform',
+    description: 'Add a new empty column.',
+    mappedDialogs: ['insert-column'],
+  },
 ];
 
 /**

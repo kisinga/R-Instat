@@ -122,7 +122,10 @@ export class IntentResolverService {
 
       const schema = getSchema(dialogStep.dialogId);
       if (!schema) {
-        return { ok: false, error: `Unknown dialog: ${dialogStep.dialogId}` };
+        return {
+          ok: false,
+          error: `The "${dialogStep.dialogId}" feature isn't available yet. Try rephrasing your request, or use the menu to find a similar analysis.`,
+        };
       }
       if (!operation.mappedDialogs.includes(dialogStep.dialogId)) {
         return {

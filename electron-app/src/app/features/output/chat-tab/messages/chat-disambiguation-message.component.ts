@@ -8,13 +8,16 @@ import type { ChatMessage } from '../../../../core/models/chat.model';
   standalone: true,
   imports: [CommonModule, TranslateModule],
   template: `
-    <div class="flex justify-start">
-      <div class="chat-bubble chat-bubble--disambiguation">
-        <p class="text-sm mb-2">{{ message().content }}</p>
+    <div class="chat chat-start">
+      <div class="chat-header">
+        <span class="text-xs opacity-50">AI</span>
+      </div>
+      <div class="chat-bubble chat-bubble-warning text-sm">
+        <p class="mb-2">{{ message().content }}</p>
         <div class="space-y-1.5">
           @for (s of suggestions(); track s.text) {
             <button
-              class="btn btn-sm btn-outline btn-block justify-start text-left text-xs"
+              class="btn btn-sm btn-outline btn-block justify-start text-left text-xs whitespace-normal break-words leading-tight h-auto min-h-[2rem] py-1.5"
               (click)="sendClarification.emit(s.text)"
             >
               {{ s.text }}
@@ -24,20 +27,6 @@ import type { ChatMessage } from '../../../../core/models/chat.model';
       </div>
     </div>
   `,
-  styles: [`
-    .chat-bubble {
-      max-width: 85%;
-      padding: 0.75rem 1rem;
-      border-radius: 0.75rem;
-      word-break: break-word;
-    }
-    .chat-bubble--disambiguation {
-      background: hsl(var(--b2));
-      color: hsl(var(--bc));
-      border: 1px solid hsl(var(--wa) / 0.3);
-      border-bottom-left-radius: 0.25rem;
-    }
-  `],
 })
 export class ChatDisambiguationMessageComponent {
   readonly message = input.required<ChatMessage>();

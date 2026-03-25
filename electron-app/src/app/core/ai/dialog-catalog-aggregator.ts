@@ -3,6 +3,7 @@ import type { DialogSchema } from './dialog-schema.registry';
 import { validateCatalogDescriptor } from './dialog-catalog-validator';
 import { AIDialogClassRegistry } from './dialog-class-registry';
 import { DialogBase } from '../../features/dialogs/dialog-base';
+import { getGenericDialogContracts } from './generic-dialog/operation-spec.registry';
 
 let cachedCatalog: DialogPromptContract[] | null = null;
 
@@ -39,7 +40,10 @@ export function buildCatalogFromDialogs(
  */
 export function getDialogContractsForPrompt(): DialogPromptContract[] {
   if (cachedCatalog === null) {
-    cachedCatalog = buildCatalogFromDialogs(AIDialogClassRegistry.getRegisteredClasses() as (typeof DialogBase)[]);
+    cachedCatalog = [
+      ...buildCatalogFromDialogs(AIDialogClassRegistry.getRegisteredClasses() as (typeof DialogBase)[]),
+      ...getGenericDialogContracts(),
+    ];
   }
   return cachedCatalog;
 }

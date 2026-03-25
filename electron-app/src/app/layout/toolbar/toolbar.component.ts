@@ -161,7 +161,11 @@ export class ToolbarComponent {
         { labelKey: 'TOOLBAR.RENAME', action: 'rename', dividerAfter: true },
         { labelKey: 'TOOLBAR.STACK', action: 'stack' },
         { labelKey: 'TOOLBAR.UNSTACK', action: 'unstack' },
-        { labelKey: 'TOOLBAR.MERGE', action: 'merge' },
+        { labelKey: 'TOOLBAR.MERGE', action: 'merge', dividerAfter: true },
+        { labelKey: 'TOOLBAR.DUPLICATE_COLUMN', action: 'duplicate-columns' },
+        { labelKey: 'TOOLBAR.PERMUTE_COLUMN', action: 'permute-column' },
+        { labelKey: 'TOOLBAR.DELETE_COLUMNS', action: 'delete-columns' },
+        { labelKey: 'TOOLBAR.INSERT_COLUMN', action: 'insert-column' },
       ]
     },
     {

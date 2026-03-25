@@ -73,4 +73,9 @@ export const TEMPLATE_CODEGEN_DIALOG_IDS = new Set<string>([
   'correlation',
   't-test',
   'regression',
+  // Generic dialog pilots
+  'duplicate-columns',
+  'permute-column',
+  'delete-columns',
+  'insert-column',
 ]);

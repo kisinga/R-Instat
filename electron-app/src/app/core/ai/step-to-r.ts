@@ -9,6 +9,7 @@ import { TEMPLATE_CODEGEN_DIALOG_IDS } from './dialog-registry-view';
 import { buildSort } from '../dialogs/builders/data-manipulation';
 import type { SortColumn } from '../dialogs/builders/data-manipulation';
 import { buildRename, buildCalculate, buildRecode } from '../dialogs/builders/data-manipulation';
+import { buildDuplicateColumn, buildPermuteColumn, buildDeleteColumns, buildInsertColumn } from '../dialogs/builders/data-manipulation';
 import type { RecodeMapping } from '../dialogs/builders/data-manipulation';
 import { buildRegression, buildCorrelation, buildTTest } from '../dialogs/builders/statistics';
 import { buildHistogram, buildBoxplot, buildScatter } from '../dialogs/builders/graphs';
@@ -199,6 +200,36 @@ export function compileStepToR(dialogId: string, state: Record<string, unknown>)
             title,
           }).toScript();
         }
+        break;
+      }
+      case 'duplicate-columns': {
+        const sourceColumn = str(state['sourceColumn']).trim();
+        const newColumnName = str(state['newColumnName']).trim();
+        if (!sourceColumn || !newColumnName) return null;
+        script = buildDuplicateColumn({ dataframe: df, sourceColumn, newColumnName }).toScript();
+        break;
+      }
+      case 'permute-column': {
+        const column = str(state['column']).trim();
+        if (!column) return null;
+        script = buildPermuteColumn({ dataframe: df, column }).toScript();
+        break;
+      }
+      case 'delete-columns': {
+        const columns = Array.isArray(state['columns'])
+          ? (state['columns'] as string[]).map(String).filter(Boolean)
+          : [];
+        if (columns.length === 0) return null;
+        script = buildDeleteColumns({ dataframe: df, columns }).toScript();
+        break;
+      }
+      case 'insert-column': {
+        const columnName = str(state['columnName']).trim();
+        if (!columnName) return null;
+        const columnType = (str(state['columnType']) || 'numeric') as 'numeric' | 'character' | 'logical';
+        const position = (str(state['position']) || 'last') as 'first' | 'last' | 'after';
+        const afterColumn = str(state['afterColumn']).trim() || undefined;
+        script = buildInsertColumn({ dataframe: df, columnName, columnType, position, afterColumn }).toScript();
         break;
       }
       default:

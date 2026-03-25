@@ -9,6 +9,10 @@
  * - Rename: Rename columns (rename)
  * - Recode: Recode values using case_when (mutate)
  * - Sort: Sort rows by columns (arrange)
+ * - DuplicateColumn: Copy a column under a new name (mutate)
+ * - PermuteColumn: Randomly shuffle a column's values (mutate + sample)
+ * - DeleteColumns: Remove columns from a dataframe (select)
+ * - InsertColumn: Add a new empty column (add_column)
  */
 
 import { RSyntax, rSyntax, rFn, rStr, rPipe, rDf, rAssign, rOp, toScript, RCode } from '../../r-codegen';
@@ -105,6 +109,62 @@ export interface SortOptions {
   dataframe: string;
   /** Columns to sort by */
   sortColumns: SortColumn[];
+}
+
+/**
+ * Duplicate Column Options
+ *
+ * Copies a column under a new name.
+ */
+export interface DuplicateColumnOptions {
+  /** Dataframe name */
+  dataframe: string;
+  /** Source column to duplicate */
+  sourceColumn: string;
+  /** Name for the new copy */
+  newColumnName: string;
+}
+
+/**
+ * Permute Column Options
+ *
+ * Randomly shuffles a column's values in place.
+ */
+export interface PermuteColumnOptions {
+  /** Dataframe name */
+  dataframe: string;
+  /** Column to permute */
+  column: string;
+}
+
+/**
+ * Delete Columns Options
+ *
+ * Removes one or more columns from a dataframe.
+ */
+export interface DeleteColumnsOptions {
+  /** Dataframe name */
+  dataframe: string;
+  /** Columns to remove */
+  columns: string[];
+}
+
+/**
+ * Insert Column Options
+ *
+ * Adds a new empty column to a dataframe.
+ */
+export interface InsertColumnOptions {
+  /** Dataframe name */
+  dataframe: string;
+  /** Name for the new column */
+  columnName: string;
+  /** Type of the new column */
+  columnType: 'numeric' | 'character' | 'logical';
+  /** Position to insert */
+  position: 'first' | 'last' | 'after';
+  /** Column to insert after (when position='after') */
+  afterColumn?: string;
 }
 
 // ============================================================================
@@ -350,4 +410,126 @@ export function buildSort(options: SortOptions): RSyntax {
   );
 
   return buildDataManipulationPipeline(options.dataframe, pipeline, 'sorted_data');
+}
+
+/**
+ * Build R code for duplicating a column
+ *
+ * Copies a column under a new name using dplyr::mutate.
+ *
+ * @param options - Duplicate column configuration
+ * @returns RSyntax instance with dplyr code
+ */
+export function buildDuplicateColumn(options: DuplicateColumnOptions): RSyntax {
+  if (!options.dataframe) {
+    return rSyntax().setBase('# Select a dataframe first');
+  }
+  if (!options.sourceColumn) {
+    return rSyntax().setBase('# Select a column to duplicate');
+  }
+  if (!options.newColumnName) {
+    return rSyntax().setBase('# Enter a name for the new column');
+  }
+
+  const pipeline = rPipe(
+    rDf(options.dataframe),
+    rFn('mutate', { [options.newColumnName]: options.sourceColumn }, 'dplyr')
+  );
+
+  return buildDataManipulationPipeline(options.dataframe, pipeline, 'updated_data');
+}
+
+/**
+ * Build R code for permuting (randomly shuffling) a column
+ *
+ * Replaces column values with a random permutation using sample().
+ *
+ * @param options - Permute column configuration
+ * @returns RSyntax instance with dplyr code
+ */
+export function buildPermuteColumn(options: PermuteColumnOptions): RSyntax {
+  if (!options.dataframe) {
+    return rSyntax().setBase('# Select a dataframe first');
+  }
+  if (!options.column) {
+    return rSyntax().setBase('# Select a column to permute');
+  }
+
+  const pipeline = rPipe(
+    rDf(options.dataframe),
+    rFn('mutate', { [options.column]: `sample(${options.column})` }, 'dplyr')
+  );
+
+  return buildDataManipulationPipeline(options.dataframe, pipeline, 'updated_data');
+}
+
+/**
+ * Build R code for deleting columns
+ *
+ * Removes one or more columns using dplyr::select with negation.
+ *
+ * @param options - Delete columns configuration
+ * @returns RSyntax instance with dplyr code
+ */
+export function buildDeleteColumns(options: DeleteColumnsOptions): RSyntax {
+  if (!options.dataframe) {
+    return rSyntax().setBase('# Select a dataframe first');
+  }
+  if (!options.columns || options.columns.length === 0) {
+    return rSyntax().setBase('# Select columns to delete');
+  }
+
+  const negatedCols = options.columns.map(c => `-${c}`).join(', ');
+  const selectCall = `dplyr::select(${negatedCols})`;
+  const pipeline = rPipe(rDf(options.dataframe), selectCall);
+
+  return buildDataManipulationPipeline(options.dataframe, pipeline, 'updated_data');
+}
+
+/**
+ * Build R code for inserting a new empty column
+ *
+ * Adds a column filled with NA of the specified type using tibble::add_column.
+ *
+ * @param options - Insert column configuration
+ * @returns RSyntax instance with dplyr code
+ */
+export function buildInsertColumn(options: InsertColumnOptions): RSyntax {
+  if (!options.dataframe) {
+    return rSyntax().setBase('# Select a dataframe first');
+  }
+  if (!options.columnName) {
+    return rSyntax().setBase('# Enter a column name');
+  }
+
+  const typeDefault: Record<string, string> = {
+    numeric: 'NA_real_',
+    character: 'NA_character_',
+    logical: 'NA',
+  };
+  const naValue = typeDefault[options.columnType] ?? 'NA';
+
+  const args: Record<string, string> = {
+    '.data': rDf(options.dataframe),
+    [options.columnName]: naValue,
+  };
+
+  if (options.position === 'first') {
+    args['.before'] = '1';
+  } else if (options.position === 'after' && options.afterColumn) {
+    args['.after'] = options.afterColumn;
+  }
+  // 'last' is the default — no extra arg needed
+
+  const addColumnCall = rFn('add_column', args, 'tibble');
+  const assignment = rOp('<-', 'updated_data', addColumnCall, { spaceAround: false });
+
+  const addDataframeCall = rFn('add_dataframe', {
+    name: rStr(options.dataframe),
+    df: 'updated_data',
+  });
+
+  return rSyntax()
+    .setBase(toScript(assignment))
+    .addAfter(addDataframeCall);
 }

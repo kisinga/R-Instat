@@ -110,7 +110,7 @@ import { ChatErrorMessageComponent } from './messages/chat-error-message.compone
       </div>
 
       <!-- Messages area -->
-      <div #messagesContainer class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+      <div #messagesContainer class="flex-1 min-h-0 overflow-y-auto px-2 py-4 space-y-1">
         @if (!store.activeConversation() || store.activeConversation()!.messages.length === 0) {
           <div class="text-center text-base-content/50 py-12">
             <div class="text-3xl mb-2">&#129302;</div>
@@ -154,8 +154,8 @@ import { ChatErrorMessageComponent } from './messages/chat-error-message.compone
             }
           }
           @if (router.isLoading()) {
-            <div class="flex justify-start">
-              <div class="bg-base-200 rounded-lg px-4 py-3 border border-base-300">
+            <div class="chat chat-start">
+              <div class="chat-bubble chat-bubble-ghost">
                 <span class="loading loading-dots loading-sm"></span>
               </div>
             </div>
