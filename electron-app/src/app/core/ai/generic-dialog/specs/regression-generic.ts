@@ -20,8 +20,8 @@ const spec: DialogContract = {
   operations: ['predictive.linear_regression'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('responseVar', 'column', { required: true, columnType: 'numeric', label: 'Response Variable' }),
-    p('predictorVars', 'column[]', { required: true, columnType: 'any', label: 'Predictor Variables' }),
+    p('responseVar', 'column', { required: true, filter: 'numeric', label: 'Response Variable' }),
+    p('predictorVars', 'column[]', { required: true, filter: 'any', label: 'Predictor Variables' }),
     p('modelName', 'string', { label: 'Model Name' }),
     p('showSummary', 'boolean', { default: true, label: 'Show Summary', group: 'Output' }),
     p('showAnova', 'boolean', { label: 'Show ANOVA Table', group: 'Output' }),

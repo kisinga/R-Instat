@@ -2,7 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { DialogBase } from '../dialog-base';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 import { rSyntax } from '../../../core/r-codegen';
@@ -10,7 +10,7 @@ import { rSyntax } from '../../../core/r-codegen';
 @Component({
   selector: 'app-line-plot-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnSelectorComponent, ColumnSlotComponent],
   template: `
     <div class="dialog-content line-plot-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -39,40 +39,17 @@ import { rSyntax } from '../../../core/r-codegen';
           }
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
-          <!-- X Variable -->
-          <div class="form-group">
-            <label class="form-label">{{ 'LINE_PLOT.X_VARIABLE' | translate }}</label>
-            <app-column-picker
-              [columns]="columns()"
-              [multiple]="false"
-              [selectedColumn]="xVariable()"
-              (selectedColumnChange)="xVariable.set($event)"
-            />
-          </div>
-
-          <!-- Y Variable -->
-          <div class="form-group">
-            <label class="form-label">{{ 'LINE_PLOT.Y_VARIABLE' | translate }}</label>
-            <app-column-picker
-              [columns]="getNumericColumns()"
-              [multiple]="false"
-              [selectedColumn]="yVariable()"
-              (selectedColumnChange)="yVariable.set($event)"
-            />
-          </div>
-        </div>
-
-        <!-- Group/Color By -->
-        <div class="form-group mt-4">
-          <label class="form-label">{{ 'LINE_PLOT.GROUP_BY' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-          <select class="select select-bordered w-full select-sm" [ngModel]="groupBy()" (ngModelChange)="groupBy.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="xVariable" [label]="'LINE_PLOT.X_VARIABLE' | translate"
+            [required]="true"
+            [(column)]="xVariable" />
+          <app-column-slot name="yVariable" [label]="'LINE_PLOT.Y_VARIABLE' | translate"
+            filter="numeric" [required]="true"
+            [(column)]="yVariable" />
+          <app-column-slot name="groupBy" [label]="'LINE_PLOT.GROUP_BY' | translate"
+            filter="factor"
+            [(column)]="groupBy" />
+        </app-column-selector>
 
         <!-- Options -->
         <div class="flex gap-4 mt-4">
@@ -100,8 +77,8 @@ import { rSyntax } from '../../../core/r-codegen';
       <div class="dialog-footer">
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
-        <button 
-          class="btn btn-primary" 
+        <button
+          class="btn btn-primary"
           (click)="execute()"
           [disabled]="!isValid() || isLoading()"
         >
@@ -115,15 +92,15 @@ import { rSyntax } from '../../../core/r-codegen';
   `,
   styles: [`
     .line-plot-dialog { width: 500px; max-width: 90vw; }
-    .code-block { 
-      background: hsl(var(--b2)); 
-      border-radius: 0.5rem; 
-      padding: 0.75rem; 
-      font-family: monospace; 
-      font-size: 0.7rem; 
-      overflow-x: auto; 
-      max-height: 150px; 
-      white-space: pre-wrap; 
+    .code-block {
+      background: hsl(var(--b2));
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.7rem;
+      overflow-x: auto;
+      max-height: 150px;
+      white-space: pre-wrap;
     }
     .code-preview-section { border-top: 1px solid hsl(var(--b3)); padding-top: 0.75rem; }
   `]

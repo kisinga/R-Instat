@@ -1,14 +1,17 @@
 import { Component, input, output, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import type { ChatMessage } from '../../../../core/models/chat.model';
 import type { ResolvedPlanStep } from '../../../../core/services/intent-resolver.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
+const MAX_VISIBLE_QUESTIONS = 3;
+
 @Component({
   selector: 'app-chat-plan-message',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   template: `
     <div class="chat chat-start">
       <div class="chat-header">
@@ -26,10 +29,16 @@ import { ToastService } from '../../../../core/services/toast.service';
           <p class="text-sm font-medium mb-2">{{ plan.goal }}</p>
 
           @if (plan.assumptions.length > 0) {
-            <div class="text-xs opacity-60 mb-2">
-              <span class="font-semibold">{{ 'AI_CHAT.ASSUMPTIONS' | translate }}:</span>
-              {{ plan.assumptions.join('; ') }}
-            </div>
+            <details class="mb-2">
+              <summary class="text-xs font-semibold opacity-60 cursor-pointer select-none">
+                {{ 'AI_CHAT.ASSUMPTIONS' | translate }} ({{ plan.assumptions.length }})
+              </summary>
+              <ul class="text-xs opacity-60 mt-1 ml-4 list-disc space-y-0.5">
+                @for (a of plan.assumptions; track a) {
+                  <li>{{ a }}</li>
+                }
+              </ul>
+            </details>
           }
 
           <div class="space-y-1.5">
@@ -69,7 +78,7 @@ import { ToastService } from '../../../../core/services/toast.service';
             <div class="mt-3">
               <p class="text-xs font-semibold opacity-70 mb-1">{{ 'AI_CHAT.QUESTIONS' | translate }}:</p>
               <div class="space-y-1">
-                @for (q of plan.clarificationQuestions; track q) {
+                @for (q of visibleQuestions(plan.clarificationQuestions); track q) {
                   <button
                     class="btn btn-sm btn-outline btn-block justify-start text-left text-xs whitespace-normal break-words leading-tight h-auto min-h-[2rem] py-1.5"
                     (click)="sendClarification.emit(q)"
@@ -77,6 +86,33 @@ import { ToastService } from '../../../../core/services/toast.service';
                     {{ q }}
                   </button>
                 }
+                @if (plan.clarificationQuestions.length > maxVisibleQuestions) {
+                  <button
+                    class="btn btn-xs btn-ghost btn-block opacity-60"
+                    (click)="showAllQuestions.set(!showAllQuestions())"
+                  >
+                    {{ showAllQuestions() ? ('AI_CHAT.SHOW_LESS' | translate) : ('AI_CHAT.SHOW_MORE' | translate : { count: plan.clarificationQuestions.length - maxVisibleQuestions }) }}
+                  </button>
+                }
+              </div>
+
+              <!-- Custom response input -->
+              <div class="mt-2 flex gap-1.5">
+                <input
+                  type="text"
+                  class="input input-xs input-bordered flex-1 text-xs"
+                  [placeholder]="'AI_CHAT.CUSTOM_RESPONSE_PLACEHOLDER' | translate"
+                  [ngModel]="customInput()"
+                  (ngModelChange)="customInput.set($event)"
+                  (keydown.enter)="sendCustom()"
+                />
+                <button
+                  class="btn btn-xs btn-primary"
+                  [disabled]="!customInput().trim()"
+                  (click)="sendCustom()"
+                >
+                  {{ 'AI_CHAT.SEND' | translate }}
+                </button>
               </div>
             </div>
           }
@@ -115,6 +151,10 @@ export class ChatPlanMessageComponent {
   private readonly confirmedStepIds = signal<Set<string>>(new Set());
   private readonly toast = inject(ToastService);
 
+  readonly customInput = signal('');
+  readonly showAllQuestions = signal(false);
+  readonly maxVisibleQuestions = MAX_VISIBLE_QUESTIONS;
+
   plan() {
     const p = this.message().payload;
     return p.type === 'action-plan' ? p.plan : null;
@@ -132,6 +172,17 @@ export class ChatPlanMessageComponent {
       return next;
     });
     this.toggleConfirm.emit({ stepId, checked });
+  }
+
+  visibleQuestions(all: string[]): string[] {
+    return this.showAllQuestions() ? all : all.slice(0, MAX_VISIBLE_QUESTIONS);
+  }
+
+  sendCustom(): void {
+    const text = this.customInput().trim();
+    if (!text) return;
+    this.customInput.set('');
+    this.sendClarification.emit(text);
   }
 
   copyPlan(): void {

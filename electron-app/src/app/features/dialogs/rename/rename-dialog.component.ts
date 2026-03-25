@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRename } from '../../../core/dialogs/builders/data-manipulation';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -12,7 +12,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-rename-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -36,15 +36,11 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </div>
 
         <!-- Column Selection -->
-        <div class="form-group">
-          <label class="form-label">Column to Rename</label>
-          <app-column-picker
-            [columns]="columns()"
-            [multiple]="false"
-            [selectedColumn]="oldName()"
-            (selectedColumnChange)="oldName.set($event)"
-          />
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="oldName" [label]="'Column to Rename'"
+            [required]="true"
+            [(column)]="oldName" />
+        </app-column-selector>
 
         <!-- New Name -->
         <div class="form-group">
@@ -101,7 +97,7 @@ export class RenameDialogComponent extends DialogBase implements OnInit {
       operations: ['data.rename'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('oldName', 'column', { required: true, columnType: 'any' }),
+        p('oldName', 'column', { required: true, filter: 'any' }),
         p('newName', 'string', { required: true }),
       ],
       retrievalHints: {

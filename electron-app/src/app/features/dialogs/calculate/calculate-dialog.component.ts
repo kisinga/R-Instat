@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCalculate } from '../../../core/dialogs/builders/data-manipulation';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -12,7 +12,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-calculate-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -72,33 +72,20 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
             <p class="form-hint">Use column names directly. Available functions: log, sqrt, abs, round, etc.</p>
           </div>
         } @else if (calcType() === 'sum' || calcType() === 'mean') {
-          <div class="form-group">
-            <label class="form-label">Columns to {{ calcType() === 'sum' ? 'Sum' : 'Average' }}</label>
-            <app-column-picker
-              [columns]="getNumericColumns()"
-              [multiple]="true"
-              [(selectedColumns)]="selectedColsArray"
-            />
-          </div>
+          <app-column-selector [columns]="columns()">
+            <app-column-slot name="selectedCols" [label]="'Columns to ' + (calcType() === 'sum' ? 'Sum' : 'Average')"
+              filter="numeric" [multiple]="true" [required]="true"
+              [columns]="selectedCols()" (columnsChange)="selectedCols.set($event)" />
+          </app-column-selector>
         } @else {
-          <div class="grid grid-cols-2 gap-4">
-            <div class="form-group">
-              <label class="form-label">Column A</label>
-              <select class="select select-bordered w-full" [ngModel]="columnA()" (ngModelChange)="columnA.set($event)">
-                @for (col of getNumericColumns(); track col.name) {
-                  <option [value]="col.name">{{ col.name }}</option>
-                }
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Column B</label>
-              <select class="select select-bordered w-full" [ngModel]="columnB()" (ngModelChange)="columnB.set($event)">
-                @for (col of getNumericColumns(); track col.name) {
-                  <option [value]="col.name">{{ col.name }}</option>
-                }
-              </select>
-            </div>
-          </div>
+          <app-column-selector [columns]="columns()">
+            <app-column-slot name="columnA" [label]="'Column A'"
+              filter="numeric" [required]="true"
+              [(column)]="columnA" />
+            <app-column-slot name="columnB" [label]="'Column B'"
+              filter="numeric" [required]="true"
+              [(column)]="columnB" />
+          </app-column-selector>
         }
 
         <!-- Code Preview -->
@@ -146,12 +133,12 @@ export class CalculateDialogComponent extends DialogBase implements OnInit {
         p('newColumnName', 'string', { required: true }),
         p('calcType', 'enum', { required: true, enumValues: ['formula', 'sum', 'mean', 'diff', 'ratio'] }),
         p('formula', 'string', { when: { param: 'calcType', equals: 'formula' } }),
-        p('selectedCols', 'column[]', { columnType: 'numeric', when: { param: 'calcType', equals: 'sum' } }),
-        p('selectedCols', 'column[]', { columnType: 'numeric', when: { param: 'calcType', equals: 'mean' } }),
-        p('columnA', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
-        p('columnB', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
-        p('columnA', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
-        p('columnB', 'column', { columnType: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
+        p('selectedCols', 'column[]', { filter: 'numeric', when: { param: 'calcType', equals: 'sum' } }),
+        p('selectedCols', 'column[]', { filter: 'numeric', when: { param: 'calcType', equals: 'mean' } }),
+        p('columnA', 'column', { filter: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
+        p('columnB', 'column', { filter: 'numeric', when: { param: 'calcType', equals: 'diff' } }),
+        p('columnA', 'column', { filter: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
+        p('columnB', 'column', { filter: 'numeric', when: { param: 'calcType', equals: 'ratio' } }),
       ],
       retrievalHints: {
         keywords: ['calculate', 'new column', 'derived', 'formula', 'computed'],
@@ -166,14 +153,6 @@ export class CalculateDialogComponent extends DialogBase implements OnInit {
   selectedCols = signal<string[]>([]);
   columnA = signal('');
   columnB = signal('');
-
-  // Property for two-way binding with column picker (syncs with signal)
-  get selectedColsArray(): string[] {
-    return this.selectedCols();
-  }
-  set selectedColsArray(value: string[]) {
-    this.selectedCols.set(value);
-  }
 
   override ngOnInit(): void {
     super.ngOnInit();

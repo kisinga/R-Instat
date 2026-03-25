@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildTTest, TTestOptions } from '../../../core/dialogs/builders/statistics';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -12,7 +12,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-t-test-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -50,15 +50,23 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </div>
 
         <!-- Variable Selection -->
-        <div class="form-group">
-          <label class="form-label">{{ testType() === 'two' ? 'Response Variable' : 'Variable' }} (numeric)</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="variable1()"
-            (selectedColumnChange)="variable1.set($event)"
-          />
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="variable1" [label]="testType() === 'two' ? 'Response Variable (numeric)' : 'Variable (numeric)'"
+            filter="numeric" [required]="true"
+            [(column)]="variable1" />
+
+          @if (testType() === 'two') {
+            <app-column-slot name="groupVar" [label]="'Grouping Variable (factor)'"
+              filter="factor" [required]="true"
+              [(column)]="groupVar" />
+          }
+
+          @if (testType() === 'paired') {
+            <app-column-slot name="variable2" [label]="'Second Variable (numeric)'"
+              filter="numeric" [required]="true"
+              [(column)]="variable2" />
+          }
+        </app-column-selector>
 
         @if (testType() === 'one') {
           <div class="form-group">
@@ -68,30 +76,6 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
               class="input input-bordered w-full"
               [ngModel]="mu()"
               (ngModelChange)="mu.set($event)"
-            />
-          </div>
-        }
-
-        @if (testType() === 'two') {
-          <div class="form-group">
-            <label class="form-label">Grouping Variable (factor)</label>
-            <app-column-picker
-              [columns]="getFactorColumns()"
-              [multiple]="false"
-              [selectedColumn]="groupVar()"
-            (selectedColumnChange)="groupVar.set($event)"
-            />
-          </div>
-        }
-
-        @if (testType() === 'paired') {
-          <div class="form-group">
-            <label class="form-label">Second Variable (numeric)</label>
-            <app-column-picker
-              [columns]="getNumericColumns()"
-              [multiple]="false"
-              [selectedColumn]="variable2()"
-            (selectedColumnChange)="variable2.set($event)"
             />
           </div>
         }
@@ -167,9 +151,9 @@ export class TTestDialogComponent extends DialogBase implements OnInit {
       params: [
         p('dataframe', 'dataframe', { required: true }),
         p('testType', 'enum', { required: true, enumValues: ['one', 'two', 'paired'] }),
-        p('variable1', 'column', { required: true, columnType: 'numeric' }),
-        p('variable2', 'column', { columnType: 'numeric', when: { param: 'testType', equals: 'paired' } }),
-        p('groupVar', 'column', { columnType: 'factor', when: { param: 'testType', equals: 'two' } }),
+        p('variable1', 'column', { required: true, filter: 'numeric' }),
+        p('variable2', 'column', { filter: 'numeric', when: { param: 'testType', equals: 'paired' } }),
+        p('groupVar', 'column', { filter: 'factor', when: { param: 'testType', equals: 'two' } }),
         p('mu', 'number', { when: { param: 'testType', equals: 'one' } }),
         p('alternative', 'enum', { enumValues: ['two.sided', 'less', 'greater'] }),
         p('confLevel', 'enum', { enumValues: ['0.90', '0.95', '0.99'] }),

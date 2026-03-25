@@ -11,8 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../../dialog-base';
 import { AIDialogClassRegistry } from '../../../../core/ai/dialog-class-registry';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
-import { ColumnInfo } from '../../../../core/models/r.model';
-import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../../shared/components/code-preview/code-preview.component';
 import {
   ClimaticSummaryOptions,
@@ -29,7 +28,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 @Component({
   selector: 'app-climatic-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content climatic-summary-dialog" (click)="$event.stopPropagation()">
       <!-- Header -->
@@ -63,41 +62,17 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
               }
             </div>
 
-            <!-- Date Column -->
-            <div class="form-group">
-              <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-              <app-column-picker
-                [columns]="getDateColumns()"
-                [multiple]="false"
-                [selectedColumn]="dateColumn()"
-                (selectedColumnChange)="dateColumn.set($event)"
-              />
-            </div>
-
-            <!-- Element Column -->
-            <div class="form-group">
-              <label class="form-label">{{ 'CLIMATIC.ELEMENT_COLUMN' | translate }}</label>
-              <app-column-picker
-                [columns]="getNumericColumns()"
-                [multiple]="false"
-                [selectedColumn]="elementColumn()"
-                (selectedColumnChange)="elementColumn.set($event)"
-              />
-            </div>
-
-            <!-- Station Column (optional) -->
-            <div class="form-group">
-              <label class="form-label">
-                {{ 'CLIMATIC.STATION_COLUMN' | translate }}
-                <span class="text-xs text-base-content/50">({{ 'DIALOG.OPTIONAL' | translate }})</span>
-              </label>
-              <app-column-picker
-                [columns]="getFactorColumns()"
-                [multiple]="false"
-                [selectedColumn]="stationColumn()"
-                (selectedColumnChange)="stationColumn.set($event)"
-              />
-            </div>
+            <app-column-selector [columns]="columns()">
+              <app-column-slot name="dateColumn" [label]="'CLIMATIC.DATE_COLUMN' | translate"
+                filter="date" [required]="true"
+                [(column)]="dateColumn" />
+              <app-column-slot name="elementColumn" [label]="'CLIMATIC.ELEMENT_COLUMN' | translate"
+                filter="numeric" [required]="true"
+                [(column)]="elementColumn" />
+              <app-column-slot name="stationColumn" [label]="'CLIMATIC.STATION_COLUMN' | translate"
+                filter="factor"
+                [(column)]="stationColumn" />
+            </app-column-selector>
           </div>
 
           <!-- Right Column: Options -->
@@ -286,19 +261,6 @@ export class ClimaticSummaryDialogComponent extends DialogBase implements OnInit
       this.summaryFunction();
       this.omitMissing();
       this.rebuildRCode();
-    });
-  }
-
-  // Enhanced date column detection (includes character columns with date-like names)
-  override getDateColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      const name = c.name.toLowerCase();
-      if (t.includes('date') || t.includes('posix')) return true;
-      if (t.includes('character')) {
-        return name.includes('date') || name.includes('time') || name === 'day';
-      }
-      return false;
     });
   }
 

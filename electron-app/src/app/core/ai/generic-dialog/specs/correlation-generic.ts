@@ -20,7 +20,7 @@ const spec: DialogContract = {
   operations: ['describe.association.numeric_numeric'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('selectedVars', 'column[]', { required: true, columnType: 'numeric' }),
+    p('selectedVars', 'column[]', { required: true, filter: 'numeric' }),
     p('method', 'enum', { enumValues: ['pearson', 'spearman', 'kendall'] }),
     p('showPValues', 'boolean'),
   ],

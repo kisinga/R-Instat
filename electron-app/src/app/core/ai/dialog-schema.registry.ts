@@ -28,7 +28,8 @@ export interface DialogParamSchema {
   name: string;
   kind: ParamKind;
   required?: boolean;
-  columnType?: ColumnTypeHint;
+  filter?: ColumnTypeHint;
+  exclusive?: boolean;
   enumValues?: string[];
   min?: number;
   max?: number;

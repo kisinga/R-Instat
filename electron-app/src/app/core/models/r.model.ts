@@ -40,6 +40,9 @@ export interface DataPreview {
 export interface ColumnInfo {
   name: string;
   type: string;
+  hidden?: boolean;
+  classes?: string[];        // R class vector e.g. ['POSIXct', 'POSIXt']
+  climaticRole?: string;     // e.g. 'date', 'rain', 'station'
 }
 
 /**

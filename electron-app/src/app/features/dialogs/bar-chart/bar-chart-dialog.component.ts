@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBarChart } from '../../../core/dialogs/builders/barchart';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -13,7 +13,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-bar-chart-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -39,37 +39,19 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
           </select>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">{{ 'BAR_CHART.X_VARIABLE' | translate }}</label>
-          <app-column-picker
-            [columns]="getFactorColumns()"
-            [multiple]="false"
-            [selectedColumn]="xVariable()"
-            (selectedColumnChange)="xVariable.set($event)"
-          />
-        </div>
-
-        @if (chartType() === 'value') {
-          <div class="form-group">
-            <label class="form-label">{{ 'BAR_CHART.Y_VARIABLE' | translate }}</label>
-            <app-column-picker
-              [columns]="getNumericColumns()"
-              [multiple]="false"
-              [selectedColumn]="yVariable()"
-              (selectedColumnChange)="yVariable.set($event)"
-            />
-          </div>
-        }
-
-        <div class="form-group">
-          <label class="form-label">{{ 'BAR_CHART.FILL_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="fillVariable()" (ngModelChange)="fillVariable.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="xVariable" [label]="'BAR_CHART.X_VARIABLE' | translate"
+            filter="factor" [required]="true"
+            [(column)]="xVariable" />
+          @if (chartType() === 'value') {
+            <app-column-slot name="yVariable" [label]="'BAR_CHART.Y_VARIABLE' | translate"
+              filter="numeric" [required]="true"
+              [(column)]="yVariable" />
+          }
+          <app-column-slot name="fillVariable" [label]="'BAR_CHART.FILL_BY' | translate"
+            filter="factor"
+            [(column)]="fillVariable" />
+        </app-column-selector>
 
         @if (fillVariable()) {
           <div class="form-group">
@@ -147,9 +129,9 @@ export class BarChartDialogComponent extends DialogBase implements OnInit {
       params: [
         p('dataframe', 'dataframe', { required: true }),
         p('chartType', 'enum', { required: true, enumValues: ['frequency', 'value'] }),
-        p('xVariable', 'column', { required: true, columnType: 'factor' }),
-        p('yVariable', 'column', { required: true, columnType: 'numeric', when: { param: 'chartType', equals: 'value' } }),
-        p('fillVariable', 'column', { columnType: 'factor' }),
+        p('xVariable', 'column', { required: true, filter: 'factor' }),
+        p('yVariable', 'column', { required: true, filter: 'numeric', when: { param: 'chartType', equals: 'value' } }),
+        p('fillVariable', 'column', { filter: 'factor' }),
         p('position', 'enum', { enumValues: ['stack', 'dodge', 'fill'] }),
         p('horizontal', 'boolean'),
         p('title', 'string'),

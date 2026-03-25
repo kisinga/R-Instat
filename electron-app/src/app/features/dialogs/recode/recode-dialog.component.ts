@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRecode } from '../../../core/dialogs/builders/data-manipulation';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -17,7 +17,7 @@ interface RecodeMapping {
 @Component({
   selector: 'app-recode-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -41,15 +41,11 @@ interface RecodeMapping {
         </div>
 
         <!-- Column to Recode -->
-        <div class="form-group">
-          <label class="form-label">Column to Recode</label>
-          <app-column-picker
-            [columns]="columns()"
-            [multiple]="false"
-            [selectedColumn]="sourceColumn()"
-            (selectedColumnChange)="sourceColumn.set($event)"
-          />
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="sourceColumn" [label]="'Column to Recode'"
+            [required]="true"
+            [(column)]="sourceColumn" />
+        </app-column-selector>
 
         <!-- New Column Name -->
         <div class="form-group">
@@ -153,7 +149,7 @@ export class RecodeDialogComponent extends DialogBase implements OnInit {
       operations: ['data.recode'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('sourceColumn', 'column', { required: true, columnType: 'any' }),
+        p('sourceColumn', 'column', { required: true, filter: 'any' }),
         p('newColumnName', 'string', { required: true }),
         p('mappings', 'object[]'),
         p('defaultValue', 'string'),

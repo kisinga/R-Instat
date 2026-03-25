@@ -33,10 +33,10 @@ const spec: DialogContract = {
   params: [
     p('dataframe', 'dataframe', { required: true }),
     p('testType', 'enum', { required: true, enumValues: ['one', 'two', 'paired'], label: 'Test Type', default: 'one' }),
-    p('variable1', 'column', { required: true, columnType: 'numeric', label: 'Variable' }),
+    p('variable1', 'column', { required: true, filter: 'numeric', label: 'Variable' }),
     p('mu', 'number', { when: { param: 'testType', equals: 'one' }, label: 'Test Value (μ₀)', default: 0 }),
-    p('groupVar', 'column', { columnType: 'factor', when: { param: 'testType', equals: 'two' }, label: 'Grouping Variable' }),
-    p('variable2', 'column', { columnType: 'numeric', when: { param: 'testType', equals: 'paired' }, label: 'Second Variable' }),
+    p('groupVar', 'column', { filter: 'factor', when: { param: 'testType', equals: 'two' }, label: 'Grouping Variable' }),
+    p('variable2', 'column', { filter: 'numeric', when: { param: 'testType', equals: 'paired' }, label: 'Second Variable' }),
     p('alternative', 'enum', { enumValues: ['two.sided', 'less', 'greater'], label: 'Alternative Hypothesis', default: 'two.sided', group: 'Options' }),
     p('confLevel', 'enum', { enumValues: ['0.90', '0.95', '0.99'], label: 'Confidence Level', default: '0.95', group: 'Options' }),
   ],

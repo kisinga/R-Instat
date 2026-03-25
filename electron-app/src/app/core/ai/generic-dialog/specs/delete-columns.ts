@@ -11,7 +11,7 @@ const spec: DialogContract = {
   operations: ['data.delete_columns'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('columns', 'column[]', { required: true, columnType: 'any' }),
+    p('columns', 'column[]', { required: true, filter: 'any' }),
   ],
   retrievalHints: {
     keywords: ['delete', 'remove', 'drop', 'columns'],

@@ -21,9 +21,9 @@ const spec: DialogContract = {
   operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('yVariable', 'column', { required: true, columnType: 'numeric' }),
-    p('xVariable', 'column', { columnType: 'factor' }),
-    p('fillVariable', 'column', { columnType: 'factor' }),
+    p('yVariable', 'column', { required: true, filter: 'numeric' }),
+    p('xVariable', 'column', { filter: 'factor' }),
+    p('fillVariable', 'column', { filter: 'factor' }),
     p('showPoints', 'boolean'),
   ],
   retrievalHints: {

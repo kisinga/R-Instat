@@ -11,7 +11,7 @@ const spec: DialogContract = {
   operations: ['data.permute_column'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('column', 'column', { required: true, columnType: 'any' }),
+    p('column', 'column', { required: true, filter: 'any' }),
   ],
   retrievalHints: {
     keywords: ['permute', 'shuffle', 'randomize', 'random order', 'column'],

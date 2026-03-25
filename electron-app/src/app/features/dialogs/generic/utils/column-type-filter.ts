@@ -1,8 +1,8 @@
 /**
  * Column Type Filter
  *
- * Maps DialogParamSchema.columnType hints to the filterTypes array
- * expected by ColumnPickerComponent.
+ * Maps DialogParamSchema.filter hints to type arrays
+ * used by ColumnSelectorCoordinator for column filtering.
  */
 
 import type { ColumnTypeHint } from '../../../../core/ai/dialog-schema.registry';

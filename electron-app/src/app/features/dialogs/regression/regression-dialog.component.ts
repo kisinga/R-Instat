@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRegression } from '../../../core/dialogs/builders/statistics';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -12,7 +12,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-regression-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -35,26 +35,15 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
           </select>
         </div>
 
-        <!-- Response Variable -->
-        <div class="form-group">
-          <label class="form-label">Response Variable (Y)</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="responseVar()"
-            (selectedColumnChange)="responseVar.set($event)"
-          />
-        </div>
-
-        <!-- Predictor Variables -->
-        <div class="form-group">
-          <label class="form-label">Predictor Variables (X)</label>
-          <app-column-picker
-            [columns]="columns()"
-            [multiple]="true"
-            [(selectedColumns)]="predictorVarsArray"
-          />
-        </div>
+        <!-- Column Selection -->
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="responseVar" [label]="'Response Variable (Y)'"
+            filter="numeric" [required]="true"
+            [(column)]="responseVar" />
+          <app-column-slot name="predictorVars" [label]="'Predictor Variables (X)'"
+            [multiple]="true" [required]="true"
+            [columns]="predictorVars()" (columnsChange)="predictorVars.set($event)" />
+        </app-column-selector>
 
         <!-- Model Name -->
         <div class="form-group">
@@ -126,8 +115,8 @@ export class RegressionDialogComponent extends DialogBase implements OnInit {
       operations: ['predictive.linear_regression'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('responseVar', 'column', { required: true, columnType: 'numeric' }),
-        p('predictorVars', 'column[]', { required: true, columnType: 'any' }),
+        p('responseVar', 'column', { required: true, filter: 'numeric' }),
+        p('predictorVars', 'column[]', { required: true, filter: 'any' }),
         p('modelName', 'string'),
         p('showSummary', 'boolean'),
         p('showAnova', 'boolean'),
@@ -145,15 +134,6 @@ export class RegressionDialogComponent extends DialogBase implements OnInit {
   showSummary = signal(true);
   showAnova = signal(false);
   plotDiagnostics = signal(false);
-
-  // Getter/setter for ColumnPickerComponent two-way binding
-  get predictorVarsArray(): string[] {
-    return this.predictorVars();
-  }
-
-  set predictorVarsArray(value: string[]) {
-    this.predictorVars.set(value);
-  }
 
   override ngOnInit(): void {
     super.ngOnInit();

@@ -306,37 +306,6 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Get columns filtered by type
-   */
-  getColumnsByType(types: string[]): ColumnInfo[] {
-    return this.columns().filter(col => {
-      const colType = col.type.toLowerCase();
-      return types.some(t => colType.includes(t.toLowerCase()));
-    });
-  }
-
-  /**
-   * Get numeric columns
-   */
-  getNumericColumns(): ColumnInfo[] {
-    return this.getColumnsByType(['numeric', 'integer', 'double']);
-  }
-
-  /**
-   * Get factor/character columns
-   */
-  getFactorColumns(): ColumnInfo[] {
-    return this.getColumnsByType(['factor', 'character']);
-  }
-
-  /**
-   * Get date columns
-   */
-  getDateColumns(): ColumnInfo[] {
-    return this.getColumnsByType(['date', 'posix']);
-  }
-
-  /**
    * Cancel and close dialog
    */
   cancel(): void {

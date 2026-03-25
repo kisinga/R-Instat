@@ -4,15 +4,14 @@
  * Dialog for generating missing values report.
  */
 
-import { Component, inject, signal, effect, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../../dialog-base';
 import { AIDialogClassRegistry } from '../../../../core/ai/dialog-class-registry';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
-import { ColumnInfo } from '../../../../core/models/r.model';
-import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../../shared/components/code-preview/code-preview.component';
 import { buildMissingReport, MissingReportOptions } from '../utils/climatic-r-builders';
 import { rSyntax } from '../../../../core/r-codegen';
@@ -21,7 +20,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 @Component({
   selector: 'app-missing-report-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content climatic-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -41,23 +40,21 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           }
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
-          </div>
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="dateColumn" [label]="'CLIMATIC.DATE_COLUMN' | translate"
+            filter="date" [required]="true"
+            [(column)]="dateColumn" />
+          <app-column-slot name="stationColumn" [label]="'CLIMATIC.STATION_COLUMN' | translate"
+            filter="factor"
+            [(column)]="stationColumn" />
+        </app-column-selector>
 
         <div class="form-group mt-4">
           <label class="form-label">{{ 'CLIMATIC.ELEMENT_COLUMNS' | translate }}</label>
           <div class="flex flex-wrap gap-2 mt-1">
-            @for (col of getNumericColumns(); track col.name) {
+            @for (col of numericColumns(); track col.name) {
               <label class="cursor-pointer flex items-center gap-1.5 bg-base-200 px-2 py-1 rounded">
-                <input type="checkbox" class="checkbox checkbox-xs" 
+                <input type="checkbox" class="checkbox checkbox-xs"
                   [checked]="elementColumns().includes(col.name)"
                   (change)="toggleElement(col.name)" />
                 <span class="text-sm">{{ col.name }}</span>
@@ -112,6 +109,12 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(MissingReportDialogComponent); }
 
   private readonly climaticService = inject(ClimaticDataService);
+
+  // Computed columns for element checkbox list
+  numericColumns = computed(() => this.columns().filter(c => {
+    const t = c.type.toLowerCase();
+    return t.includes('numeric') || t.includes('integer') || t.includes('double') || t.includes('number');
+  }));
 
   // Form state (signals for reactivity)
   dateColumn = signal('');
@@ -183,17 +186,6 @@ export class MissingReportDialogComponent extends DialogBase implements OnInit {
     } else {
       this.elementColumns.set([...cols, colName]);
     }
-  }
-
-  // Enhanced date column detection (includes character columns with date-like names)
-  override getDateColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      const n = c.name.toLowerCase();
-      if (t.includes('date') || t.includes('posix')) return true;
-      if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day';
-      return false;
-    });
   }
 
   isValid(): boolean {

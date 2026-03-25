@@ -1,9 +1,9 @@
-import { Component, OnInit, effect, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -13,7 +13,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-boxplot-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -25,7 +25,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         <!-- Dataframe Selection -->
         <div class="form-group">
           <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
-          <select 
+          <select
             class="select select-bordered w-full"
             [ngModel]="selectedDataframe()"
             (ngModelChange)="onDataframeChange($event)"
@@ -36,38 +36,17 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
           </select>
         </div>
 
-        <!-- Y Variable -->
-        <div class="form-group">
-          <label class="form-label">{{ 'BOXPLOT.Y_VARIABLE' | translate }}</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="yVariable()"
-            (selectedColumnChange)="yVariable.set($event)"
-          />
-        </div>
-
-        <!-- X Variable (grouping) -->
-        <div class="form-group">
-          <label class="form-label">{{ 'BOXPLOT.X_VARIABLE' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="xVariable()" (ngModelChange)="xVariable.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
-        </div>
-
-        <!-- Fill Variable -->
-        <div class="form-group">
-          <label class="form-label">{{ 'BOXPLOT.FILL_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="fillVariable()" (ngModelChange)="fillVariable.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="yVariable" [label]="'BOXPLOT.Y_VARIABLE' | translate"
+            filter="numeric" [required]="true"
+            [(column)]="yVariable" />
+          <app-column-slot name="xVariable" [label]="'BOXPLOT.X_VARIABLE' | translate"
+            filter="factor"
+            [(column)]="xVariable" />
+          <app-column-slot name="fillVariable" [label]="'BOXPLOT.FILL_BY' | translate"
+            filter="factor"
+            [(column)]="fillVariable" />
+        </app-column-selector>
 
         <!-- Options -->
         <div class="form-group">
@@ -91,8 +70,8 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
-        <button 
-          class="btn btn-primary" 
+        <button
+          class="btn btn-primary"
           (click)="execute()"
           [disabled]="!isValid() || isLoading()"
         >
@@ -119,9 +98,9 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
       operations: ['describe.comparison.numeric_by_group'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('yVariable', 'column', { required: true, columnType: 'numeric' }),
-        p('xVariable', 'column', { columnType: 'factor' }),
-        p('fillVariable', 'column', { columnType: 'factor' }),
+        p('yVariable', 'column', { required: true, filter: 'numeric' }),
+        p('xVariable', 'column', { filter: 'factor' }),
+        p('fillVariable', 'column', { filter: 'factor' }),
         p('showPoints', 'boolean'),
       ],
       retrievalHints: {
@@ -130,7 +109,6 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
     };
   }
 
-  // Dialog state using signals for reactivity
   yVariable = signal('');
   xVariable = signal('');
   fillVariable = signal('');
@@ -139,7 +117,6 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
-    // Register form fields for automatic save/restore/auto-population
     this.registerFormFields({
       yVariable: this.yVariable,
       xVariable: this.xVariable,
@@ -147,7 +124,6 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
       showPoints: this.showPoints,
     });
 
-    // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildBoxplot({
         dataframe: this.selectedDataframe(),
@@ -159,16 +135,12 @@ export class BoxplotDialogComponent extends DialogBase implements OnInit {
       })
     );
 
-    // Set up effect to rebuild R code whenever dialog state changes
     this.createEffect(() => {
-      // Read all signals to establish dependencies
       this.selectedDataframe();
       this.yVariable();
       this.xVariable();
       this.fillVariable();
       this.showPoints();
-
-      // Rebuild when any dependency changes
       this.rebuildRCode();
     });
   }

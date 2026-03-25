@@ -1,12 +1,11 @@
 /**
- * GenericFieldComponent — Atomic control renderer
+ * GenericFieldComponent — Atomic control renderer for non-column params.
  *
  * Renders a single DialogParamSchema as the appropriate form control.
- * This is the lowest-level building block of the generic dialog system.
+ * Column kinds ('column', 'column[]') are handled by the form section
+ * via ColumnSelector + ColumnSlot — not by this component.
  *
  * Supported kinds:
- * - column    → ColumnPicker (single select, type-filtered)
- * - column[]  → ColumnPicker (multi select, type-filtered)
  * - enum      → <select> with enumValues
  * - boolean   → <checkbox>
  * - number    → <input type="number"> with min/max
@@ -15,18 +14,16 @@
  * The 'dataframe' kind is handled by the shell, not this component.
  */
 
-import { Component, Input, computed, type WritableSignal } from '@angular/core';
+import { Component, Input, type WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { DialogParamSchema } from '../../../../core/ai/dialog-schema.registry';
 import type { ColumnInfo } from '../../../../core/models/r.model';
-import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
-import { filterColumnsByType } from '../utils/column-type-filter';
 
 @Component({
   selector: 'app-generic-field',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule],
   template: `
     <!-- Boolean renders its own label inline -->
     @if (param.kind === 'boolean') {
@@ -44,22 +41,6 @@ import { filterColumnsByType } from '../utils/column-type-filter';
         </label>
 
         @switch (param.kind) {
-          @case ('column') {
-            <app-column-picker
-              [columns]="filteredColumns()"
-              [multiple]="false"
-              [selectedColumn]="value()"
-              (selectedColumnChange)="value.set($event)"
-            />
-          }
-          @case ('column[]') {
-            <app-column-picker
-              [columns]="filteredColumns()"
-              [multiple]="true"
-              [selectedColumns]="value() || []"
-              (selectedColumnsChange)="value.set($event)"
-            />
-          }
           @case ('enum') {
             <select class="select select-bordered w-full"
               [ngModel]="value()" (ngModelChange)="value.set($event)">
@@ -88,11 +69,6 @@ export class GenericFieldComponent {
   @Input({ required: true }) value!: WritableSignal<any>;
   @Input() columns: ColumnInfo[] = [];
 
-  readonly filteredColumns = computed(() =>
-    filterColumnsByType(this.columns, this.param?.columnType)
-  );
-
-  /** Uses param.label if set, otherwise derives from param.name. */
   displayLabel(): string {
     return this.param.label ?? this.formatLabel(this.param.name);
   }

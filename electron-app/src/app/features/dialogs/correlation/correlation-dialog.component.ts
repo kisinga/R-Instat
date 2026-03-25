@@ -2,7 +2,7 @@ import { Component, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCorrelation } from '../../../core/dialogs/builders/statistics';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -12,7 +12,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-correlation-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -36,14 +36,11 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </div>
 
         <!-- Variables -->
-        <div class="form-group">
-          <label class="form-label">Variables (select 2 or more numeric columns)</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="true"
-            [(selectedColumns)]="selectedVarsArray"
-          />
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="selectedVars" [label]="'Variables (select 2 or more numeric columns)'"
+            filter="numeric" [multiple]="true" [required]="true"
+            [columns]="selectedVars()" (columnsChange)="selectedVars.set($event)" />
+        </app-column-selector>
 
         <!-- Method -->
         <div class="form-group">
@@ -114,7 +111,7 @@ export class CorrelationDialogComponent extends DialogBase implements OnInit {
       operations: ['describe.association.numeric_numeric'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('selectedVars', 'column[]', { required: true, columnType: 'numeric' }),
+        p('selectedVars', 'column[]', { required: true, filter: 'numeric' }),
         p('method', 'enum', { enumValues: ['pearson', 'spearman', 'kendall'] }),
         p('showPValues', 'boolean'),
       ],
@@ -127,15 +124,6 @@ export class CorrelationDialogComponent extends DialogBase implements OnInit {
   selectedVars = signal<string[]>([]);
   method = signal<'pearson' | 'spearman' | 'kendall'>('pearson');
   showPValues = signal(true);
-
-  // Getter/setter for ColumnPickerComponent two-way binding
-  get selectedVarsArray(): string[] {
-    return this.selectedVars();
-  }
-
-  set selectedVarsArray(value: string[]) {
-    this.selectedVars.set(value);
-  }
 
   override ngOnInit(): void {
     super.ngOnInit();

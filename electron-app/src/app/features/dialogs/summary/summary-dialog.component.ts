@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { LanguageService } from '../../../core/services/language.service';
 import { 
@@ -37,7 +37,7 @@ interface StatisticOption {
 @Component({
   selector: 'app-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -63,37 +63,24 @@ interface StatisticOption {
               </select>
             </div>
 
-            <!-- Variables to Summarize -->
-            <div class="form-group">
-              <div class="flex items-center gap-2">
-                <label class="form-label">{{ 'SUMMARY.VARIABLES' | translate }}</label>
-                <span class="text-xs text-base-content/60">({{ selectedColumns().length }}/{{ columns().length }})</span>
+            <!-- Variables to Summarize & Group By -->
+            <app-column-selector [columns]="columns()">
+              <div class="form-group">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-base-content/60">({{ selectedColumns().length }}/{{ columns().length }})</span>
+                </div>
+                <app-column-slot name="selectedColumns" [label]="'SUMMARY.VARIABLES' | translate"
+                  [multiple]="true" [required]="true"
+                  [columns]="selectedColumns()" (columnsChange)="selectedColumns.set($event)" />
               </div>
-              <app-column-picker
-                [columns]="columns()"
-                [multiple]="true"
-                [(selectedColumns)]="selectedColumnsArray"
-              />
-            </div>
 
-            <!-- Group By (optional) -->
-            <div class="form-group">
-              <div class="flex items-center gap-2">
-                <label class="form-label">{{ 'SUMMARY.GROUP_BY' | translate }}</label>
-                <span class="text-xs text-base-content/60">({{ 'DIALOG.OPTIONAL' | translate }})</span>
+              <div class="form-group">
+                <app-column-slot name="groupByColumn" [label]="'SUMMARY.GROUP_BY' | translate"
+                  filter="factor"
+                  [(column)]="groupByColumn" />
+                <p class="text-xs text-base-content/50 mt-1">{{ 'SUMMARY.GROUP_BY_HINT' | translate }}</p>
               </div>
-              <select 
-                class="select select-bordered w-full select-sm"
-                [ngModel]="groupByColumn()"
-                (ngModelChange)="groupByColumn.set($event)"
-              >
-                <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-                @for (col of getFactorColumns(); track col.name) {
-                  <option [value]="col.name">{{ col.name }} ({{ col.type }})</option>
-                }
-              </select>
-              <p class="text-xs text-base-content/50 mt-1">{{ 'SUMMARY.GROUP_BY_HINT' | translate }}</p>
-            </div>
+            </app-column-selector>
           </div>
 
           <!-- Right Column: Summary Options -->
@@ -199,8 +186,8 @@ export class SummaryDialogComponent extends DialogBase implements OnInit {
       operations: ['describe.comparison.numeric_by_group'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('selectedColumns', 'column[]', { required: true, columnType: 'any' }),
-        p('groupByColumn', 'column', { columnType: 'factor' }),
+        p('selectedColumns', 'column[]', { required: true, filter: 'any' }),
+        p('groupByColumn', 'column', { filter: 'factor' }),
         p('summaryMode', 'enum', { enumValues: ['default', 'customised', 'skim'] }),
         p('selectedStatistics', 'string[]'),
         p('omitMissing', 'boolean'),
@@ -239,15 +226,6 @@ export class SummaryDialogComponent extends DialogBase implements OnInit {
     { value: 'var', labelKey: 'SUMMARY.STAT_VAR' },
     { value: 'iqr', labelKey: 'SUMMARY.STAT_IQR' },
   ];
-
-  // Getter/setter for ColumnPickerComponent two-way binding
-  get selectedColumnsArray(): string[] {
-    return this.selectedColumns();
-  }
-
-  set selectedColumnsArray(value: string[]) {
-    this.selectedColumns.set(value);
-  }
 
   toggleStatistic(stat: SummaryStatistic): void {
     const current = this.selectedStatistics();

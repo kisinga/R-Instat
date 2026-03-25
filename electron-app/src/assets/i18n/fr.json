@@ -551,7 +551,11 @@
     "QUESTIONS": "Questions",
     "APPLY": "Appliquer",
     "CODE_SUCCESS": "Exécuté",
-    "CODE_FAILED": "Échoué"
+    "CODE_FAILED": "Échoué",
+    "SEND": "Envoyer",
+    "CUSTOM_RESPONSE_PLACEHOLDER": "Tapez votre propre réponse...",
+    "SHOW_MORE": "Afficher {{count}} de plus...",
+    "SHOW_LESS": "Afficher moins"
   },
   "SETTINGS": {
     "TITLE": "Paramètres",

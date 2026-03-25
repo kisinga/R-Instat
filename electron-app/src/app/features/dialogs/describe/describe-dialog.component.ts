@@ -13,7 +13,7 @@ import { RService } from '../../../core/services/r.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { ColumnInfo } from '../../../core/models/r.model';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { DescribeDialogService, OutputMode } from './describe-dialog.service';
 import { GraphMode } from './utils/variable-type-analyzer';
 import { GraphPanelComponent } from './panels/graph-panel.component';
@@ -29,7 +29,8 @@ import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-v
     CommonModule,
     FormsModule,
     TranslateModule,
-    ColumnPickerComponent,
+    ColumnSelectorComponent,
+    ColumnSlotComponent,
     GraphPanelComponent,
     FrequencyPanelComponent,
   ],
@@ -88,30 +89,26 @@ import { validateDialogueAIContract } from '../../../core/ai/dialogue-contract-v
           </div>
 
           <!-- Analyze Variables (Primary) -->
-          <div class="form-group">
-            <div class="flex items-center gap-2">
-              <label class="form-label">
-                {{ getAnalyzeLabel() | translate }}
-              </label>
-              <span 
-                class="tooltip tooltip-right cursor-help" 
-                [attr.data-tip]="'DESCRIBE.ANALYZE_TOOLTIP' | translate"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </span>
-              @if (allowMultipleAnalyze()) {
-                <span class="text-xs text-base-content/60 ml-auto">({{ analyzeVarNames.length }}/{{ columns().length }})</span>
-              }
+          <app-column-selector [columns]="columns()">
+            <div class="form-group">
+              <div class="flex items-center gap-2">
+                <span
+                  class="tooltip tooltip-right cursor-help"
+                  [attr.data-tip]="'DESCRIBE.ANALYZE_TOOLTIP' | translate"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                @if (allowMultipleAnalyze()) {
+                  <span class="text-xs text-base-content/60 ml-auto">({{ analyzeVarNames.length }}/{{ columns().length }})</span>
+                }
+              </div>
+              <app-column-slot name="analyzeVars" [label]="getAnalyzeLabel() | translate"
+                [multiple]="allowMultipleAnalyze()"
+                [columns]="analyzeVarNames" (columnsChange)="analyzeVarNames = $event; onAnalyzeVarsChange($event)" />
             </div>
-            <app-column-picker
-              [columns]="columns()"
-              [multiple]="allowMultipleAnalyze()"
-              [(selectedColumns)]="analyzeVarNames"
-              (selectedColumnsChange)="onAnalyzeVarsChange($event)"
-            />
-          </div>
+          </app-column-selector>
 
           <!-- Group By (for Two/Three Variable modes) -->
           @if (showGroupBy()) {

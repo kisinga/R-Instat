@@ -11,8 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../../dialog-base';
 import { AIDialogClassRegistry } from '../../../../core/ai/dialog-class-registry';
 import { ClimaticDataService } from '../../../../core/services/climatic-data.service';
-import { ColumnInfo } from '../../../../core/models/r.model';
-import { ColumnPickerComponent } from '../../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../../shared/components/code-preview/code-preview.component';
 import { buildTemperatureSummary, TemperatureSummaryOptions } from '../utils/climatic-r-builders';
 import { rSyntax } from '../../../../core/r-codegen';
@@ -21,7 +20,7 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 @Component({
   selector: 'app-temperature-summary-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnSelectorComponent, ColumnSlotComponent, CodePreviewComponent],
   template: `
     <div class="dialog-content climatic-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -41,27 +40,20 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
           }
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.DATE_COLUMN' | translate }}</label>
-            <app-column-picker [columns]="getDateColumns()" [multiple]="false" [selectedColumn]="dateColumn()" (selectedColumnChange)="dateColumn.set($event)" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.STATION_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getFactorColumns()" [multiple]="false" [selectedColumn]="stationColumn()" (selectedColumnChange)="stationColumn.set($event)" />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.TMAX_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="tmaxColumn()" (selectedColumnChange)="tmaxColumn.set($event)" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">{{ 'CLIMATIC.TMIN_COLUMN' | translate }} <span class="text-xs opacity-60">({{ 'DIALOG.OPTIONAL' | translate }})</span></label>
-            <app-column-picker [columns]="getNumericColumns()" [multiple]="false" [selectedColumn]="tminColumn()" (selectedColumnChange)="tminColumn.set($event)" />
-          </div>
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="dateColumn" [label]="'CLIMATIC.DATE_COLUMN' | translate"
+            filter="date" [required]="true"
+            [(column)]="dateColumn" />
+          <app-column-slot name="stationColumn" [label]="'CLIMATIC.STATION_COLUMN' | translate"
+            filter="factor"
+            [(column)]="stationColumn" />
+          <app-column-slot name="tmaxColumn" [label]="'CLIMATIC.TMAX_COLUMN' | translate"
+            filter="numeric"
+            [(column)]="tmaxColumn" />
+          <app-column-slot name="tminColumn" [label]="'CLIMATIC.TMIN_COLUMN' | translate"
+            filter="numeric"
+            [(column)]="tminColumn" />
+        </app-column-selector>
 
         <div class="form-group mt-4">
           <label class="form-label">{{ 'CLIMATIC.SUMMARY_LEVEL' | translate }}</label>
@@ -167,17 +159,6 @@ export class TemperatureSummaryDialogComponent extends DialogBase implements OnI
       this.tminColumn();
       this.level();
       this.rebuildRCode();
-    });
-  }
-
-  // Enhanced date column detection (includes character columns with date-like names)
-  override getDateColumns(): ColumnInfo[] {
-    return this.columns().filter(c => {
-      const t = c.type.toLowerCase();
-      const n = c.name.toLowerCase();
-      if (t.includes('date') || t.includes('posix')) return true;
-      if (t.includes('character')) return n.includes('date') || n.includes('time') || n === 'day';
-      return false;
     });
   }
 

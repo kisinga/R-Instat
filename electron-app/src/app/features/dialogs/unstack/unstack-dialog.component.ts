@@ -2,7 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { DialogBase } from '../dialog-base';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 import { rSyntax } from '../../../core/r-codegen';
@@ -10,7 +10,7 @@ import { rSyntax } from '../../../core/r-codegen';
 @Component({
   selector: 'app-unstack-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ColumnPickerComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, ColumnSelectorComponent, ColumnSlotComponent],
   template: `
     <div class="dialog-content unstack-dialog" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -39,31 +39,25 @@ import { rSyntax } from '../../../core/r-codegen';
           }
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mt-4">
-          <!-- Names From -->
-          <div class="form-group">
-            <label class="form-label">{{ 'UNSTACK.NAMES_FROM' | translate }}</label>
-            <app-column-picker
-              [columns]="getFactorColumns()"
-              [multiple]="false"
-              [selectedColumn]="namesFrom()"
-              (selectedColumnChange)="namesFrom.set($event)"
-            />
-            <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.NAMES_HINT' | translate }}</p>
-          </div>
+        <app-column-selector [columns]="columns()">
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <!-- Names From -->
+            <div class="form-group">
+              <app-column-slot name="namesFrom" [label]="'UNSTACK.NAMES_FROM' | translate"
+                filter="factor" [required]="true"
+                [(column)]="namesFrom" />
+              <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.NAMES_HINT' | translate }}</p>
+            </div>
 
-          <!-- Values From -->
-          <div class="form-group">
-            <label class="form-label">{{ 'UNSTACK.VALUES_FROM' | translate }}</label>
-            <app-column-picker
-              [columns]="getNumericColumns()"
-              [multiple]="false"
-              [selectedColumn]="valuesFrom()"
-              (selectedColumnChange)="valuesFrom.set($event)"
-            />
-            <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.VALUES_HINT' | translate }}</p>
+            <!-- Values From -->
+            <div class="form-group">
+              <app-column-slot name="valuesFrom" [label]="'UNSTACK.VALUES_FROM' | translate"
+                filter="numeric" [required]="true"
+                [(column)]="valuesFrom" />
+              <p class="text-xs text-base-content/60 mt-1">{{ 'UNSTACK.VALUES_HINT' | translate }}</p>
+            </div>
           </div>
-        </div>
+        </app-column-selector>
 
         <!-- Values Fill -->
         <div class="form-group mt-4">

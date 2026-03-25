@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildHistogram } from '../../../core/dialogs/builders/graphs';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -13,7 +13,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-histogram-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -25,7 +25,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         <!-- Dataframe Selection -->
         <div class="form-group">
           <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
-          <select 
+          <select
             class="select select-bordered w-full"
             [ngModel]="selectedDataframe()"
             (ngModelChange)="onDataframeChange($event)"
@@ -36,16 +36,14 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
           </select>
         </div>
 
-        <!-- Variable Selection -->
-        <div class="form-group">
-          <label class="form-label">{{ 'HISTOGRAM.VARIABLE' | translate }}</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="variable()"
-            (selectedColumnChange)="variable.set($event)"
-          />
-        </div>
+        <app-column-selector [columns]="columns()">
+          <app-column-slot name="variable" [label]="'HISTOGRAM.VARIABLE' | translate"
+            filter="numeric" [required]="true"
+            [(column)]="variable" />
+          <app-column-slot name="facetBy" [label]="'HISTOGRAM.FACET_BY' | translate"
+            filter="factor"
+            [(column)]="facetBy" />
+        </app-column-selector>
 
         <!-- Options -->
         <div class="grid grid-cols-2 gap-4">
@@ -70,17 +68,6 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
               (ngModelChange)="fillColor.set($event)"
             />
           </div>
-        </div>
-
-        <!-- Facet Option -->
-        <div class="form-group">
-          <label class="form-label">{{ 'HISTOGRAM.FACET_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="facetBy()" (ngModelChange)="facetBy.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
         </div>
 
         <div class="form-group">
@@ -117,8 +104,8 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
-        <button 
-          class="btn btn-primary" 
+        <button
+          class="btn btn-primary"
           (click)="execute()"
           [disabled]="!isValid() || isLoading()"
         >
@@ -145,10 +132,10 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
       operations: ['describe.distribution.numeric'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('variable', 'column', { required: true, columnType: 'numeric' }),
+        p('variable', 'column', { required: true, filter: 'numeric' }),
         p('bins', 'number', { min: 5, max: 100 }),
         p('fillColor', 'string'),
-        p('facetBy', 'column', { columnType: 'factor' }),
+        p('facetBy', 'column', { filter: 'factor' }),
         p('title', 'string'),
         p('outputName', 'string'),
       ],
@@ -158,7 +145,6 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
     };
   }
 
-  // Dialog state using signals for reactivity
   variable = signal('');
   bins = signal(30);
   fillColor = signal('#6366f1');
@@ -169,7 +155,6 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
-    // Register form fields for automatic save/restore/auto-population
     this.registerFormFields({
       variable: this.variable,
       bins: this.bins,
@@ -179,7 +164,6 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
       outputName: this.outputName,
     });
 
-    // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildHistogram({
         dataframe: this.selectedDataframe(),
@@ -192,9 +176,7 @@ export class HistogramDialogComponent extends DialogBase implements OnInit {
       })
     );
 
-    // Set up effect to rebuild R code whenever dialog state changes
     this.createRebuildEffect(() => {
-      // Read all signals to establish dependencies
       this.selectedDataframe();
       this.variable();
       this.bins();

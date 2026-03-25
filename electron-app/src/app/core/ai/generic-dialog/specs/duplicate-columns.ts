@@ -11,7 +11,7 @@ const spec: DialogContract = {
   operations: ['data.duplicate_column'],
   params: [
     p('dataframe', 'dataframe', { required: true }),
-    p('sourceColumn', 'column', { required: true, columnType: 'any' }),
+    p('sourceColumn', 'column', { required: true, filter: 'any' }),
     p('newColumnName', 'string', { required: true }),
   ],
   retrievalHints: {

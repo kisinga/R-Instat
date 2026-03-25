@@ -17,3 +17,7 @@ import './t-test-generic';
 import './regression-generic';
 import './correlation-generic';
 import './boxplot-generic';
+import './chi-square-test';
+import './frequency-table';
+import './row-summary';
+import './convert-columns';

@@ -592,7 +592,11 @@
     "QUESTIONS": "Questions",
     "APPLY": "Apply",
     "CODE_SUCCESS": "Executed",
-    "CODE_FAILED": "Failed"
+    "CODE_FAILED": "Failed",
+    "SEND": "Send",
+    "CUSTOM_RESPONSE_PLACEHOLDER": "Type your own response...",
+    "SHOW_MORE": "Show {{count}} more...",
+    "SHOW_LESS": "Show less"
   },
   "SETTINGS": {
     "TITLE": "Settings",

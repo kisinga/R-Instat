@@ -14,7 +14,7 @@ const spec: DialogContract = {
     p('columnName', 'string', { required: true }),
     p('columnType', 'enum', { required: true, enumValues: ['numeric', 'character', 'logical'] }),
     p('position', 'enum', { required: true, enumValues: ['first', 'last', 'after'] }),
-    p('afterColumn', 'column', { columnType: 'any', when: { param: 'position', equals: 'after' } }),
+    p('afterColumn', 'column', { filter: 'any', when: { param: 'position', equals: 'after' } }),
   ],
   retrievalHints: {
     keywords: ['insert', 'add', 'new', 'empty', 'column', 'create'],

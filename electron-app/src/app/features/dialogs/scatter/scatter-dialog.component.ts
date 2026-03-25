@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
-import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
+import { ColumnSelectorComponent, ColumnSlotComponent } from '../../../shared/components/column-selector';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildScatter } from '../../../core/dialogs/builders/graphs';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
@@ -13,7 +13,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 @Component({
   selector: 'app-scatter-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ColumnPickerComponent, TranslateModule, CodePreviewComponent],
+  imports: [CommonModule, FormsModule, ColumnSelectorComponent, ColumnSlotComponent, TranslateModule, CodePreviewComponent],
   template: `
     <div class="dialog-content" (click)="$event.stopPropagation()">
       <div class="dialog-header">
@@ -25,7 +25,7 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         <!-- Dataframe Selection -->
         <div class="form-group">
           <label class="form-label">{{ 'DIALOG.DATA_FRAME' | translate }}</label>
-          <select 
+          <select
             class="select select-bordered w-full"
             [ngModel]="selectedDataframe()"
             (ngModelChange)="onDataframeChange($event)"
@@ -36,38 +36,17 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
           </select>
         </div>
 
-        <!-- X Variable -->
-        <div class="form-group">
-          <label class="form-label">{{ 'SCATTER.X_VARIABLE' | translate }}</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="xVariable()"
-            (selectedColumnChange)="xVariable.set($event)"
-          />
-        </div>
-
-        <!-- Y Variable -->
-        <div class="form-group">
-          <label class="form-label">{{ 'SCATTER.Y_VARIABLE' | translate }}</label>
-          <app-column-picker
-            [columns]="getNumericColumns()"
-            [multiple]="false"
-            [selectedColumn]="yVariable()"
-            (selectedColumnChange)="yVariable.set($event)"
-          />
-        </div>
-
-        <!-- Color Variable -->
-        <div class="form-group">
-          <label class="form-label">{{ 'SCATTER.COLOR_BY' | translate }}</label>
-          <select class="select select-bordered w-full" [ngModel]="colorVariable()" (ngModelChange)="colorVariable.set($event)">
-            <option value="">{{ 'DIALOG.NONE' | translate }}</option>
-            @for (col of getFactorColumns(); track col.name) {
-              <option [value]="col.name">{{ col.name }}</option>
-            }
-          </select>
-        </div>
+        <app-column-selector [columns]="columns()" [excludeUsed]="true">
+          <app-column-slot name="xVariable" [label]="'SCATTER.X_VARIABLE' | translate"
+            filter="numeric" [required]="true"
+            [(column)]="xVariable" />
+          <app-column-slot name="yVariable" [label]="'SCATTER.Y_VARIABLE' | translate"
+            filter="numeric" [required]="true"
+            [(column)]="yVariable" />
+          <app-column-slot name="colorVariable" [label]="'SCATTER.COLOR_BY' | translate"
+            filter="factor"
+            [(column)]="colorVariable" />
+        </app-column-selector>
 
         <!-- Options -->
         <div class="form-group">
@@ -91,8 +70,8 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
         </button>
         <div class="flex-1"></div>
         <button class="btn btn-ghost" (click)="cancel()">{{ 'DIALOG.CANCEL' | translate }}</button>
-        <button 
-          class="btn btn-primary" 
+        <button
+          class="btn btn-primary"
           (click)="execute()"
           [disabled]="!isValid() || isLoading()"
         >
@@ -119,9 +98,9 @@ export class ScatterDialogComponent extends DialogBase implements OnInit {
       operations: ['describe.association.numeric_numeric'],
       params: [
         p('dataframe', 'dataframe', { required: true }),
-        p('xVariable', 'column', { required: true, columnType: 'numeric' }),
-        p('yVariable', 'column', { required: true, columnType: 'numeric' }),
-        p('colorVariable', 'column', { columnType: 'factor' }),
+        p('xVariable', 'column', { required: true, filter: 'numeric' }),
+        p('yVariable', 'column', { required: true, filter: 'numeric' }),
+        p('colorVariable', 'column', { filter: 'factor' }),
         p('addTrendLine', 'boolean'),
       ],
       retrievalHints: {
@@ -130,7 +109,6 @@ export class ScatterDialogComponent extends DialogBase implements OnInit {
     };
   }
 
-  // Dialog state using signals for reactivity
   xVariable = signal('');
   yVariable = signal('');
   colorVariable = signal('');
@@ -139,7 +117,6 @@ export class ScatterDialogComponent extends DialogBase implements OnInit {
   override ngOnInit(): void {
     super.ngOnInit();
 
-    // Register form fields for automatic save/restore/auto-population
     this.registerFormFields({
       xVariable: this.xVariable,
       yVariable: this.yVariable,
@@ -147,7 +124,6 @@ export class ScatterDialogComponent extends DialogBase implements OnInit {
       addTrendLine: this.addTrendLine,
     });
 
-    // Initialize code manager with builder function
     this.initializeCodeManager(() =>
       buildScatter({
         dataframe: this.selectedDataframe(),
@@ -159,16 +135,12 @@ export class ScatterDialogComponent extends DialogBase implements OnInit {
       })
     );
 
-    // Set up effect to rebuild R code whenever dialog state changes
     this.createEffect(() => {
-      // Read all signals to establish dependencies
       this.selectedDataframe();
       this.xVariable();
       this.yVariable();
       this.colorVariable();
       this.addTrendLine();
-
-      // Rebuild when any dependency changes
       this.rebuildRCode();
     });
   }

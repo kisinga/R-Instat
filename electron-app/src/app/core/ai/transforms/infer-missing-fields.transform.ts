@@ -71,7 +71,7 @@ function pickColumnForParam(
   columns: Array<{ name: string; type: string }>,
   state: Record<string, unknown>
 ): string | null {
-  const requiredType = param.columnType ?? 'any';
+  const requiredType = param.filter ?? 'any';
   const used = getUsedColumnNames(state);
   const candidates = columns.filter((col) => {
     const mapped = mapColumnType(col.type);
@@ -90,7 +90,7 @@ function pickColumnsForParam(
   columns: Array<{ name: string; type: string }>,
   state: Record<string, unknown>
 ): string[] {
-  const requiredType = param.columnType ?? 'any';
+  const requiredType = param.filter ?? 'any';
   const used = getUsedColumnNames(state);
   const candidates = columns.filter((col) => {
     const mapped = mapColumnType(col.type);

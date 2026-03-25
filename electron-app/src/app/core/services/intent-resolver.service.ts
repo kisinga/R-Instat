@@ -268,10 +268,10 @@ export class IntentResolverService {
         const cols = dataContext.columnsByDataframe[dfName] ?? [];
         const col = cols.find((c) => c.name === value);
         if (!col) return `column "${value}" not found in dataframe "${dfName}"`;
-        if (param.columnType && param.columnType !== 'any') {
+        if (param.filter && param.filter !== 'any') {
           const mappedType = mapColumnType(col.type);
-          if (mappedType !== param.columnType) {
-            return `column "${value}" has type "${col.type}", expected ${param.columnType}`;
+          if (mappedType !== param.filter) {
+            return `column "${value}" has type "${col.type}", expected ${param.filter}`;
           }
         }
         return null;
@@ -285,10 +285,10 @@ export class IntentResolverService {
           if (typeof item !== 'string') return 'column[] must contain strings';
           const col = cols.find((c) => c.name === item);
           if (!col) return `column "${item}" not found in dataframe "${dfName}"`;
-          if (param.columnType && param.columnType !== 'any') {
+          if (param.filter && param.filter !== 'any') {
             const mappedType = mapColumnType(col.type);
-            if (mappedType !== param.columnType) {
-              return `column "${item}" has type "${col.type}", expected ${param.columnType}`;
+            if (mappedType !== param.filter) {
+              return `column "${item}" has type "${col.type}", expected ${param.filter}`;
             }
           }
         }

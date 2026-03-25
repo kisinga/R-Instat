@@ -67,8 +67,8 @@ function applyPreRankedScores(
 
     // Apply column-type compatibility boost (same as keyword path)
     const requiredColumnTypes = contract.params
-      .filter((p) => p.required && p.kind === 'column' && p.columnType && p.columnType !== 'any')
-      .map((p) => p.columnType);
+      .filter((p) => p.required && p.kind === 'column' && p.filter && p.filter !== 'any')
+      .map((p) => p.filter);
     if (requiredColumnTypes.includes('numeric') && hasNumeric) {
       score += 0.05; // Smaller boost since vector scores are 0-1 range
       reasons.push('numeric compatibility');
@@ -127,8 +127,8 @@ function retrieveDialogContractsTopKInternal(
     }
 
     const requiredColumnTypes = contract.params
-      .filter((p) => p.required && p.kind === 'column' && p.columnType && p.columnType !== 'any')
-      .map((p) => p.columnType);
+      .filter((p) => p.required && p.kind === 'column' && p.filter && p.filter !== 'any')
+      .map((p) => p.filter);
     if (requiredColumnTypes.includes('numeric') && hasNumeric) {
       score += 0.8;
       reasons.push('numeric compatibility');
