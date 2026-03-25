@@ -11,3 +11,4 @@ export type {
   DisambiguationSuggestion,
   ModeDecision,
 } from './ai-result.types';
+export type { AIResponseEnvelope, AIEnvelopeType } from './ai-envelope.types';

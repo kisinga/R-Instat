@@ -149,7 +149,6 @@ const JOIN_TYPES: JoinType[] = [
 export class MergeDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(MergeDialogComponent); }
   static readonly dialogId = 'merge';
-  readonly dialogTitle = 'Merge';
 
   secondDataframe = signal('');
   firstColumns = signal<ColumnInfo[]>([]);

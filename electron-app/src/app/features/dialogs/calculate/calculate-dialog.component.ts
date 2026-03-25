@@ -5,7 +5,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCalculate } from '../../../core/dialogs/builders/data-manipulation';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -132,12 +132,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class CalculateDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(CalculateDialogComponent); }
   static readonly dialogId = 'calculate';
-  readonly dialogTitle = 'Calculate New Column';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'calculate',
       componentType: 'CalculateDialogComponent',
+      title: 'Calculate New Column',
       family: 'data-preparation',
       description: 'Create a new derived column from formula/arithmetic.',
       operations: ['data.calculate'],

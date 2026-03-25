@@ -1,9 +1,10 @@
-import type { OperationSpec } from '../operation-spec';
+import type { DialogContract } from '../../dialog-catalog';
 import { p } from '../../dialog-schema.registry';
-import { registerOperationSpec } from '../operation-spec.registry';
+import { registerDialogSpec } from '../operation-spec.registry';
 
-const spec: OperationSpec = {
+const spec: DialogContract = {
   dialogId: 'insert-column',
+  componentType: 'GenericDialogComponent',
   title: 'Insert Column',
   family: 'data-preparation',
   description: 'Add a new empty column to a dataframe.',
@@ -20,6 +21,6 @@ const spec: OperationSpec = {
   },
 };
 
-registerOperationSpec(spec);
+registerDialogSpec(spec);
 
 export default spec;

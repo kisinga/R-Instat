@@ -6,9 +6,10 @@
  */
 
 import { getDialogContractsForPrompt } from './dialog-catalog-aggregator';
-import { OPERATION_REGISTRY } from './operation-registry';
+import { getOperationRegistry } from './operation-registry';
 import { listDialogIds } from './dialog-identity.registry';
 import { DIALOG_PARITY_EVIDENCE } from './dialog-parity-evidence.registry';
+import { AIDialogClassRegistry } from './dialog-class-registry';
 
 export interface DialogRegistryView {
   hostIds: Set<string>;
@@ -21,12 +22,16 @@ export interface DialogRegistryView {
 
 let cachedView: DialogRegistryView | null = null;
 
+AIDialogClassRegistry.onClassesChanged(() => {
+  cachedView = null;
+});
+
 function buildView(): DialogRegistryView {
   const hostIds = new Set(listDialogIds({ includeNonAnalytical: false }));
   const catalog = getDialogContractsForPrompt();
   const catalogIds = new Set(catalog.map((c) => c.dialogId));
   const schemaIds = new Set(catalogIds);
-  const operationIds = new Set(OPERATION_REGISTRY.flatMap((o) => o.mappedDialogs));
+  const operationIds = new Set(getOperationRegistry().flatMap((o) => o.mappedDialogs));
   const parityEvidenceIds = new Set(
     DIALOG_PARITY_EVIDENCE.filter((x) => x.status === 'complete').map((x) => x.dialogId)
   );
@@ -74,6 +79,10 @@ export const TEMPLATE_CODEGEN_DIALOG_IDS = new Set<string>([
   't-test',
   'regression',
   // Generic dialog pilots
+  't-test-generic',
+  'regression-generic',
+  'correlation-generic',
+  'boxplot-generic',
   'duplicate-columns',
   'permute-column',
   'delete-columns',

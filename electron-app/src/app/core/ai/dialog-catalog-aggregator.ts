@@ -1,11 +1,16 @@
-import type { DialogPromptContract } from './dialog-catalog';
+import type { DialogContract } from './dialog-catalog';
 import type { DialogSchema } from './dialog-schema.registry';
 import { validateCatalogDescriptor } from './dialog-catalog-validator';
 import { AIDialogClassRegistry } from './dialog-class-registry';
 import { DialogBase } from '../../features/dialogs/dialog-base';
 import { getGenericDialogContracts } from './generic-dialog/operation-spec.registry';
 
-let cachedCatalog: DialogPromptContract[] | null = null;
+let cachedCatalog: DialogContract[] | null = null;
+
+// Invalidate catalog cache when new dialog classes register
+AIDialogClassRegistry.onClassesChanged(() => {
+  cachedCatalog = null;
+});
 
 /**
  * Builds the catalog from dialog classes. Pure function; no caching inside.
@@ -13,11 +18,11 @@ let cachedCatalog: DialogPromptContract[] | null = null;
  */
 export function buildCatalogFromDialogs(
   classes: (typeof DialogBase)[]
-): DialogPromptContract[] {
-  const result: DialogPromptContract[] = [];
+): DialogContract[] {
+  const result: DialogContract[] = [];
   for (const Cls of classes) {
     const descriptor = (Cls as typeof DialogBase & {
-      getCatalogDescriptor(): DialogPromptContract | null;
+      getCatalogDescriptor(): DialogContract | null;
     }).getCatalogDescriptor();
     if (descriptor === null) {
       continue;
@@ -38,7 +43,7 @@ export function buildCatalogFromDialogs(
 /**
  * Returns the list of prompt contracts for all valid dialogs. Cached on first access.
  */
-export function getDialogContractsForPrompt(): DialogPromptContract[] {
+export function getDialogContractsForPrompt(): DialogContract[] {
   if (cachedCatalog === null) {
     cachedCatalog = [
       ...buildCatalogFromDialogs(AIDialogClassRegistry.getRegisteredClasses() as (typeof DialogBase)[]),
@@ -51,7 +56,7 @@ export function getDialogContractsForPrompt(): DialogPromptContract[] {
 /**
  * Returns the full catalog contract for a dialog by dialogId, or undefined.
  */
-export function getCatalogContract(dialogId: string): DialogPromptContract | undefined {
+export function getCatalogContract(dialogId: string): DialogContract | undefined {
   return getDialogContractsForPrompt().find((c) => c.dialogId === dialogId);
 }
 

@@ -12,7 +12,7 @@ import {
   isConditionValid,
 } from './filter-r-builders';
 import { rSyntax } from '../../../core/r-codegen';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -158,12 +158,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class FilterDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(FilterDialogComponent); }
   static readonly dialogId = 'filter';
-  readonly dialogTitle = 'Filter Rows';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'filter',
       componentType: 'FilterDialogComponent',
+      title: 'Filter Rows',
       family: 'data-preparation',
       description: 'Filter rows using one or more conditions.',
       operations: ['data.filter'],

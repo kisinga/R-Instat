@@ -1,5 +1,5 @@
 import '../../features/dialogs/dialog-host.component';
-import { OPERATION_REGISTRY } from './operation-registry';
+import { getOperationRegistry } from './operation-registry';
 import {
   getComponentType,
   getDialogContract,
@@ -42,14 +42,14 @@ describe('dialog contract composition', () => {
   });
 
   it('resolves component types for all operation-mapped dialogs', () => {
-    const mappedDialogs = new Set(OPERATION_REGISTRY.flatMap((op) => op.mappedDialogs));
+    const mappedDialogs = new Set(getOperationRegistry().flatMap((op) => op.mappedDialogs));
     for (const dialogId of mappedDialogs) {
       expect(getComponentType(dialogId)).withContext(dialogId).toBeDefined();
     }
   });
 
   it('ensures all operation-mapped dialogs have catalog entries', () => {
-    const mappedDialogs = new Set(OPERATION_REGISTRY.flatMap((op) => op.mappedDialogs));
+    const mappedDialogs = new Set(getOperationRegistry().flatMap((op) => op.mappedDialogs));
     const catalogDialogIds = new Set(getDialogContractsForPrompt().map((c) => c.dialogId));
     for (const dialogId of mappedDialogs) {
       expect(catalogDialogIds.has(dialogId)).withContext(dialogId).toBeTrue();
@@ -157,7 +157,7 @@ describe('intent resolver integration', () => {
 
     const resolved = resolver.resolve(aiResult, dataContext);
     expect(resolved.ok).toBeTrue();
-    expect(resolved.plan?.steps[0].metadata?.componentType).toBe('HistogramDialogComponent');
+    expect(resolved.plan?.steps[0].metadata?.dialogId).toBe('histogram');
   });
 
   it('normalizes bar-chart to value mode when yVariable is provided', () => {

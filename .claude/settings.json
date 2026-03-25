@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep \"^Public Class\" /Users/mac/Documents/code/R-Instat/instat/ucrReceiver*.vb)",
+      "Bash(cat /Users/mac/Documents/code/R-Instat/instat/**/*.vb)",
+      "Bash(grep \"^Public Class\" /Users/mac/Documents/code/R-Instat/instat/ucrSelector*.vb)",
+      "Bash(grep \"Inherits\" /Users/mac/Documents/code/R-Instat/instat/ucr*.vb)",
+      "Bash(find /Users/mac/Documents/code/R-Instat/electron-app -name *.ts -path */electron/* -o -name *.ts -path */ipc/*)",
+      "Bash(head -60 /Users/mac/Documents/code/R-Instat/instat/sdg*.vb)",
+      "Read(//Users/mac/.claude/projects/-Users-mac-Documents-code-R-Instat/efbcd9f5-04e0-4de5-9847-52daf4e14b80/subagents/**)",
+      "Bash(ls /Users/mac/Documents/code/R-Instat/electron-app/src/app/features/dialogs/dialog-name-mapper*)",
+      "Bash(grep -r operation-spec'' /Users/mac/Documents/code/R-Instat/electron-app/src/app/ --include=*.ts)",
+      "Bash(grep -r \"DialogPromptContract\\\\|DialogCatalogContract\\\\|OperationSpec\" /Users/mac/Documents/code/R-Instat/electron-app/src/app/ --include=*.ts)",
+      "Bash(grep -E \"\\\\.vb$\")",
+      "Bash(grep -r \"Dialog\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
+      "Bash(grep -r \"RunScript\\\\|ExecuteScript\\\\|clsRCode\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
+      "Bash(grep -r \"Class dlg.*Form\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
+      "Bash(grep -r \"Dialog.*Registry\\\\|RegisterDialog\\\\|DialogFactory\\\\|DialogNameMapper\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
+      "Bash(wc -l /Users/mac/Documents/code/R-Instat/instat/*.vb)"
+    ]
+  }
+}

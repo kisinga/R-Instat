@@ -1,9 +1,10 @@
-import type { OperationSpec } from '../operation-spec';
+import type { DialogContract } from '../../dialog-catalog';
 import { p } from '../../dialog-schema.registry';
-import { registerOperationSpec } from '../operation-spec.registry';
+import { registerDialogSpec } from '../operation-spec.registry';
 
-const spec: OperationSpec = {
+const spec: DialogContract = {
   dialogId: 'duplicate-columns',
+  componentType: 'GenericDialogComponent',
   title: 'Duplicate Column',
   family: 'data-preparation',
   description: 'Copy a column under a new name.',
@@ -18,6 +19,6 @@ const spec: OperationSpec = {
   },
 };
 
-registerOperationSpec(spec);
+registerDialogSpec(spec);
 
 export default spec;

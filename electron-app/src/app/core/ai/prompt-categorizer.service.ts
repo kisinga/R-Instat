@@ -1,6 +1,8 @@
 /**
  * Layer 1 – Categorizer: Compose rule-based strategy first, then LLM when rules do not match.
  * Classify user prompt into category and optional family.
+ *
+ * LLM responses use the standard envelope: { "type": "classification", "body": { ... } }
  */
 
 import { Injectable, inject } from '@angular/core';
@@ -9,7 +11,7 @@ import type { CategorizerResult, PromptCategory } from './pipeline-types';
 import { ruleBasedCategorizer } from './categorizer-rules';
 import { AIConfigService } from '../services/ai-config.service';
 import { LLMProviderFactory } from './providers/llm-provider.factory';
-import { extractJson } from './shared/json-extractor';
+import { ResponseParser } from './pipeline/response-parser';
 
 const VALID_CATEGORIES: PromptCategory[] = [
   'open_dialog',
@@ -29,8 +31,8 @@ const VALID_FAMILIES: DialogFamily[] = [
   'other',
 ];
 
-const CLASSIFICATION_SYSTEM = `You are a classifier for an R-based statistics app. Given the user's message and whether a dialog is currently open, respond with JSON only in this exact shape (no markdown, no explanation):
-{"category": "<category>", "family": "<family or omit>"}
+const CLASSIFICATION_SYSTEM = `You are a classifier for an R-based statistics app. Given the user's message and whether a dialog is currently open, respond with STRICT JSON only in the standard envelope format:
+{"type": "classification", "body": {"category": "<category>", "family": "<family or omit>"}}
 
 Categories (choose exactly one). Use unclear only when the intent is genuinely ambiguous (e.g. very short, vague, or could mean several different things). When in doubt, prefer a concrete category from context:
 - open_dialog: User wants to open or use a dialog/feature (e.g. create a plot, run a t-test, filter data, import). Prefer this over run_code when the user mentions a named analysis, plot type, or app feature (e.g. "bar chart", "t-test", "regression", "filter") even if they say "code" in passing.
@@ -46,6 +48,7 @@ Family (include only when category is open_dialog): one of plotting, data-prepar
 export class PromptCategorizerService {
   private readonly aiConfig = inject(AIConfigService);
   private readonly llmFactory = inject(LLMProviderFactory);
+  private readonly responseParser = inject(ResponseParser);
 
   /**
    * Categorize: try rule-based strategy first; if no match, call LLM.
@@ -80,10 +83,22 @@ export class PromptCategorizerService {
         maxTokens: modelConfig.categorizerMaxTokens,
       });
 
-      const json = extractJson(response.content);
-      const parsed = JSON.parse(json) as { category?: string; family?: string };
-      const category = this.normalizeCategory(parsed?.category);
-      const family = this.normalizeFamily(parsed?.family, category);
+      const parsed = this.responseParser.extractEnvelope<{ category?: string; family?: string }>(
+        response.content,
+        'classification',
+        (body) => {
+          if (typeof body !== 'object' || body === null) return null;
+          return body as { category?: string; family?: string };
+        }
+      );
+
+      if (!parsed) {
+        console.warn('[Categorizer] Failed to parse classification envelope:', response.content);
+        return { category: 'unclear' };
+      }
+
+      const category = this.normalizeCategory(parsed.category);
+      const family = this.normalizeFamily(parsed.family, category);
 
       return { category, ...(family !== undefined && { family }) };
     } catch {

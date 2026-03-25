@@ -5,8 +5,9 @@
  * (primary/derived statistical intent), independent of specific dialogs.
  */
 
-import type { DialogPromptContract } from './dialog-catalog';
+import type { DialogContract } from './dialog-catalog';
 import { getDialogContractsForPrompt } from './dialog-catalog-aggregator';
+import { AIDialogClassRegistry } from './dialog-class-registry';
 
 export type PrimaryKind =
   | 'data-preparation'
@@ -92,7 +93,7 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
     primaryKind: 'descriptive',
     derivedKind: 'distribution',
     description: 'Visualize distribution of numeric variables.',
-    mappedDialogs: ['boxplot'],
+    mappedDialogs: ['boxplot', 'boxplot-generic'],
   },
   {
     id: 'describe.comparison.numeric_by_group',
@@ -124,7 +125,15 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
     primaryKind: 'inferential',
     derivedKind: 'hypothesis-test',
     description: 'One-sample, two-sample, or paired t-test.',
-    mappedDialogs: ['t-test'],
+    mappedDialogs: ['t-test', 't-test-generic'],
+  },
+  {
+    id: 'inferential.correlation',
+    label: 'Correlation (generic)',
+    primaryKind: 'descriptive',
+    derivedKind: 'association',
+    description: 'Correlation matrix (generic).',
+    mappedDialogs: ['correlation-generic'],
   },
   {
     id: 'predictive.linear_regression',
@@ -132,7 +141,7 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
     primaryKind: 'predictive',
     derivedKind: 'regression',
     description: 'Linear model with one or more predictors.',
-    mappedDialogs: ['regression'],
+    mappedDialogs: ['regression', 'regression-generic'],
   },
   {
     id: 'climatic.summary',
@@ -200,7 +209,7 @@ const LEGACY_OPERATION_REGISTRY: OperationDefinition[] = [
  * with inferred metadata from the dialog's family.
  */
 function buildRegistryFromCatalog(
-  catalog: DialogPromptContract[],
+  catalog: DialogContract[],
   legacy: OperationDefinition[]
 ): OperationDefinition[] {
   const legacyById = new Map(legacy.map((op) => [op.id, op]));
@@ -266,9 +275,20 @@ function inferDerivedKind(operationId: string): DerivedKind {
   return 'transform';
 }
 
-export const OPERATION_REGISTRY: OperationDefinition[] =
-  buildRegistryFromCatalog(
-    getDialogContractsForPrompt(),
-    LEGACY_OPERATION_REGISTRY
-  );
+let cachedRegistry: OperationDefinition[] | null = null;
+
+export function getOperationRegistry(): OperationDefinition[] {
+  if (cachedRegistry === null) {
+    cachedRegistry = buildRegistryFromCatalog(
+      getDialogContractsForPrompt(),
+      LEGACY_OPERATION_REGISTRY
+    );
+  }
+  return cachedRegistry;
+}
+
+// Invalidate when the catalog changes (new dialog classes registered)
+AIDialogClassRegistry.onClassesChanged(() => {
+  cachedRegistry = null;
+});
 

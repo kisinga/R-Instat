@@ -192,6 +192,7 @@ export class ToolbarComponent {
       items: [
         { labelKey: 'TOOLBAR.HISTOGRAM', action: 'histogram' },
         { labelKey: 'TOOLBAR.BOX_PLOT', action: 'boxplot' },
+        { labelKey: 'TOOLBAR.BOX_PLOT_GENERIC', action: 'boxplot-generic' },
         { labelKey: 'TOOLBAR.SCATTER', action: 'scatter' },
         { labelKey: 'TOOLBAR.BAR_CHART', action: 'bar-chart' },
         { labelKey: 'TOOLBAR.LINE_PLOT', action: 'line-plot' },
@@ -203,8 +204,11 @@ export class ToolbarComponent {
       icon: '🧮',
       items: [
         { labelKey: 'TOOLBAR.CORRELATION', action: 'correlation' },
+        { labelKey: 'TOOLBAR.CORRELATION_GENERIC', action: 'correlation-generic' },
         { labelKey: 'TOOLBAR.TTEST', action: 't-test' },
+        { labelKey: 'TOOLBAR.TTEST_GENERIC', action: 't-test-generic' },
         { labelKey: 'TOOLBAR.REGRESSION', action: 'regression' },
+        { labelKey: 'TOOLBAR.REGRESSION_GENERIC', action: 'regression-generic' },
       ]
     }
   ];

@@ -95,6 +95,7 @@ export function compileStepToR(dialogId: string, state: Record<string, unknown>)
         script = buildRecode({ dataframe: df, sourceColumn, mappings, newColumnName, defaultValue }).toScript();
         break;
       }
+      case 'correlation-generic':
       case 'correlation': {
         const selectedVars = Array.isArray(state['selectedVars']) ? (state['selectedVars'] as string[]).map(String).filter(Boolean) : [];
         if (selectedVars.length < 2) return null;
@@ -103,6 +104,7 @@ export function compileStepToR(dialogId: string, state: Record<string, unknown>)
         script = buildCorrelation({ dataframe: df, selectedVars, method, showPValues }).toScript();
         break;
       }
+      case 'regression-generic':
       case 'regression': {
         const responseVar = str(state['responseVar']).trim();
         const predictorVars = Array.isArray(state['predictorVars']) ? (state['predictorVars'] as string[]).map(String).filter(Boolean) : [];
@@ -119,6 +121,7 @@ export function compileStepToR(dialogId: string, state: Record<string, unknown>)
         }).toScript();
         break;
       }
+      case 't-test-generic':
       case 't-test': {
         const testType = (str(state['testType']) || 'one') as 'one' | 'two' | 'paired';
         const variable1 = str(state['variable1']).trim();
@@ -149,6 +152,7 @@ export function compileStepToR(dialogId: string, state: Record<string, unknown>)
         script = buildHistogram({ dataframe: df, variable, bins, fillColor, facetBy, title }).toScript();
         break;
       }
+      case 'boxplot-generic':
       case 'boxplot': {
         const yVariable = str(state['yVariable']).trim();
         if (!yVariable) return null;

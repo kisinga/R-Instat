@@ -10,7 +10,7 @@
 
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { getDialogContractsForPrompt } from '../ai/dialog-catalog-aggregator';
-import type { DialogPromptContract } from '../ai/dialog-catalog';
+import type { DialogContract } from '../ai/dialog-catalog';
 import { IPC_BRIDGE, type IPCBridge } from '../ai/ipc/ipc-bridge';
 
 export interface PreRankedCandidate {
@@ -107,7 +107,7 @@ export class VectorIndexService {
     await this.indexDialogContracts();
   }
 
-  private hashContracts(contracts: DialogPromptContract[]): string {
+  private hashContracts(contracts: DialogContract[]): string {
     // Simple hash: concatenate dialogIds + descriptions, hash to string
     const content = contracts
       .map(c => `${c.dialogId}:${c.description}:${c.operations.join(',')}`)

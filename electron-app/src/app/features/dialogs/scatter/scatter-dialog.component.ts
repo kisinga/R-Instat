@@ -6,7 +6,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildScatter } from '../../../core/dialogs/builders/graphs';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -108,12 +108,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class ScatterDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(ScatterDialogComponent); }
   static readonly dialogId = 'scatter';
-  readonly dialogTitle = 'Scatter Plot';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'scatter',
       componentType: 'ScatterDialogComponent',
+      title: 'Scatter Plot',
       family: 'plotting',
       description: 'Scatter plot of two numeric variables.',
       operations: ['describe.association.numeric_numeric'],

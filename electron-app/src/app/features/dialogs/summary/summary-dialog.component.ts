@@ -19,7 +19,7 @@ import {
   SummaryStatistic 
 } from '../describe/utils/r-code-builders';
 import { rSyntax } from '../../../core/r-codegen';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -187,13 +187,13 @@ interface StatisticOption {
 export class SummaryDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(SummaryDialogComponent); }
   static readonly dialogId = 'summary';
-  readonly dialogTitle = 'Summary Statistics';
   private readonly languageService = inject(LanguageService);
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'summary',
       componentType: 'SummaryDialogComponent',
+      title: 'Summary Statistics',
       family: 'plotting',
       description: 'Summary statistics for selected columns.',
       operations: ['describe.comparison.numeric_by_group'],

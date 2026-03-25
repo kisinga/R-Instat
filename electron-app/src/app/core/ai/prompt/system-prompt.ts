@@ -2,28 +2,31 @@
  * System prompt for the LLM planner, decomposed into composable sections.
  */
 
-const JSON_SCHEMA = `Return STRICT JSON only with this shape:
+const JSON_SCHEMA = `Return STRICT JSON only, wrapped in the standard envelope:
 {
-  "goal": string,
-  "assumptions": string[],
-  "clarificationQuestions": string[],
-  "overallConfidence": number, // 0..1
-  "requiresConfirmation": boolean,
-  "executionMode": "component_codegen",
-  "modeReason": string,
-  "modeConfidence": number, // 0..1
-  "steps": [
-    {
-      "stepId": string,
-      "operationId": string, // from operation registry
-      "dialogId": string,    // from dialog schema
-      "dependsOnStepId": string | null,
-      "state": object,       // must match dialog param schema
-      "inferredFields": string[],
-      "confidence": number,  // 0..1
-      "rationale": string
-    }
-  ]
+  "type": "plan",
+  "body": {
+    "goal": string,
+    "assumptions": string[],
+    "clarificationQuestions": string[],
+    "overallConfidence": number, // 0..1
+    "requiresConfirmation": boolean,
+    "executionMode": "component_codegen",
+    "modeReason": string,
+    "modeConfidence": number, // 0..1
+    "steps": [
+      {
+        "stepId": string,
+        "operationId": string, // from operation registry
+        "dialogId": string,    // from dialog schema
+        "dependsOnStepId": string | null,
+        "state": object,       // must match dialog param schema
+        "inferredFields": string[],
+        "confidence": number,  // 0..1
+        "rationale": string
+      }
+    ]
+  }
 }`;
 
 const RULES = `Rules:

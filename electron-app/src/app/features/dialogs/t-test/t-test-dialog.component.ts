@@ -5,7 +5,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildTTest, TTestOptions } from '../../../core/dialogs/builders/statistics';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -155,12 +155,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class TTestDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(TTestDialogComponent); }
   static readonly dialogId = 't-test';
-  readonly dialogTitle = 't-Test';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 't-test',
       componentType: 'TTestDialogComponent',
+      title: 't-Test',
       family: 'inferential',
       description: 'One-sample, two-sample, or paired t-test.',
       operations: ['inferential.t_test'],

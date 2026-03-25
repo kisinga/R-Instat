@@ -11,7 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DialogBase } from '../dialog-base';
 import { extractMetadata, stripMetadata, hasMetadata } from '../../../core/r-codegen/metadata-parser';
 import { DialogMetadata } from '../../../core/r-codegen/dialog-metadata';
-import { mapComponentTypeToDialogId } from '../dialog-name-mapper';
+import { isKnownDialogId } from '../../../core/ai/dialog-identity.registry';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -95,7 +95,6 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class RestoreFromCodeDialogComponent extends DialogBase {
   static { AIDialogClassRegistry.register(RestoreFromCodeDialogComponent); }
   static readonly dialogId = 'restore-from-code';
-  readonly dialogTitle = 'Restore From Code';
 
   codeInput = signal('');
   syntaxError = signal<string | null>(null);
@@ -128,8 +127,7 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
     if (this.syntaxError()) return false;
     const meta = this.metadata();
     if (!meta) return false;
-    const dialogId = mapComponentTypeToDialogId(meta.componentType);
-    return !!dialogId;
+    return isKnownDialogId(meta.dialogId);
   });
 
   hasMetadata(code: string): boolean {
@@ -150,9 +148,9 @@ export class RestoreFromCodeDialogComponent extends DialogBase {
       return;
     }
 
-    const dialogId = mapComponentTypeToDialogId(metadata.componentType);
-    if (!dialogId) {
-      this.toastService.error(`Unknown dialog type: ${metadata.componentType}`);
+    const dialogId = metadata.dialogId;
+    if (!isKnownDialogId(dialogId)) {
+      this.toastService.error(`Unknown dialog: ${dialogId}`);
       return;
     }
 

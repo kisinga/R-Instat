@@ -6,7 +6,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBarChart } from '../../../core/dialogs/builders/barchart';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -135,12 +135,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class BarChartDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(BarChartDialogComponent); }
   static dialogId = 'bar-chart';
-  readonly dialogTitle = 'Bar Chart';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'bar-chart',
       componentType: 'BarChartDialogComponent',
+      title: 'Bar Chart',
       family: 'plotting',
       description: 'Bar chart for categorical counts or numeric values by category.',
       operations: ['describe.distribution.numeric', 'describe.comparison.numeric_by_group'],

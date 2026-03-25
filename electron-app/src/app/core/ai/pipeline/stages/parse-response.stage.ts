@@ -17,8 +17,13 @@ export class ParseResponseStage implements PipelineStage {
     const content = ctx.state.llmResponse!;
     const allowEmptySteps = ctx.state.category === 'education_question';
 
-    const parsed = this.responseParser.extractJson<Partial<AIPlan>>(content);
+    const parsed = this.responseParser.extractEnvelope<Partial<AIPlan>>(
+      content,
+      'plan',
+      (body) => (typeof body === 'object' && body !== null ? body as Partial<AIPlan> : null)
+    );
     if (!parsed) {
+      console.warn('[ParseResponse] Failed to parse plan envelope from AI response:', content);
       return Stage.terminate({
         success: false,
         error: 'Invalid response: could not parse JSON from AI response',

@@ -147,7 +147,6 @@ import { rSyntax } from '../../../core/r-codegen';
 export class StackDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(StackDialogComponent); }
   static readonly dialogId = 'stack';
-  readonly dialogTitle = 'Stack';
 
   columnsToStack = signal<string[]>([]);
   namesTo = signal('variable');

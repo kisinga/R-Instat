@@ -234,7 +234,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 })
 export class InventoryPlotDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(InventoryPlotDialogComponent); }
-  readonly dialogTitle = 'Inventory Plot';
 
   private readonly climaticService = inject(ClimaticDataService);
 

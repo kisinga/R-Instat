@@ -48,6 +48,10 @@
     "DOT_PLOT": "Dot Plot",
     "CORRELATION": "Correlation",
     "TTEST": "t-Test",
+    "BOX_PLOT_GENERIC": "Box Plot (Generic)",
+    "CORRELATION_GENERIC": "Correlation (Generic)",
+    "TTEST_GENERIC": "t-Test (Generic)",
+    "REGRESSION_GENERIC": "Regression (Generic)",
     "REGRESSION": "Linear Regression",
     "SETTINGS": "Settings"
   },

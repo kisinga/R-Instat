@@ -1,9 +1,10 @@
-import type { OperationSpec } from '../operation-spec';
+import type { DialogContract } from '../../dialog-catalog';
 import { p } from '../../dialog-schema.registry';
-import { registerOperationSpec } from '../operation-spec.registry';
+import { registerDialogSpec } from '../operation-spec.registry';
 
-const spec: OperationSpec = {
+const spec: DialogContract = {
   dialogId: 'delete-columns',
+  componentType: 'GenericDialogComponent',
   title: 'Delete Columns',
   family: 'data-preparation',
   description: 'Remove one or more columns from a dataframe.',
@@ -17,6 +18,6 @@ const spec: OperationSpec = {
   },
 };
 
-registerOperationSpec(spec);
+registerDialogSpec(spec);
 
 export default spec;

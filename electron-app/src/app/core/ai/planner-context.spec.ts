@@ -3,7 +3,7 @@ import {
   filterOperationsForScopedDialogs,
   buildPlanningContractViews,
 } from './planner-context';
-import { OPERATION_REGISTRY } from './operation-registry';
+import { getOperationRegistry } from './operation-registry';
 import { getSchema } from './dialog-catalog-aggregator';
 import { getDialogContractsForPrompt } from './dialog-identity.registry';
 
@@ -11,8 +11,8 @@ describe('planner-context', () => {
   describe('filterOperationsForScopedDialogs', () => {
     it('returns only operations whose mappedDialogs intersect scopedDialogIds', () => {
       const scoped = ['filter', 'sort'];
-      const result = filterOperationsForScopedDialogs(OPERATION_REGISTRY, scoped);
-      expect(result.length).toBeLessThanOrEqual(OPERATION_REGISTRY.length);
+      const result = filterOperationsForScopedDialogs(getOperationRegistry(), scoped);
+      expect(result.length).toBeLessThanOrEqual(getOperationRegistry().length);
       result.forEach((op) => {
         const hasOverlap = op.mappedDialogs.some((id) => scoped.includes(id));
         expect(hasOverlap).toBe(true);
@@ -20,13 +20,13 @@ describe('planner-context', () => {
     });
 
     it('returns empty when scopedDialogIds is empty', () => {
-      const result = filterOperationsForScopedDialogs(OPERATION_REGISTRY, []);
+      const result = filterOperationsForScopedDialogs(getOperationRegistry(), []);
       expect(result).toEqual([]);
     });
 
     it('returns all operations that map to any of the scoped dialogs', () => {
       const scoped = ['bar-chart', 'histogram'];
-      const result = filterOperationsForScopedDialogs(OPERATION_REGISTRY, scoped);
+      const result = filterOperationsForScopedDialogs(getOperationRegistry(), scoped);
       const ids = result.map((r) => r.id);
       expect(ids).toContain('describe.distribution.numeric');
       expect(ids).toContain('describe.comparison.numeric_by_group');

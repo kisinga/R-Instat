@@ -1,4 +1,4 @@
-import type { DialogPromptContract } from './dialog-catalog';
+import type { DialogContract } from './dialog-catalog';
 
 export interface CatalogValidationResult {
   valid: boolean;
@@ -11,7 +11,7 @@ export interface CatalogValidationResult {
  * operations.length >= 1, params array, retrievalHints.keywords array.
  */
 export function validateCatalogDescriptor(
-  descriptor: DialogPromptContract | null
+  descriptor: DialogContract | null
 ): CatalogValidationResult {
   const warnings: string[] = [];
   if (descriptor === null) {

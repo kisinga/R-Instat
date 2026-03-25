@@ -99,7 +99,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 })
 export class DayCountDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(DayCountDialogComponent); }
-  readonly dialogTitle = 'Day Count';
 
   private readonly climaticService = inject(ClimaticDataService);
 

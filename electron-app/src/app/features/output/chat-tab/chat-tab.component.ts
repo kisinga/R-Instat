@@ -136,6 +136,7 @@ import { ChatErrorMessageComponent } from './messages/chat-error-message.compone
                 <app-chat-plan-message
                   [message]="msg"
                   (executeStep)="onExecuteStep($event)"
+                  (sendClarification)="onSendFollowUp($event)"
                   (toggleConfirm)="onToggleConfirm($event)"
                 />
               }

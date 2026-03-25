@@ -105,7 +105,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 })
 export class SpellLengthsDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(SpellLengthsDialogComponent); }
-  readonly dialogTitle = 'Spell Lengths';
 
   private readonly climaticService = inject(ClimaticDataService);
 

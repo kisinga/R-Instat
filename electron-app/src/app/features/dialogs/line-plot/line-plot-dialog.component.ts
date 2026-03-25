@@ -131,7 +131,6 @@ import { rSyntax } from '../../../core/r-codegen';
 export class LinePlotDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(LinePlotDialogComponent); }
   static readonly dialogId = 'line-plot';
-  readonly dialogTitle = 'Line Plot';
 
   xVariable = signal('');
   yVariable = signal('');

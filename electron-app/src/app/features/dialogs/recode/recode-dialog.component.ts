@@ -5,7 +5,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRecode } from '../../../core/dialogs/builders/data-manipulation';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -142,12 +142,12 @@ interface RecodeMapping {
 export class RecodeDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(RecodeDialogComponent); }
   static readonly dialogId = 'recode';
-  readonly dialogTitle = 'Recode Values';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'recode',
       componentType: 'RecodeDialogComponent',
+      title: 'Recode Values',
       family: 'data-preparation',
       description: 'Recode values in a column (map old values to new).',
       operations: ['data.recode'],

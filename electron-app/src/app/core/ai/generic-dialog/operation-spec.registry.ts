@@ -1,42 +1,40 @@
 /**
- * OperationSpec Registry
+ * Generic Dialog Registry
  *
- * Stores and retrieves OperationSpecs for the generic dialog renderer.
- * Also bridges into the AI catalog system via getGenericDialogContracts().
+ * Stores and retrieves DialogContract specs for the generic dialog renderer.
+ * Specs registered here are automatically merged into the AI catalog.
  */
 
-import type { OperationSpec } from './operation-spec';
-import type { DialogPromptContract } from '../dialog-catalog';
+import type { DialogContract } from '../dialog-catalog';
 
-const specs = new Map<string, OperationSpec>();
+const specs = new Map<string, DialogContract>();
 
-export function registerOperationSpec(spec: OperationSpec): void {
+export function registerDialogSpec(spec: DialogContract): void {
   if (specs.has(spec.dialogId)) {
     console.warn(`[GenericDialog] Duplicate spec registration: "${spec.dialogId}"`);
   }
   specs.set(spec.dialogId, spec);
 }
 
-export function getOperationSpec(dialogId: string): OperationSpec | undefined {
+export function getDialogSpec(dialogId: string): DialogContract | undefined {
   return specs.get(dialogId);
 }
 
-export function listOperationSpecs(): OperationSpec[] {
+export function listDialogSpecs(): DialogContract[] {
   return [...specs.values()];
 }
 
+/** @deprecated Use registerDialogSpec */
+export const registerOperationSpec = registerDialogSpec;
+/** @deprecated Use getDialogSpec */
+export const getOperationSpec = getDialogSpec;
+/** @deprecated Use listDialogSpecs */
+export const listOperationSpecs = listDialogSpecs;
+
 /**
- * Returns DialogPromptContract[] for all registered specs.
- * Used by dialog-catalog-aggregator to merge generic specs into the AI catalog.
+ * Returns all registered generic dialog contracts.
+ * Used by dialog-catalog-aggregator to merge into the AI catalog.
  */
-export function getGenericDialogContracts(): DialogPromptContract[] {
-  return listOperationSpecs().map((spec) => ({
-    dialogId: spec.dialogId,
-    componentType: 'GenericDialogComponent',
-    family: spec.family,
-    description: spec.description,
-    operations: spec.operations,
-    params: spec.params,
-    retrievalHints: spec.retrievalHints,
-  }));
+export function getGenericDialogContracts(): DialogContract[] {
+  return listDialogSpecs();
 }

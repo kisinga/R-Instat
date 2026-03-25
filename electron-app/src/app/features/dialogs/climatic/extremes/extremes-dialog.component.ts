@@ -106,7 +106,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 })
 export class ExtremesDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(ExtremesDialogComponent); }
-  readonly dialogTitle = 'Extremes';
 
   private readonly climaticService = inject(ClimaticDataService);
 

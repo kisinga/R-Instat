@@ -135,7 +135,6 @@ import { rSyntax } from '../../../core/r-codegen';
 export class UnstackDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(UnstackDialogComponent); }
   static readonly dialogId = 'unstack';
-  readonly dialogTitle = 'Unstack';
 
   namesFrom = signal('');
   valuesFrom = signal('');

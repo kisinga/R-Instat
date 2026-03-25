@@ -5,7 +5,7 @@ import type { PipelineContext } from '../context';
 import { AIConfigService } from '../../../services/ai-config.service';
 import { PromptScoperService } from '../../prompt-scoper.service';
 import { CurrentDialogueRegistryService } from '../../current-dialogue-registry.service';
-import { OPERATION_REGISTRY } from '../../operation-registry';
+import { getOperationRegistry } from '../../operation-registry';
 import {
   filterOperationsForScopedDialogs,
   buildPlanningContractViews,
@@ -63,7 +63,7 @@ export class ScopeStage implements PipelineStage {
 
     // Build operations and contracts JSON for prompt
     const scopedOperations = filterOperationsForScopedDialogs(
-      OPERATION_REGISTRY,
+      getOperationRegistry(),
       ctx.state.scopedDialogIds
     );
     const compactContracts = buildPlanningContractViews(

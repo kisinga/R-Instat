@@ -5,7 +5,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildCorrelation } from '../../../core/dialogs/builders/statistics';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -103,12 +103,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class CorrelationDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(CorrelationDialogComponent); }
   static readonly dialogId = 'correlation';
-  readonly dialogTitle = 'Correlation Analysis';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'correlation',
       componentType: 'CorrelationDialogComponent',
+      title: 'Correlation Analysis',
       family: 'inferential',
       description: 'Correlation matrix between numeric variables.',
       operations: ['describe.association.numeric_numeric'],

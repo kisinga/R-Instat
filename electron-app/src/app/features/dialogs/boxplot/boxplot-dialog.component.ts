@@ -6,7 +6,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildBoxplot } from '../../../core/dialogs/builders/graphs';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -108,12 +108,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class BoxplotDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(BoxplotDialogComponent); }
   static readonly dialogId = 'boxplot';
-  readonly dialogTitle = 'Box Plot';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'boxplot',
       componentType: 'BoxplotDialogComponent',
+      title: 'Box Plot',
       family: 'plotting',
       description: 'Boxplot comparing numeric variable across groups.',
       operations: ['describe.comparison.numeric_by_group'],

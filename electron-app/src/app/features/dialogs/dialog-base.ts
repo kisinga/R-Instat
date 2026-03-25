@@ -16,7 +16,7 @@ import { CurrentDialogueRegistryService } from '../../core/ai/current-dialogue-r
 import { buildDialogueAIContract } from '../../core/ai/dialogue-ai-adapters';
 import { validateDialogueAIContract } from '../../core/ai/dialogue-contract-validator';
 import type { AICapability } from '../../core/ai/current-dialogue-contract';
-import type { DialogPromptContract } from '../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../core/ai/dialog-catalog';
 
 /**
  * Base class for all statistical dialogs
@@ -60,14 +60,17 @@ export abstract class DialogBase implements OnInit, AfterViewInit, OnDestroy {
   private autoPopulateSources: Array<() => Record<string, any> | null> = [];
   private aiRegistered = false;
 
-  // Abstract properties
-  abstract readonly dialogTitle: string;
+  /** Dialog title derived from the catalog contract. Subclasses no longer declare this separately. */
+  get dialogTitle(): string {
+    const ctor = this.constructor as typeof DialogBase;
+    return ctor.getCatalogDescriptor()?.title ?? this.dialogId;
+  }
 
   /**
    * Static catalog descriptor for AI prompt/retrieval. Override in subclasses that participate in the AI catalog.
    * Return null to opt out. No aggregation or validation in DialogBase.
    */
-  static getCatalogDescriptor(): DialogPromptContract | null {
+  static getCatalogDescriptor(): DialogContract | null {
     return null;
   }
 

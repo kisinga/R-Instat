@@ -68,9 +68,16 @@ import { ToastService } from '../../../../core/services/toast.service';
           @if (plan.clarificationQuestions.length > 0) {
             <div class="mt-3">
               <p class="text-xs font-semibold opacity-70 mb-1">{{ 'AI_CHAT.QUESTIONS' | translate }}:</p>
-              @for (q of plan.clarificationQuestions; track q) {
-                <p class="text-xs opacity-60 break-words">• {{ q }}</p>
-              }
+              <div class="space-y-1">
+                @for (q of plan.clarificationQuestions; track q) {
+                  <button
+                    class="btn btn-sm btn-outline btn-block justify-start text-left text-xs whitespace-normal break-words leading-tight h-auto min-h-[2rem] py-1.5"
+                    (click)="sendClarification.emit(q)"
+                  >
+                    {{ q }}
+                  </button>
+                }
+              </div>
             </div>
           }
         }
@@ -102,6 +109,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 export class ChatPlanMessageComponent {
   readonly message = input.required<ChatMessage>();
   readonly executeStep = output<ResolvedPlanStep>();
+  readonly sendClarification = output<string>();
   readonly toggleConfirm = output<{ stepId: string; checked: boolean }>();
 
   private readonly confirmedStepIds = signal<Set<string>>(new Set());

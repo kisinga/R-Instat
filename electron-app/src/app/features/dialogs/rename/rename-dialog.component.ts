@@ -5,7 +5,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildRename } from '../../../core/dialogs/builders/data-manipulation';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -90,12 +90,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class RenameDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(RenameDialogComponent); }
   static readonly dialogId = 'rename';
-  readonly dialogTitle = 'Rename Column';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'rename',
       componentType: 'RenameDialogComponent',
+      title: 'Rename Column',
       family: 'data-preparation',
       description: 'Rename one column.',
       operations: ['data.rename'],

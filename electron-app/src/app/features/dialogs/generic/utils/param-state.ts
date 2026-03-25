@@ -8,8 +8,10 @@
 import { signal, type WritableSignal } from '@angular/core';
 import type { DialogParamSchema } from '../../../../core/ai/dialog-schema.registry';
 
-/** Returns the appropriate default value for a param kind. */
+/** Returns the appropriate default value for a param kind. Uses `param.default` if set. */
 export function getDefaultValue(param: DialogParamSchema): any {
+  if (param.default !== undefined) return param.default;
+
   switch (param.kind) {
     case 'boolean':
       return false;

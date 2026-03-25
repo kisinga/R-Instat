@@ -6,7 +6,7 @@
  */
 
 import { Injectable, inject } from '@angular/core';
-import type { DialogPromptContract, DialogFamily } from './dialog-catalog';
+import type { DialogContract, DialogFamily } from './dialog-catalog';
 import type { DialogueAIContext } from './current-dialogue-contract';
 import type { PromptCategory } from './pipeline-types';
 import { CurrentDialogueRegistryService } from './current-dialogue-registry.service';
@@ -22,7 +22,7 @@ import type { ExecutionMode } from './types/data-context.types';
 export type { ExecutionMode };
 
 export interface ScopedPromptContext {
-  contracts: DialogPromptContract[];
+  contracts: DialogContract[];
   currentDialogContext: DialogueAIContext | null;
   executionMode: ExecutionMode;
 }
@@ -57,7 +57,7 @@ export class PromptScoperService {
         }
         const allContracts = getDialogContractsForPrompt();
         const contract = allContracts.find((c) => c.dialogId === descriptor.id);
-        const contracts: DialogPromptContract[] = contract ? [contract] : [];
+        const contracts: DialogContract[] = contract ? [contract] : [];
         return {
           contracts,
           currentDialogContext: currentContext,

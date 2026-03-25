@@ -1,7 +1,7 @@
 /**
  * GenericDialogComponent — Shell for spec-driven dialogs
  *
- * Renders a complete dialog from an OperationSpec:
+ * Renders a complete dialog from an DialogContract:
  * - Chrome: header, footer with OK/Cancel/Show Code
  * - Dataframe selector (always first, convention from all existing dialogs)
  * - Form body: delegates to GenericFormSectionComponent
@@ -46,7 +46,7 @@ import { GenericFormSectionComponent } from './sections/generic-form-section.com
 import { createParamSignals, collectState, applyState } from './utils/param-state';
 import { isParamVisible } from './utils/param-visibility';
 import { compileStepToR } from '../../../core/ai/step-to-r';
-import type { OperationSpec } from '../../../core/ai/generic-dialog/operation-spec';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import type { DialogParamSchema } from '../../../core/ai/dialog-schema.registry';
 import type { ColumnInfo } from '../../../core/models/r.model';
 import type { WritableSignal } from '@angular/core';
@@ -117,7 +117,7 @@ import type { WritableSignal } from '@angular/core';
   `,
 })
 export class GenericDialogComponent implements OnInit, OnDestroy {
-  @Input({ required: true }) spec!: OperationSpec;
+  @Input({ required: true }) spec!: DialogContract;
   @Output() close = new EventEmitter<void>();
 
   private readonly appState = inject(AppStateService);
@@ -193,9 +193,12 @@ export class GenericDialogComponent implements OnInit, OnDestroy {
         for (const sig of this.stateSignals.values()) {
           sig();
         }
-        // Generate R code
+        // Generate R code — try spec.build first, fall back to compileStepToR
         const state = collectState(this.stateSignals, df);
-        this.generatedCode.set(compileStepToR(this.spec.dialogId, state) ?? '');
+        const code = this.spec.build
+          ? this.spec.build(state)
+          : compileStepToR(this.spec.dialogId, state);
+        this.generatedCode.set(code ?? '');
       });
     });
 

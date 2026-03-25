@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { DialogBase } from '../dialog-base';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildSort } from '../../../core/dialogs/builders/data-manipulation';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -111,12 +111,12 @@ interface SortColumn {
 export class SortDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(SortDialogComponent); }
   static readonly dialogId = 'sort';
-  readonly dialogTitle = 'Sort Data';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'sort',
       componentType: 'SortDialogComponent',
+      title: 'Sort Data',
       family: 'data-preparation',
       description: 'Sort rows by one or more columns.',
       operations: ['data.sort'],

@@ -34,12 +34,12 @@ import { filterColumnsByType } from '../utils/column-type-filter';
         <label class="label cursor-pointer justify-start gap-2">
           <input type="checkbox" class="checkbox checkbox-primary"
             [ngModel]="value()" (ngModelChange)="value.set($event)" />
-          <span>{{ formatLabel(param.name) }}</span>
+          <span>{{ displayLabel() }}</span>
         </label>
       </div>
     } @else {
       <div class="form-group">
-        <label class="form-label">{{ formatLabel(param.name) }}
+        <label class="form-label">{{ displayLabel() }}
           @if (param.required) { <span class="text-error">*</span> }
         </label>
 
@@ -91,6 +91,11 @@ export class GenericFieldComponent {
   readonly filteredColumns = computed(() =>
     filterColumnsByType(this.columns, this.param?.columnType)
   );
+
+  /** Uses param.label if set, otherwise derives from param.name. */
+  displayLabel(): string {
+    return this.param.label ?? this.formatLabel(this.param.name);
+  }
 
   formatLabel(name: string): string {
     return name

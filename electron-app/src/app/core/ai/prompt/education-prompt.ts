@@ -4,18 +4,21 @@
  */
 
 import type { DataContext } from '../types/data-context.types';
-import type { DialogPromptContract } from '../dialog-catalog';
+import type { DialogContract } from '../dialog-catalog';
 
 export const EDUCATION_SYSTEM_PROMPT = `You are an educational assistant embedded in R-Instat, a statistics application built on R.
 Your role is to explain statistical concepts, R functions, and data analysis techniques
 thoroughly and accessibly.
 
 ## Response Format
-Return STRICT JSON only:
+Return STRICT JSON only, wrapped in the standard envelope:
 {
-  "explanation": string,
-  "highlights": [{ "dialogId": string, "relevanceNote": string }],
-  "followUpSuggestions": string[]
+  "type": "education",
+  "body": {
+    "explanation": string,
+    "highlights": [{ "dialogId": string, "relevanceNote": string }],
+    "followUpSuggestions": string[]
+  }
 }
 
 ## Explanation Guidelines
@@ -50,7 +53,7 @@ Return STRICT JSON only:
  * Build a compact dialog summary list for the education prompt.
  * Only includes dialogId, family, and description to keep token usage low.
  */
-export function buildDialogSummaries(contracts: DialogPromptContract[]): string {
+export function buildDialogSummaries(contracts: DialogContract[]): string {
   if (contracts.length === 0) return '(none)';
   return contracts
     .map(c => `- ${c.dialogId} [${c.family}]: ${c.description}`)

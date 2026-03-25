@@ -9,7 +9,7 @@ import { DialogMetadata } from '../r-codegen/dialog-metadata';
 import { getSchema } from '../ai/dialog-catalog-aggregator';
 import type { DialogParamSchema } from '../ai/dialog-schema.registry';
 import { buildDialogMetadata } from '../ai/dialog-metadata-builder';
-import { OPERATION_REGISTRY } from '../ai/operation-registry';
+import { getOperationRegistry } from '../ai/operation-registry';
 import { extractStepDelta, applyDeltasToContext, type StepOutputDelta } from '../ai/step-output-delta';
 import { ResolverTransformPipeline } from './intent-resolver.pipeline';
 import { createDefaultTransforms } from '../ai/transforms';
@@ -70,7 +70,8 @@ export class IntentResolverService {
       return { ok: false, error: result.error ?? 'No result' };
     }
 
-    const allowedOperations = new Set(OPERATION_REGISTRY.map((x) => x.id));
+    const registry = getOperationRegistry();
+    const allowedOperations = new Set(registry.map((x) => x.id));
     const warnings: string[] = [];
     const resolvedSteps: ResolvedPlanStep[] = [];
     const accumulatedDeltas: StepOutputDelta[] = [];
@@ -115,7 +116,7 @@ export class IntentResolverService {
             "This request couldn't be matched to a specific analysis. For conceptual questions (e.g. 'What does a t-test tell us?') try asking to run a t-test on your data from the menu, or rephrase as a request to perform an analysis.",
         };
       }
-      const operation = OPERATION_REGISTRY.find((x) => x.id === rawOpId);
+      const operation = registry.find((x) => x.id === rawOpId);
       if (!allowedOperations.has(rawOpId) || !operation) {
         return { ok: false, error: `Unknown operationId "${rawOpId}"` };
       }

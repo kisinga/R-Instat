@@ -4,7 +4,7 @@
  */
 
 import type { OperationDefinition } from './operation-registry';
-import type { DialogPromptContract } from './dialog-catalog';
+import type { DialogContract } from './dialog-catalog';
 import type { DialogSchema } from './dialog-schema.registry';
 
 export interface PlanningContractView {
@@ -33,7 +33,7 @@ export function filterOperationsForScopedDialogs(
  * Param names come from getSchema (dialog-catalog-aggregator).
  */
 export function buildPlanningContractViews(
-  contracts: DialogPromptContract[],
+  contracts: DialogContract[],
   getSchema: (dialogId: string) => DialogSchema | undefined
 ): PlanningContractView[] {
   return contracts.map((c) => {

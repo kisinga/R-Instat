@@ -106,9 +106,25 @@ Additionally, the form field registry pattern gives automatic save/restore of di
 
 Analysis of all 342 VB.NET dialogs shows: 55% are simple enough for pure spec-driven rendering, 23% need moderate flow control (steps/subpaths), and only 22% require custom Angular components. The generic system runs in parallel with existing custom dialogs — a `@default` case in `DialogHostComponent` renders specs for any dialog ID not matched by a custom `@case`, and custom components automatically shadow generic specs when added.
 
-4 pilot dialogs (Duplicate Column, Permute Column, Delete Columns, Insert Column) demonstrate the approach. Each is ~25 lines of spec + a builder function, versus ~200+ lines for a hand-written component.
+**Validated with 4 side-by-side comparisons** — each custom component has a generic spec twin accessible from the same menu:
 
-**Verdict**: If validated, this reduces the per-dialog effort for ~78% of operations from ~200 lines of Angular to ~30-50 lines of declarative spec. The remaining 22% (complex ggplot, climatic workflows, calculator) still need custom components. See `FEATURE_PARITY_STRATEGY.md` for the full classification and validation approach.
+| Dialog | Custom | Generic Spec | Reduction | What it exercises |
+|---|---|---|---|---|
+| t-Test | 300 lines | 55 lines | 82% | 3 branching modes, 3 `when` conditions, mixed column types, custom validation |
+| Regression | 213 lines | 45 lines | 79% | `column[]` multi-select, 3 boolean options, optional string |
+| Correlation | 183 lines | 40 lines | 78% | `column[]` with min-2 validation, enum (method), boolean |
+| Box Plot | 179 lines | 35 lines | 80% | ggplot dialog, mixed column types (numeric required, factor optional) |
+
+All produce identical R code for the same inputs. The sort dialog (182 lines) was excluded — its `object[]` array with add/remove/reorder UI is beyond what the generic renderer can express, confirming the graduation boundary.
+
+**Implications**:
+
+- **The bottleneck shifts from frontend to domain knowledge.** Writing a generic spec requires understanding the R function and its parameters, not Angular. A statistician who can read a VB.NET dialog can write a spec without knowing TypeScript component architecture.
+- **AI can draft specs.** The spec is plain data that maps 1:1 to what the AI pipeline already produces (`dialogId` + `state`). Claude can read a VB.NET dialog source and generate a draft spec — a human then validates the R builder.
+- **Graduation is seamless.** When a generic spec hits the limits of what the renderer can express, adding a `@case` in `DialogHostComponent` with a custom component automatically shadows it. The spec becomes documentation.
+- **Testing collapses to fixtures.** A generic spec's correctness is verified by asserting `compileStepToR(dialogId, state)` produces the right R code fragments — pure functions, no UI testing needed for the form rendering.
+
+See `FEATURE_PARITY_STRATEGY.md` for the full dialog classification (55% simple / 23% moderate / 22% custom) and validation approach.
 
 ### 2.8 Cross-Platform (Strategic Win)
 
@@ -151,11 +167,11 @@ Analysis of all 342 VB.NET dialogs shows: 55% are simple enough for pure spec-dr
 
 ### 3.4 Selector-Receiver Pattern (Control Gap)
 
-**VB.NET**: The `ucrSelector` + `ucrReceiver` system is the backbone of every dialog. Users drag columns from a list to receiver slots. Multiple receivers share one selector. Receivers enforce type constraints (numeric only, factor only, date only). This pattern is reused across all 627 dialogs.
+**VB.NET**: The `ucrSelector` + `ucrReceiver` system is the backbone of every dialog (348 of 342 dialog files). Users drag columns from a list to receiver slots. Multiple receivers share one selector. Receivers enforce type constraints, filter by metadata (class, hidden status, climatic type), and auto-fill when only one column matches. This is 9 controls replacing what would otherwise be per-dialog column selection logic.
 
-**Electron**: `ColumnPicker` is a simpler dropdown-based selector. No drag-and-drop. No multi-receiver coordination. No type enforcement at the control level. Each dialog implements column selection ad-hoc.
+**Electron**: `ColumnPicker` is a simpler dropdown-based selector. No drag-and-drop. No multi-receiver coordination. No metadata filtering beyond basic type. Each dialog implements column selection ad-hoc.
 
-**Verdict**: Building a proper `ColumnPicker` with receiver semantics would dramatically accelerate dialog porting. This is the highest-leverage shared component to build.
+**Verdict**: The Enhanced ColumnPicker is the single highest-leverage component to build. Analysis of VB.NET's 105 `ucr*` controls shows 82 are WinForms plumbing that Angular already replaces (checkboxes, inputs, buttons — see `CONTROLS_AND_GENERIC_DIALOG.md`). Only the selector/receiver system (9 controls) provides UX value that Electron lacks. Building it lifts generic dialog coverage from ~78% to ~88% of all dialogs, and benefits custom components equally. The ~1,260 R function references in VB.NET are a non-issue — the Electron bridge executes arbitrary R code via `eval(parse())`; the gap is builders, not R functions.
 
 ### 3.5 Linked Controls (Interaction Gap)
 
@@ -165,21 +181,20 @@ ucrChkShowTitle.AddToLinkedControls(ucrInputTitle, {True}, bNewReceiverIsVisible
 ```
 When the checkbox is checked, the title input appears. When unchecked, it hides. This is declarative and reusable across all dialogs.
 
-**Electron**: This is handled via template `@if` blocks and signal checks:
-```html
-@if (showTitle()) { <input ... /> }
+**Electron**: In custom components, handled via `@if` blocks and signal checks. In the generic dialog system, handled declaratively via `DialogParamSchema.when` conditions — identical to VB.NET's linked controls but defined as data, not code:
+```typescript
+p('afterColumn', 'column', { when: { param: 'position', equals: 'after' } })
 ```
-This works but requires per-dialog template logic rather than a reusable control-linking system.
 
-**Verdict**: Not a blocker, but a reusable linked-controls system would reduce per-dialog boilerplate.
+**Verdict**: Solved for generic dialogs. Custom components still use per-dialog template logic, which is acceptable given their complexity.
 
 ### 3.6 Script Window / R Console (Missing Infrastructure)
 
 **VB.NET**: Full script window shows every R command executed. Users can copy, edit, and re-run scripts. Power users treat R-Instat as a teaching tool where the script window shows "what R code does this button produce."
 
-**Electron**: Output panel shows code per-execution, but there's no persistent script window, no R console, and no way to write/run arbitrary R code. The educational value of "see the R code" is partially preserved in the code preview, but the interactive scripting workflow is absent.
+**Electron**: Output panel persistently logs all executed R commands across the session with a code toggle (`</>` button). Live code preview in dialogs shows R code as options change. The remaining gaps vs VB.NET: no copy-all-as-script, no re-run from history, no interactive R console for arbitrary code.
 
-**Verdict**: The script window is a defining feature of R-Instat's educational mission. Its absence undermines the "learn R through the GUI" value proposition.
+**Verdict**: Partially addressed. The educational "see the R code" workflow works via output panel + dialog code preview. Copy-all and re-run would close the remaining gap.
 
 ### 3.7 Project Save/Load (Missing Infrastructure)
 
@@ -351,11 +366,11 @@ The remaining ~550 dialogs are specialist tools (climate domain, survey analysis
 ### Do First (Highest Leverage)
 1. **Build the enhanced ColumnPicker** with receiver semantics. This single component unblocks every future dialog port and is the biggest gap between "porting a dialog takes 3 days" and "porting a dialog takes 3 hours."
 2. **Add in-cell editing** to AG Grid. This closes the most visible UX regression.
-3. **Build a script window**. Even a simple read-only log of all executed R commands restores the educational value proposition.
+3. **Extend the output panel into a script window**. The output panel already logs all executed R commands with a code toggle. The remaining gap is copy-all-as-script and re-run capabilities for the educational "see all R code" workflow.
 
 ### Do Smart (Architecture Decisions)
 4. **Don't port sub-dialogs as nested modals.** Instead, use expandable panels or tabs within the primary dialog. This is a UX improvement over VB.NET's modal-on-modal pattern while preserving the functionality.
-5. **Don't build 116 ucr* control equivalents.** The builder function pattern eliminates the need for most of them. Only build shared controls for genuinely repeated patterns (ColumnPicker/Receiver, Panel with radio groups, Save options).
+5. **Don't build 105 ucr* control equivalents.** 82 of 105 are WinForms plumbing (data binding wrappers) that Angular signals already replace. Only 3 systems matter: Enhanced ColumnPicker (replaces 9 controls, lifts generic coverage to ~88%), Save/Position control (replaces 1 control, unblocks ~200 data-prep specs), and ggplot layer controls (custom component territory). See `CONTROLS_AND_GENERIC_DIALOG.md` for the full analysis.
 6. **Use the `execute` bridge command** for new dialogs rather than adding explicit bridge routes. Generate complete R scripts in builders. This eliminates bridge.R as a bottleneck.
 
 ### Don't Do (Traps)

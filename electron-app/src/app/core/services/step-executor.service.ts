@@ -26,7 +26,6 @@ export class StepExecutorService {
 
     this.dialogRestore.setRestoreData({
       dialogId: step.metadata.dialogId,
-      componentType: step.metadata.componentType,
       version: '1.0',
       state: step.metadata.state,
       timestamp: new Date().toISOString(),

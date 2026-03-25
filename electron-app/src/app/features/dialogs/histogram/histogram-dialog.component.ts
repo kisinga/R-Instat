@@ -6,7 +6,7 @@ import { DialogBase } from '../dialog-base';
 import { ColumnPickerComponent } from '../../../shared/components/column-picker/column-picker.component';
 import { CodePreviewComponent } from '../../../shared/components/code-preview/code-preview.component';
 import { buildHistogram } from '../../../core/dialogs/builders/graphs';
-import type { DialogPromptContract } from '../../../core/ai/dialog-catalog';
+import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import { p } from '../../../core/ai/dialog-schema.registry';
 import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 
@@ -134,12 +134,12 @@ import { AIDialogClassRegistry } from '../../../core/ai/dialog-class-registry';
 export class HistogramDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(HistogramDialogComponent); }
   static dialogId = 'histogram';
-  readonly dialogTitle = 'Histogram';
 
-  static override getCatalogDescriptor(): DialogPromptContract {
+  static override getCatalogDescriptor(): DialogContract {
     return {
       dialogId: 'histogram',
       componentType: 'HistogramDialogComponent',
+      title: 'Histogram',
       family: 'plotting',
       description: 'Histogram of numeric variable.',
       operations: ['describe.distribution.numeric'],

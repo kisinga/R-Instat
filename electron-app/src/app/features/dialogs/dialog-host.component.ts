@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { RService } from '../../core/services/r.service';
 import { listDialogIds } from '../../core/ai/dialog-identity.registry';
-import { getOperationSpec } from '../../core/ai/generic-dialog/operation-spec.registry';
+import { getDialogSpec } from '../../core/ai/generic-dialog/operation-spec.registry';
 
 // Import all dialog components
 import { ImportDialogComponent } from './import-dialog/import-dialog.component';
@@ -45,11 +45,8 @@ import { DotPlotDialogComponent } from './dot-plot/dot-plot-dialog.component';
 import { RestoreFromCodeDialogComponent } from './restore-from-code/restore-from-code-dialog.component';
 import { GenericDialogComponent } from './generic/generic-dialog.component';
 
-// Import generic dialog specs (side-effect: registers them)
-import '../../core/ai/generic-dialog/specs/duplicate-columns';
-import '../../core/ai/generic-dialog/specs/permute-column';
-import '../../core/ai/generic-dialog/specs/delete-columns';
-import '../../core/ai/generic-dialog/specs/insert-column';
+// Register all generic dialog specs (single barrel import)
+import '../../core/ai/generic-dialog/specs';
 import { AiSettingsDialogComponent } from './ai-settings/ai-settings-dialog.component';
 import { SettingsDialogComponent } from './settings/settings-dialog.component';
 
@@ -230,8 +227,8 @@ export class DialogHostComponent implements OnInit, OnDestroy {
 
   activeDialog = signal<string | null>(null);
 
-  /** Resolves the OperationSpec for the active dialog (if it's a generic dialog). */
-  readonly resolvedSpec = computed(() => getOperationSpec(this.activeDialog() ?? ''));
+  /** Resolves the DialogContract for the active dialog (if it's a generic spec). */
+  readonly resolvedSpec = computed(() => getDialogSpec(this.activeDialog() ?? ''));
 
   ngOnInit(): void {
     this.subscription = this.rService.dialog$.subscribe(({ action, dialog }) => {

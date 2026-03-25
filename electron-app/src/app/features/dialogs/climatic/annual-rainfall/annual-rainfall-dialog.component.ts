@@ -89,7 +89,6 @@ import { mapClimaticRolesToFields } from '../utils/climatic-role-mapper';
 })
 export class AnnualRainfallDialogComponent extends DialogBase implements OnInit {
   static { AIDialogClassRegistry.register(AnnualRainfallDialogComponent); }
-  readonly dialogTitle = 'Annual Rainfall';
 
   private readonly climaticService = inject(ClimaticDataService);
 

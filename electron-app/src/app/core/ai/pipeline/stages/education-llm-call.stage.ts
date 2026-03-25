@@ -77,29 +77,33 @@ export class EducationLlmCallStage implements PipelineStage {
     content: string,
     ctx: PipelineContext
   ): EducationAIResponse | null {
-    return this.responseParser.extractJson<EducationAIResponse>(content, (raw: unknown) => {
-      if (typeof raw !== 'object' || raw === null) return null;
-      const obj = raw as Record<string, unknown>;
+    return this.responseParser.extractEnvelope<EducationAIResponse>(
+      content,
+      'education',
+      (body: unknown) => {
+        if (typeof body !== 'object' || body === null) return null;
+        const obj = body as Record<string, unknown>;
 
-      const explanation = typeof obj['explanation'] === 'string'
-        ? (ctx.state.aliasMaps ? deAliasScript(obj['explanation'], ctx.state.aliasMaps) : obj['explanation'])
-        : '';
+        const explanation = typeof obj['explanation'] === 'string'
+          ? (ctx.state.aliasMaps ? deAliasScript(obj['explanation'], ctx.state.aliasMaps) : obj['explanation'])
+          : '';
 
-      const highlights = Array.isArray(obj['highlights'])
-        ? obj['highlights'].filter(
-            (h: unknown): h is { dialogId: string; relevanceNote: string } => {
-              if (typeof h !== 'object' || h === null) return false;
-              const rec = h as Record<string, unknown>;
-              return typeof rec['dialogId'] === 'string' && typeof rec['relevanceNote'] === 'string';
-            }
-          )
-        : [];
+        const highlights = Array.isArray(obj['highlights'])
+          ? obj['highlights'].filter(
+              (h: unknown): h is { dialogId: string; relevanceNote: string } => {
+                if (typeof h !== 'object' || h === null) return false;
+                const rec = h as Record<string, unknown>;
+                return typeof rec['dialogId'] === 'string' && typeof rec['relevanceNote'] === 'string';
+              }
+            )
+          : [];
 
-      const followUpSuggestions = Array.isArray(obj['followUpSuggestions'])
-        ? obj['followUpSuggestions'].filter((s: unknown): s is string => typeof s === 'string')
-        : [];
+        const followUpSuggestions = Array.isArray(obj['followUpSuggestions'])
+          ? obj['followUpSuggestions'].filter((s: unknown): s is string => typeof s === 'string')
+          : [];
 
-      return { explanation, highlights, followUpSuggestions };
-    });
+        return { explanation, highlights, followUpSuggestions };
+      }
+    );
   }
 }

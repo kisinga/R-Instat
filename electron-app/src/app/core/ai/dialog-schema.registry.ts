@@ -33,14 +33,22 @@ export interface DialogParamSchema {
   min?: number;
   max?: number;
   when?: ParamCondition;
+
+  /** Default value. Used by generic renderer for initial state and by AI for omitted fields. */
+  default?: string | number | boolean;
+
+  /** Display label override. Without this, the generic renderer derives a label from `name`. */
+  label?: string;
+
+  /**
+   * Visual grouping key. Params with the same group render together under a shared heading.
+   * The generic renderer uses this to create collapsible sections.
+   */
+  group?: string;
 }
 
-export interface DialogSchema {
-  dialogId: string;
-  description: string;
-  operations: string[];
-  params: DialogParamSchema[];
-}
+/** DialogSchema is now a derived type alias. Defined in dialog-catalog.ts, re-exported here for import compatibility. */
+export type { DialogSchema } from './dialog-catalog';
 
 /** Helper to build param definitions for dialog catalog descriptors. */
 export function p(

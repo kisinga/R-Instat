@@ -1,11 +1,11 @@
-import type { DialogPromptContract, DialogFamily } from './dialog-catalog';
+import type { DialogContract, DialogFamily } from './dialog-catalog';
 
 export interface RetrievalDataContext {
   activeDataframe: string | null;
   columnsByDataframe: Record<string, Array<{ name: string; type: string }>>;
 }
 
-export interface RetrievedDialogCandidate extends DialogPromptContract {
+export interface RetrievedDialogCandidate extends DialogContract {
   score: number;
   reasons: string[];
 }
@@ -27,7 +27,7 @@ export interface PreRankedCandidate {
  */
 export function retrieveDialogContractsTopK(
   userInput: string,
-  contracts: DialogPromptContract[],
+  contracts: DialogContract[],
   dataContext: RetrievalDataContext,
   topK: number,
   family?: DialogFamily,
@@ -48,7 +48,7 @@ export function retrieveDialogContractsTopK(
  * Use pre-ranked vector scores, then apply column-type compatibility boost.
  */
 function applyPreRankedScores(
-  contracts: DialogPromptContract[],
+  contracts: DialogContract[],
   dataContext: RetrievalDataContext,
   topK: number,
   preRanked: PreRankedCandidate[]
@@ -89,7 +89,7 @@ function applyPreRankedScores(
 
 function retrieveDialogContractsTopKInternal(
   userInput: string,
-  contracts: DialogPromptContract[],
+  contracts: DialogContract[],
   dataContext: RetrievalDataContext,
   topK: number
 ): RetrievedDialogCandidate[] {
