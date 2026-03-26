@@ -533,3 +533,83 @@ export function buildInsertColumn(options: InsertColumnOptions): RSyntax {
     .setBase(toScript(assignment))
     .addAfter(addDataframeCall);
 }
+
+// ============================================================================
+// Builder Registry Registrations
+// ============================================================================
+
+import { registerBuilder } from './builder-registry';
+
+function str(s: unknown): string {
+  return s !== undefined && s !== null ? String(s) : '';
+}
+
+registerBuilder('sort', (state) => {
+  const df = str(state['dataframe']).trim();
+  const cols = Array.isArray(state['sortColumns']) ? state['sortColumns'] as Array<Record<string, unknown>> : [];
+  const sortColumns: SortColumn[] = cols
+    .map((c) => ({ column: str(c['column']).trim(), descending: Boolean(c['descending']) }))
+    .filter((s) => s.column);
+  return buildSort({ dataframe: df, sortColumns });
+});
+
+registerBuilder('rename', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildRename({ dataframe: df, oldName: str(state['oldName']).trim(), newName: str(state['newName']).trim() });
+});
+
+registerBuilder('calculate', (state) => {
+  const df = str(state['dataframe']).trim();
+  const calcType = (str(state['calcType']) || 'formula').trim() as 'formula' | 'sum' | 'mean' | 'diff' | 'ratio';
+  return buildCalculate({
+    dataframe: df,
+    newColumnName: str(state['newColumnName']).trim() || 'new_col',
+    calcType,
+    formula: calcType === 'formula' ? str(state['formula']).trim() || 'NA' : undefined,
+    selectedCols: Array.isArray(state['selectedCols']) ? (state['selectedCols'] as string[]).map(String).filter(Boolean) : undefined,
+    columnA: str(state['columnA']).trim() || undefined,
+    columnB: str(state['columnB']).trim() || undefined,
+  });
+});
+
+registerBuilder('recode', (state) => {
+  const df = str(state['dataframe']).trim();
+  const rawMappings = Array.isArray(state['mappings']) ? state['mappings'] as Array<Record<string, unknown>> : [];
+  const mappings: RecodeMapping[] = rawMappings
+    .map((m) => ({ from: str(m['from']), to: str(m['to']) }))
+    .filter((m) => m.from !== '' || m.to !== '');
+  return buildRecode({
+    dataframe: df,
+    sourceColumn: str(state['sourceColumn']).trim(),
+    mappings,
+    newColumnName: str(state['newColumnName']).trim() || undefined,
+    defaultValue: str(state['defaultValue']).trim() || undefined,
+  });
+});
+
+registerBuilder('duplicate-column', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildDuplicateColumn({ dataframe: df, sourceColumn: str(state['sourceColumn']).trim(), newColumnName: str(state['newColumnName']).trim() });
+});
+
+registerBuilder('permute-column', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildPermuteColumn({ dataframe: df, column: str(state['column']).trim() });
+});
+
+registerBuilder('delete-columns', (state) => {
+  const df = str(state['dataframe']).trim();
+  const columns = Array.isArray(state['columns']) ? (state['columns'] as string[]).map(String).filter(Boolean) : [];
+  return buildDeleteColumns({ dataframe: df, columns });
+});
+
+registerBuilder('insert-column', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildInsertColumn({
+    dataframe: df,
+    columnName: str(state['columnName']).trim(),
+    columnType: (str(state['columnType']) || 'numeric') as 'numeric' | 'character' | 'logical',
+    position: (str(state['position']) || 'last') as 'first' | 'last' | 'after',
+    afterColumn: str(state['afterColumn']).trim() || undefined,
+  });
+});

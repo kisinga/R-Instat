@@ -1,257 +1,100 @@
 /**
- * Step-to-R adapter
+ * Step-to-R compiler
  *
- * Maps AI plan step state (schema-shaped) to existing dialog R builders and returns
- * the generated script. Single source of truth for template-based R codegen.
+ * Single entry point for R code generation. Handles the full resolution chain:
+ *   1. builderId → builder registry (custom TypeScript builders)
+ *   2. rGen → generic builder (function-call, pipeline, ggplot)
+ *   3. rCode → string interpolation (escape hatch)
+ *
+ * No caller needs to know which path produced the code.
  */
 
-import { TEMPLATE_CODEGEN_DIALOG_IDS } from './dialog-registry-view';
-import { getDialogSpec } from './generic-dialog/operation-spec.registry';
-import { buildSort } from '../dialogs/builders/data-manipulation';
-import type { SortColumn } from '../dialogs/builders/data-manipulation';
-import { buildRename, buildCalculate, buildRecode } from '../dialogs/builders/data-manipulation';
-import { buildDuplicateColumn, buildPermuteColumn, buildDeleteColumns, buildInsertColumn } from '../dialogs/builders/data-manipulation';
-import type { RecodeMapping } from '../dialogs/builders/data-manipulation';
-import { buildRegression, buildCorrelation, buildTTest } from '../dialogs/builders/statistics';
-import { buildHistogram, buildBoxplot, buildScatter } from '../dialogs/builders/graphs';
-import { buildBarChart } from '../dialogs/builders/barchart';
+import { getBuilder } from '../dialogs/builders/builder-registry';
+import { buildFromRGen } from '../dialogs/builders/generic-builders';
+import { interpolateRCode } from './generic-dialog/r-code-interpolator';
+import { getCatalogContract } from './dialog-catalog-aggregator';
+import type { RGenDescriptor } from './generic-dialog/portable-dialog-spec';
+import type { DialogParamSchema } from './dialog-schema.registry';
 
-function str(s: unknown): string {
-  return s !== undefined && s !== null ? String(s) : '';
-}
+// Ensure all builder registrations execute
+import '../dialogs/builders/data-manipulation';
+import '../dialogs/builders/statistics';
+import '../dialogs/builders/graphs';
+import '../dialogs/builders/barchart';
 
-function isPlaceholder(script: string): boolean {
-  const t = script.trim();
-  if (!t) return true;
-  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
-  return lines.length === 1 && lines[0].startsWith('#');
+/**
+ * Everything needed to resolve R code generation for a step.
+ * Can come from a DialogContract, a PortableDialogSpec, or an AI plan step.
+ */
+export interface StepCodegenInfo {
+  builderId?: string;
+  rGen?: RGenDescriptor;
+  rCode?: string;
+  params?: DialogParamSchema[];
 }
 
 /**
- * Compile a single dialog step (dialogId + state) to R script using existing builders.
- * Returns null if dialogId is not in template codegen set, state is incomplete, or builder would produce a placeholder.
+ * Compile a step to R code.
+ *
+ * Resolution chain:
+ *   1. builderId → builder registry
+ *   2. rGen → generic builder (function-call / pipeline / ggplot)
+ *   3. rCode → string interpolation
+ *
+ * @param info - Codegen info (builderId, rGen, rCode, params)
+ * @param state - Dialog state (param values)
  */
-export function compileStepToR(dialogId: string, state: Record<string, unknown>): string | null {
-  if (!TEMPLATE_CODEGEN_DIALOG_IDS.has(dialogId)) {
-    // Not a built-in template dialog — try the spec's build() (covers imported dialogs)
-    const spec = getDialogSpec(dialogId);
-    if (spec?.build) {
+export function compileStep(info: StepCodegenInfo, state: Record<string, unknown>): string | null {
+  // 1. Custom builder from registry
+  if (info.builderId) {
+    const builder = getBuilder(info.builderId);
+    if (builder) {
       try {
-        const result = spec.build(state);
-        if (result && !isPlaceholder(result)) return result;
+        const script = builder(state).toScript();
+        return script?.trim() || null;
       } catch { /* fall through */ }
     }
-    return null;
   }
 
-  const df = str(state['dataframe']).trim();
-  if (!df) {
-    return null;
+  // 2. Generic builder from rGen descriptor
+  if (info.rGen && info.params) {
+    try {
+      const syntax = buildFromRGen(info.rGen, state, info.params);
+      const script = syntax?.toScript();
+      if (script?.trim()) return script.trim();
+    } catch { /* fall through */ }
   }
 
-  try {
-    let script: string | null = null;
-
-    switch (dialogId) {
-      case 'sort': {
-        const cols = Array.isArray(state['sortColumns']) ? state['sortColumns'] as Array<Record<string, unknown>> : [];
-        const sortColumns: SortColumn[] = cols
-          .map((c) => ({ column: str(c['column']).trim(), descending: Boolean(c['descending']) }))
-          .filter((s) => s.column);
-        if (!sortColumns.length) return null;
-        script = buildSort({ dataframe: df, sortColumns }).toScript();
-        break;
-      }
-      case 'rename': {
-        const oldName = str(state['oldName']).trim();
-        const newName = str(state['newName']).trim();
-        if (!oldName || !newName) return null;
-        script = buildRename({ dataframe: df, oldName, newName }).toScript();
-        break;
-      }
-      case 'calculate': {
-        const newColumnName = str(state['newColumnName']).trim() || 'new_col';
-        const calcType = (str(state['calcType']) || 'formula').trim() as 'formula' | 'sum' | 'mean' | 'diff' | 'ratio';
-        const formula = str(state['formula']).trim();
-        const selectedCols = Array.isArray(state['selectedCols'])
-          ? (state['selectedCols'] as string[]).map(String).filter(Boolean)
-          : undefined;
-        const columnA = str(state['columnA']).trim() || undefined;
-        const columnB = str(state['columnB']).trim() || undefined;
-        if (calcType === 'formula' && !formula) return null;
-        if ((calcType === 'sum' || calcType === 'mean') && (!selectedCols || selectedCols.length === 0)) return null;
-        if ((calcType === 'diff' || calcType === 'ratio') && (!columnA || !columnB)) return null;
-        script = buildCalculate({
-          dataframe: df,
-          newColumnName,
-          calcType,
-          formula: calcType === 'formula' ? formula || 'NA' : undefined,
-          selectedCols,
-          columnA,
-          columnB,
-        }).toScript();
-        break;
-      }
-      case 'recode': {
-        const sourceColumn = str(state['sourceColumn']).trim();
-        const rawMappings = Array.isArray(state['mappings']) ? state['mappings'] as Array<Record<string, unknown>> : [];
-        const mappings: RecodeMapping[] = rawMappings
-          .map((m) => ({ from: str(m['from']), to: str(m['to']) }))
-          .filter((m) => m.from !== '' || m.to !== '');
-        if (!df || !sourceColumn || mappings.length === 0) return null;
-        const newColumnName = str(state['newColumnName']).trim() || undefined;
-        const defaultValue = str(state['defaultValue']).trim() || undefined;
-        script = buildRecode({ dataframe: df, sourceColumn, mappings, newColumnName, defaultValue }).toScript();
-        break;
-      }
-      case 'correlation-generic':
-      case 'correlation': {
-        const selectedVars = Array.isArray(state['selectedVars']) ? (state['selectedVars'] as string[]).map(String).filter(Boolean) : [];
-        if (selectedVars.length < 2) return null;
-        const method = (str(state['method']) || 'pearson') as 'pearson' | 'spearman' | 'kendall';
-        const showPValues = state['showPValues'] === true;
-        script = buildCorrelation({ dataframe: df, selectedVars, method, showPValues }).toScript();
-        break;
-      }
-      case 'regression-generic':
-      case 'regression': {
-        const responseVar = str(state['responseVar']).trim();
-        const predictorVars = Array.isArray(state['predictorVars']) ? (state['predictorVars'] as string[]).map(String).filter(Boolean) : [];
-        if (!responseVar || predictorVars.length === 0) return null;
-        const modelName = str(state['modelName']).trim() || undefined;
-        script = buildRegression({
-          dataframe: df,
-          responseVar,
-          predictorVars,
-          modelName,
-          showSummary: state['showSummary'] === true,
-          showAnova: state['showAnova'] === true,
-          plotDiagnostics: state['plotDiagnostics'] === true,
-        }).toScript();
-        break;
-      }
-      case 't-test-generic':
-      case 't-test': {
-        const testType = (str(state['testType']) || 'one') as 'one' | 'two' | 'paired';
-        const variable1 = str(state['variable1']).trim();
-        if (!variable1) return null;
-        const alternative = (str(state['alternative']) || 'two.sided') as 'two.sided' | 'less' | 'greater';
-        const confLevel = str(state['confLevel']) || '0.95';
-        if (testType === 'one') {
-          const mu = str(state['mu']).trim() || '0';
-          script = buildTTest({ dataframe: df, testType: 'one', variable1, mu, alternative, confLevel }).toScript();
-        } else if (testType === 'two') {
-          const groupVar = str(state['groupVar']).trim();
-          if (!groupVar) return null;
-          script = buildTTest({ dataframe: df, testType: 'two', variable1, groupVar, alternative, confLevel }).toScript();
-        } else {
-          const variable2 = str(state['variable2']).trim();
-          if (!variable2) return null;
-          script = buildTTest({ dataframe: df, testType: 'paired', variable1, variable2, alternative, confLevel }).toScript();
-        }
-        break;
-      }
-      case 'histogram': {
-        const variable = str(state['variable']).trim();
-        if (!variable) return null;
-        const bins = typeof state['bins'] === 'number' ? state['bins'] : undefined;
-        const fillColor = str(state['fillColor']) || undefined;
-        const facetBy = str(state['facetBy']).trim() || undefined;
-        const title = str(state['title']).trim() || undefined;
-        script = buildHistogram({ dataframe: df, variable, bins, fillColor, facetBy, title }).toScript();
-        break;
-      }
-      case 'boxplot-generic':
-      case 'boxplot': {
-        const yVariable = str(state['yVariable']).trim();
-        if (!yVariable) return null;
-        const xVariable = str(state['xVariable']).trim() || undefined;
-        const fillVariable = str(state['fillVariable']).trim() || undefined;
-        const showPoints = state['showPoints'] === true;
-        script = buildBoxplot({ dataframe: df, yVariable, xVariable, fillVariable, showPoints }).toScript();
-        break;
-      }
-      case 'scatter': {
-        const xVariable = str(state['xVariable']).trim();
-        const yVariable = str(state['yVariable']).trim();
-        if (!xVariable || !yVariable) return null;
-        const colorVariable = str(state['colorVariable']).trim() || undefined;
-        const addTrendLine = state['addTrendLine'] === true;
-        script = buildScatter({ dataframe: df, xVariable, yVariable, colorVariable, addTrendLine }).toScript();
-        break;
-      }
-      case 'bar-chart': {
-        const xVariable = str(state['xVariable']).trim();
-        if (!xVariable) return null;
-        const chartType = (str(state['chartType']) || '').trim() as 'frequency' | 'value' | '';
-        const yVariable = str(state['yVariable']).trim();
-        const type: 'frequency' | 'value' = chartType === 'value' || (chartType !== 'frequency' && yVariable) ? 'value' : 'frequency';
-        const fillVariable = str(state['fillVariable']).trim() || undefined;
-        const position = (str(state['position']) || undefined) as 'stack' | 'dodge' | 'fill' | undefined;
-        const horizontal = state['horizontal'] === true;
-        const title = str(state['title']).trim() || undefined;
-        if (type === 'value' && !yVariable) return null;
-        if (type === 'value') {
-          script = buildBarChart({
-            dataframe: df,
-            type: 'value',
-            xVariable,
-            yVariable,
-            fillVariable,
-            position,
-            horizontal,
-            title,
-          }).toScript();
-        } else {
-          script = buildBarChart({
-            dataframe: df,
-            type: 'frequency',
-            xVariable,
-            fillVariable,
-            position,
-            horizontal,
-            title,
-          }).toScript();
-        }
-        break;
-      }
-      case 'duplicate-columns': {
-        const sourceColumn = str(state['sourceColumn']).trim();
-        const newColumnName = str(state['newColumnName']).trim();
-        if (!sourceColumn || !newColumnName) return null;
-        script = buildDuplicateColumn({ dataframe: df, sourceColumn, newColumnName }).toScript();
-        break;
-      }
-      case 'permute-column': {
-        const column = str(state['column']).trim();
-        if (!column) return null;
-        script = buildPermuteColumn({ dataframe: df, column }).toScript();
-        break;
-      }
-      case 'delete-columns': {
-        const columns = Array.isArray(state['columns'])
-          ? (state['columns'] as string[]).map(String).filter(Boolean)
-          : [];
-        if (columns.length === 0) return null;
-        script = buildDeleteColumns({ dataframe: df, columns }).toScript();
-        break;
-      }
-      case 'insert-column': {
-        const columnName = str(state['columnName']).trim();
-        if (!columnName) return null;
-        const columnType = (str(state['columnType']) || 'numeric') as 'numeric' | 'character' | 'logical';
-        const position = (str(state['position']) || 'last') as 'first' | 'last' | 'after';
-        const afterColumn = str(state['afterColumn']).trim() || undefined;
-        script = buildInsertColumn({ dataframe: df, columnName, columnType, position, afterColumn }).toScript();
-        break;
-      }
-      default:
-        return null;
-    }
-
-    if (!script || isPlaceholder(script)) return null;
-    return script;
-  } catch {
-    return null;
+  // 3. String interpolation from rCode
+  if (info.rCode && info.params) {
+    try {
+      return interpolateRCode(info.rCode, state, info.params);
+    } catch { /* fall through */ }
   }
+
+  return null;
+}
+
+/**
+ * Compile a step using a dialogId to look up codegen info from the catalog.
+ * Used by callers that only have a dialogId (e.g. AI plan steps).
+ */
+export function compileStepByDialogId(dialogId: string, state: Record<string, unknown>): string | null {
+  // Try dialogId directly as builderId (works when they match, e.g. 'sort', 'histogram')
+  const direct = getBuilder(dialogId);
+  if (direct) {
+    try {
+      const script = direct(state).toScript();
+      return script?.trim() || null;
+    } catch { /* fall through */ }
+  }
+
+  // Look up the contract from the catalog
+  const contract = getCatalogContract(dialogId);
+  if (!contract) return null;
+
+  return compileStep(
+    { builderId: contract.builderId, params: contract.params },
+    state
+  );
 }

@@ -2,20 +2,34 @@
  * Frequency Table — Generic dialog spec
  *
  * VB.NET: dlgFlatFrequencyTable.vb (~125 lines)
- * Generic spec: ~45 lines
- * Port time: ~4 minutes
- *
  * Wraps ftable() for flat cross-tabulation of factor variables.
- * Two column receivers (row vars, column var) + margins option.
  */
 
 import type { DialogContract } from '../../dialog-catalog';
 import { p } from '../../dialog-schema.registry';
 import { registerDialogSpec } from '../operation-spec.registry';
+import { registerBuilder } from '../../../dialogs/builders/builder-registry';
+import { rSyntax } from '../../../r-codegen';
+
+registerBuilder('frequency-table', (state) => {
+  const df = state['dataframe'] as string;
+  const rowVars = state['rowVars'] as string[];
+  const colVar = state['colVar'] as string;
+  if (!df || !rowVars?.length || !colVar) return rSyntax().setBase('# Select row and column variables');
+
+  const rowVarStr = rowVars.map(v => `"${v}"`).join(', ');
+  let code = `ftable(table(${[...rowVars, colVar].map(c => `${df}$${c}`).join(', ')}), row.vars = c(${rowVarStr}), col.vars = "${colVar}")`;
+
+  if (state['addMargins'] === true) {
+    code = `addmargins(${code})`;
+  }
+  return rSyntax().setBase(code);
+});
 
 const spec: DialogContract = {
   dialogId: 'frequency-table',
   componentType: 'GenericDialogComponent',
+  builderId: 'frequency-table',
   title: 'Frequency Table',
   family: 'inferential',
   description: 'Cross-tabulation frequency table with optional margins.',
@@ -31,25 +45,9 @@ const spec: DialogContract = {
   },
   validate: (state) => {
     const rowVars = state['rowVars'];
-    if (!Array.isArray(rowVars) || rowVars.length === 0) {
-      return 'Select at least one row variable';
-    }
+    if (!Array.isArray(rowVars) || rowVars.length === 0) return 'Select at least one row variable';
     if (!state['colVar']) return 'Select a column variable';
     return null;
-  },
-  build: (state) => {
-    const df = state['dataframe'] as string;
-    const rowVars = state['rowVars'] as string[];
-    const colVar = state['colVar'] as string;
-    if (!df || !rowVars?.length || !colVar) return null;
-
-    const rowVarStr = rowVars.map(v => `"${v}"`).join(', ');
-    let code = `ftable(table(${[...rowVars, colVar].map(c => `${df}$${c}`).join(', ')}), row.vars = c(${rowVarStr}), col.vars = "${colVar}")`;
-
-    if (state['addMargins'] === true) {
-      code = `addmargins(${code})`;
-    }
-    return code;
   },
 };
 

@@ -219,3 +219,30 @@ export function buildBarChart(options: BarChartOptions): RSyntax {
       return buildValueBarChart(options);
   }
 }
+
+// ============================================================================
+// Builder Registry Registration
+// ============================================================================
+
+import { registerBuilder } from './builder-registry';
+
+function str(s: unknown): string {
+  return s !== undefined && s !== null ? String(s) : '';
+}
+
+registerBuilder('bar-chart', (state) => {
+  const df = str(state['dataframe']).trim();
+  const xVariable = str(state['xVariable']).trim();
+  const chartType = (str(state['chartType']) || '').trim() as 'frequency' | 'value' | '';
+  const yVariable = str(state['yVariable']).trim();
+  const type: 'frequency' | 'value' = chartType === 'value' || (chartType !== 'frequency' && yVariable) ? 'value' : 'frequency';
+  const fillVariable = str(state['fillVariable']).trim() || undefined;
+  const position = (str(state['position']) || undefined) as 'stack' | 'dodge' | 'fill' | undefined;
+  const horizontal = state['horizontal'] === true;
+  const title = str(state['title']).trim() || undefined;
+
+  if (type === 'value') {
+    return buildBarChart({ dataframe: df, type: 'value', xVariable, yVariable, fillVariable, position, horizontal, title });
+  }
+  return buildBarChart({ dataframe: df, type: 'frequency', xVariable, fillVariable, position, horizontal, title });
+});

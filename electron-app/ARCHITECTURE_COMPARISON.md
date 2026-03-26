@@ -8,7 +8,7 @@ A senior engineering assessment of where we are, what's better, what's worse, an
 
 | Metric | VB.NET | Electron |
 |---|---|---|
-| Dialogs implemented | 627 | 32 custom + 12 generic-spec (~7%) |
+| Dialogs implemented | 627 | 28 custom + 13 generic-spec (8 JSON + 5 TS) (~7%) |
 | Sub-dialogs | 170 | 0 |
 | Reusable controls | 116 (ucr* classes) | ColumnSelector/Slot + generic renderer |
 | R functions callable | 500+ | ~60 |
@@ -82,13 +82,13 @@ Additionally, the form field registry pattern gives automatic save/restore of di
 
 **Verdict**: Stronger guarantees, less boilerplate, consistent behavior. New dialogs get correct lifecycle for free.
 
-### 2.5 Metadata Embedding and State Restoration (Novel)
+### 2.5 Metadata Embedding, Restoration, and Dialog Sharing (Novel)
 
-**VB.NET**: No equivalent. Once a dialog closes, its state is gone. Users can't reproduce an analysis from output.
+**VB.NET**: No equivalent. Once a dialog closes, its state is gone.
 
-**Electron**: Dialog state is embedded as JSON metadata in R code comments. The "Restore from Code" feature can reconstruct a dialog's exact state from previously generated code. This is a genuinely new capability.
+**Electron**: Dialog state is embedded as JSON metadata in R code comments. "Restore from Code" reconstructs a dialog's exact state. R scripts can also embed full dialog definitions — recipients auto-import unknown dialogs on restore, making scripts self-contained and shareable.
 
-**Verdict**: A significant UX advancement that VB.NET never had.
+**Verdict**: A significant UX advancement. Combined with the import/export pipeline, this enables teacher→student workflow sharing.
 
 ### 2.6 AI Integration (Novel)
 
@@ -98,44 +98,29 @@ Additionally, the form field registry pattern gives automatic save/restore of di
 
 **Verdict**: A differentiating feature, though it requires API key configuration which limits accessibility.
 
-### 2.7 Generic Dialog System (Novel, Experimental)
+### 2.7 Generic Dialog System (Production)
 
-**VB.NET**: Every dialog is a hand-coded WinForms class with pixel-positioned controls. No generic rendering capability — WinForms has no layout engine that can produce forms from metadata.
+**VB.NET**: Every dialog is a hand-coded WinForms class. No generic rendering.
 
-**Electron**: An experimental **intent-driven generic dialog renderer** that generates dialogs from declarative `OperationSpec` definitions (schema + builder reference). A single `GenericDialogComponent` renders forms from `DialogParamSchema[]`, handling 7 control types (dataframe, column, column[], enum, boolean, number, string) with conditional visibility (`when` conditions). The system is composable: shell (chrome + lifecycle) delegates to `GenericFormSectionComponent` which delegates to `GenericFieldComponent`, allowing future extensions (steps, subpaths, grouped sections) without rewriting existing components.
+**Electron**: A hybrid system with three dialog definition paths:
 
-Analysis of all 342 VB.NET dialogs shows: 55% are simple enough for pure spec-driven rendering, 23% need moderate flow control (steps/subpaths), and only 22% require custom Angular components. The generic system runs in parallel with existing custom dialogs — a `@default` case in `DialogHostComponent` renders specs for any dialog ID not matched by a custom `@case`, and custom components automatically shadow generic specs when added.
+1. **JSON specs** (8 dialogs) — Pure data files in `assets/dialogs/builtin/*.json`. Reference a shared builder by `builderId`. No TypeScript needed. Importable/exportable/shareable.
+2. **TypeScript specs** (5 dialogs) — For complex codegen (conditionals, iteration, mode branching). Register custom builders.
+3. **Custom Angular components** (28 dialogs) — Full control for complex UIs.
 
-**Validated with 4 parity comparisons** (custom component + generic spec twin, identical R output):
+All three produce `DialogContract` objects rendered by `GenericDialogComponent`. The `@default` branch in `DialogHostComponent` handles specs; `@case` branches handle custom components.
 
-| Dialog | Custom | Generic Spec | Reduction | What it exercises |
-|---|---|---|---|---|
-| t-Test | 300 lines | 55 lines | 82% | 3 branching modes, 3 `when` conditions, mixed column types, custom validation |
-| Regression | 213 lines | 45 lines | 79% | `column[]` multi-select, 3 boolean options, optional string |
-| Correlation | 183 lines | 40 lines | 78% | `column[]` with min-2 validation, enum (method), boolean |
-| Box Plot | 179 lines | 35 lines | 80% | ggplot dialog, mixed column types (numeric required, factor optional) |
+**Builder registry**: 20 R code builders registered by name. `compileStep(spec, state)` resolves: `builderId → rGen → rCode`. One codegen path for all dialogs.
 
-**Fresh-port test** — 4 dialogs ported from VB.NET directly as generic specs (no custom component):
+**Import/export pipeline**: Users import `.rinstat-dialog.json` files via Data menu. Imported dialogs appear in a dynamic toolbar menu and persist across restarts. Restore-from-code auto-imports embedded definitions.
 
-| Dialog | VB.NET lines | Generic spec lines | Port time | What it exercises |
-|---|---|---|---|---|
-| Chi-Square Test | ~34 | 60 | ~3 min | `column[]` factor, conditional param (`when`), custom builder |
-| Frequency Table | ~125 | 55 | ~4 min | 2 column receivers (row + col), boolean, custom ftable builder |
-| Row Summary | ~250 | 55 | ~5 min | `column[]` numeric, enum (function), conditional na.rm, dplyr pipeline |
-| Convert Columns | ~200 | 70 | ~5 min | `column[]` any, enum (target type), 2 conditional params, per-column code |
+**Coverage analysis** (~313 VB.NET dialogs):
+- 83% (~260) expressible as JSON with `builderId` or `rGen`
+- 17% (~53) need custom TypeScript builders (multi-step, data-driven branching)
 
-**Measured effort**: ~4 minutes average per spec, including reading the VB.NET source, writing the spec, and the R builder. This validates the claim that **the bottleneck is domain knowledge, not frontend code** — a domain expert who understands the R function can produce a working spec in under 5 minutes.
+**The boundary**: If R code structure is fixed (only arg values change) → JSON. If R code structure changes based on state → TypeScript builder.
 
-The sort dialog (182 lines) was excluded — its `object[]` array with add/remove/reorder UI is beyond what the generic renderer can express, confirming the graduation boundary.
-
-**Implications**:
-
-- **The bottleneck shifts from frontend to domain knowledge.** Writing a generic spec requires understanding the R function and its parameters, not Angular. A statistician who can read a VB.NET dialog can write a spec without knowing TypeScript component architecture.
-- **AI can draft specs.** The spec is plain data that maps 1:1 to what the AI pipeline already produces (`dialogId` + `state`). Claude can read a VB.NET dialog source and generate a draft spec — a human then validates the R builder.
-- **Graduation is seamless.** When a generic spec hits the limits of what the renderer can express, adding a `@case` in `DialogHostComponent` with a custom component automatically shadows it. The spec becomes documentation.
-- **Testing collapses to fixtures.** A generic spec's correctness is verified by asserting `compileStepToR(dialogId, state)` produces the right R code fragments — pure functions, no UI testing needed for the form rendering.
-
-See `FEATURE_PARITY_STRATEGY.md` for the full dialog classification (55% simple / 23% moderate / 22% custom) and validation approach.
+See `DIALOG-AUTHORING.md` in `core/dialogs/builders/` for the contributor guide.
 
 ### 2.8 Cross-Platform (Strategic Win)
 
@@ -380,10 +365,11 @@ The remaining ~550 dialogs are specialist tools (climate domain, survey analysis
 ## 8. Strategic Recommendations
 
 ### Do First (Highest Leverage)
-1. ~~Build the enhanced ColumnPicker~~ **DONE** — ColumnSelector + ColumnSlot system with coordinator, auto-fill, drag-drop, type filtering, and column exclusion. All 25 custom dialogs + generic renderer migrated. Fresh-port test shows ~4 minutes per generic spec.
-2. **Add in-cell editing** to AG Grid. This closes the most visible UX regression.
-3. **Extend the output panel into a script window**. The output panel already logs all executed R commands with a code toggle. The remaining gap is copy-all-as-script and re-run capabilities for the educational "see all R code" workflow.
-4. **Batch-port simple dialogs as generic specs.** With the ColumnSelector infrastructure in place, the 55% of VB.NET dialogs classified as "simple" can now be ported at ~4 minutes each. Prioritize by user demand. A dedicated porting sprint could add 30-50 specs in a single week.
+1. ~~Build the enhanced ColumnPicker~~ **DONE**
+2. ~~Builder registry + JSON spec system~~ **DONE** — 20 builders registered, 8 JSON specs, import/export pipeline, dynamic toolbar menu
+3. **Add in-cell editing** to AG Grid. Closes the most visible UX regression.
+4. **Batch-port simple dialogs as JSON specs.** With the builder registry in place, most VB.NET dialogs need only a JSON file referencing an existing builder. A dedicated sprint could add 50+ dialogs in a week.
+5. **Extend the output panel into a script window.** Copy-all-as-script and re-run for the educational workflow.
 
 ### Do Smart (Architecture Decisions)
 4. **Don't port sub-dialogs as nested modals.** Instead, use expandable panels or tabs within the primary dialog. This is a UX improvement over VB.NET's modal-on-modal pattern while preserving the functionality.
@@ -403,12 +389,10 @@ The Electron rewrite has made **correct architectural decisions** at every layer
 
 The gap is not architectural - it's **volume and domain knowledge**. The missing dialogs each represent domain-specific R code that must be manually encoded in builder functions. No framework change eliminates this work — but the generic dialog system significantly reduces the per-dialog effort for the ~88% of operations that fit a standard form pattern.
 
-**Validated porting economics** (measured March 2026): With the ColumnSelector infrastructure in place, a fresh VB.NET dialog can be ported as a generic spec in ~4 minutes average. This means 345 unported VB.NET dialogs × 55% simple = ~190 spec-viable dialogs × 4 min = ~13 hours of spec writing. Even accounting for builder functions and testing, the simple tier is a **1-2 week sprint**, not months.
+**Porting economics** (measured March 2026): Simple dialogs can be ported as JSON specs (~20 lines each) referencing existing builders. With 20 builders registered, ~83% of VB.NET dialogs need only a JSON file — no TypeScript. The remaining ~17% need custom builders.
 
 The fastest path to usable coverage:
-1. ~~Build the infrastructure~~ ColumnSelector done; remaining: cell editing, script window, project save - **~6-9 weeks**
-2. **Batch-port simple dialogs** as generic specs (the 55% tier) - **~1-2 weeks** for ~190 specs
-3. Port the top 30 moderate/complex dialogs as custom components - **~10 weeks**
+1. ~~Build infrastructure~~ ColumnSelector done, builder registry done; remaining: cell editing, script window, project save
+2. **Batch-port simple dialogs** as JSON specs referencing existing builders — ~1-2 weeks for ~190 specs
+3. **Write new builders** for the top 30 moderate/complex dialogs — ~10 weeks
 4. This gets you to **~85% of daily user workflows** in **~4-5 months**
-
-The remaining long tail of specialist dialogs can be ported incrementally over the following year, prioritized by actual user demand. See `FEATURE_PARITY_STRATEGY.md` for the full strategy, dialog classification, and validation approach.

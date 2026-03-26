@@ -1,0 +1,22 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "regression-generic",
+  "title": "Linear Regression (Generic)",
+  "family": "predictive",
+  "description": "Linear model with one or more predictors.",
+  "operations": ["predictive.linear_regression"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "responseVar", "kind": "column", "required": true, "filter": "numeric", "label": "Response Variable" },
+    { "name": "predictorVars", "kind": "column[]", "required": true, "filter": "any", "label": "Predictor Variables" },
+    { "name": "modelName", "kind": "string", "label": "Model Name" },
+    { "name": "showSummary", "kind": "boolean", "default": true, "label": "Show Summary", "group": "Output" },
+    { "name": "showAnova", "kind": "boolean", "label": "Show ANOVA Table", "group": "Output" },
+    { "name": "plotDiagnostics", "kind": "boolean", "label": "Plot Diagnostics", "group": "Output" }
+  ],
+  "retrievalHints": { "keywords": ["regression", "linear", "model", "predict", "lm", "anova"] },
+  "validations": [
+    { "rule": "minItems", "param": "predictorVars", "min": 1, "message": "Select at least one predictor variable" }
+  ],
+  "builderId": "regression"
+}

@@ -1,0 +1,17 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "boxplot-generic",
+  "title": "Box Plot (Generic)",
+  "family": "plotting",
+  "description": "Boxplot of numeric variable, optionally grouped by factor.",
+  "operations": ["describe.distribution.numeric", "describe.comparison.numeric_by_group"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "yVariable", "kind": "column", "required": true, "filter": "numeric" },
+    { "name": "xVariable", "kind": "column", "filter": "factor" },
+    { "name": "fillVariable", "kind": "column", "filter": "factor" },
+    { "name": "showPoints", "kind": "boolean" }
+  ],
+  "retrievalHints": { "keywords": ["boxplot", "box plot", "box", "distribution", "quartile", "median"] },
+  "builderId": "boxplot"
+}

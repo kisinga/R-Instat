@@ -16,7 +16,9 @@
       "Bash(grep -r \"RunScript\\\\|ExecuteScript\\\\|clsRCode\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
       "Bash(grep -r \"Class dlg.*Form\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
       "Bash(grep -r \"Dialog.*Registry\\\\|RegisterDialog\\\\|DialogFactory\\\\|DialogNameMapper\" /Users/mac/Documents/code/R-Instat/instat/*.vb)",
-      "Bash(wc -l /Users/mac/Documents/code/R-Instat/instat/*.vb)"
+      "Bash(wc -l /Users/mac/Documents/code/R-Instat/instat/*.vb)",
+      "Bash(npm install:*)",
+      "Bash(grep -r r-template-engine /Users/mac/Documents/code/R-Instat/electron-app/src --include=*.ts)"
     ]
   }
 }

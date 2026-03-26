@@ -1,0 +1,17 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "insert-column",
+  "title": "Insert Column",
+  "family": "data-preparation",
+  "description": "Add a new empty column to a dataframe.",
+  "operations": ["data.insert_column"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "columnName", "kind": "string", "required": true },
+    { "name": "columnType", "kind": "enum", "required": true, "enumValues": ["numeric", "character", "logical"] },
+    { "name": "position", "kind": "enum", "required": true, "enumValues": ["first", "last", "after"] },
+    { "name": "afterColumn", "kind": "column", "filter": "any", "when": { "param": "position", "equals": "after" } }
+  ],
+  "retrievalHints": { "keywords": ["insert", "add", "new", "empty", "column", "create"] },
+  "builderId": "insert-column"
+}

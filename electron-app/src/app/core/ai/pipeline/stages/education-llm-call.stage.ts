@@ -52,7 +52,7 @@ export class EducationLlmCallStage implements PipelineStage {
     const response = await provider.call(ctx.state.apiKey!, {
       systemPrompt: EDUCATION_SYSTEM_PROMPT,
       userMessage,
-      responseFormat: 'json',
+      responseFormat: 'text',
       model: modelConfig.plannerModel,
       temperature: 0.3,
       maxTokens: modelConfig.plannerMaxTokens,

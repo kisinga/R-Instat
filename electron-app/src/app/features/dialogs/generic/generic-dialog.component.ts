@@ -46,7 +46,7 @@ import { CodePreviewComponent } from '../../../shared/components/code-preview/co
 import { GenericFormSectionComponent } from './sections/generic-form-section.component';
 import { createParamSignals, collectState, applyState } from './utils/param-state';
 import { isParamVisible } from './utils/param-visibility';
-import { compileStepToR } from '../../../core/ai/step-to-r';
+import { compileStep } from '../../../core/ai/step-to-r';
 import type { DialogContract } from '../../../core/ai/dialog-catalog';
 import type { DialogParamSchema } from '../../../core/ai/dialog-schema.registry';
 import type { ColumnInfo } from '../../../core/models/r.model';
@@ -198,11 +198,9 @@ export class GenericDialogComponent implements OnInit, OnDestroy {
         for (const sig of this.stateSignals.values()) {
           sig();
         }
-        // Generate R code — try spec.build first, fall back to compileStepToR
+        // Generate R code — compileStep handles the full resolution chain
         const state = collectState(this.stateSignals, df);
-        const code = this.spec.build
-          ? this.spec.build(state)
-          : compileStepToR(this.spec.dialogId, state);
+        const code = compileStep(this.spec, state);
         this.generatedCode.set(code ?? '');
       });
     });

@@ -165,7 +165,8 @@ export class ToolbarComponent {
       items: [
         { labelKey: 'TOOLBAR.IMPORT', action: 'import', shortcut: 'Ctrl+I' },
         { labelKey: 'TOOLBAR.EXPORT', action: 'export' },
-        { labelKey: 'TOOLBAR.RESTORE_FROM_CODE', action: 'restore-from-code', dividerAfter: true },
+        { labelKey: 'TOOLBAR.RESTORE_FROM_CODE', action: 'restore-from-code' },
+        { labelKey: 'TOOLBAR.IMPORT_DIALOG', action: 'import-dialog-definition', dividerAfter: true },
         { labelKey: 'TOOLBAR.FILTER', action: 'filter' },
         { labelKey: 'TOOLBAR.SORT', action: 'sort', dividerAfter: true },
         { labelKey: 'TOOLBAR.CALCULATE', action: 'calculate' },
@@ -274,7 +275,30 @@ export class ToolbarComponent {
     if (action === 'save') {
       return;
     }
+    if (action === 'import-dialog-definition') {
+      this.importDialogDefinition();
+      return;
+    }
     this.rService.openDialog(action);
+  }
+
+  private async importDialogDefinition(): Promise<void> {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.dialog?.openFile) return;
+
+    const { canceled, filePaths } = await electronAPI.dialog.openFile({
+      filters: [{ name: 'R-Instat Dialog', extensions: ['json'] }],
+    });
+    if (canceled || !filePaths?.length) return;
+
+    const result = await this.dialogLibrary.importFromFile(filePaths[0]);
+    if (result.valid) {
+      // Toast would be nice but we don't have ToastService here — the menu update is the feedback
+      console.log('[Toolbar] Dialog imported successfully');
+    } else {
+      console.error('[Toolbar] Import failed:', result.errors);
+      alert(`Import failed: ${result.errors.join(', ')}`);
+    }
   }
 
   openSettings(): void {

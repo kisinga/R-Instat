@@ -1,0 +1,14 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "delete-columns",
+  "title": "Delete Columns",
+  "family": "data-preparation",
+  "description": "Remove one or more columns from a dataframe.",
+  "operations": ["data.delete_columns"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "columns", "kind": "column[]", "required": true, "filter": "any" }
+  ],
+  "retrievalHints": { "keywords": ["delete", "remove", "drop", "columns"] },
+  "builderId": "delete-columns"
+}

@@ -1,24 +1,17 @@
 /**
  * Generic Dialog Specs Barrel
  *
- * Import this single file to register all generic dialog specs.
- * Each spec self-registers via registerDialogSpec() on import.
- *
- * To add a new generic dialog:
- * 1. Create a spec file in this directory
- * 2. Add an import line below
+ * Registers all generic dialog specs:
+ * - Complex specs: TypeScript files in this directory (custom builders + validation)
+ * - Simple specs: JSON files via builtin-json-specs.ts (builderId reference)
  */
 
-import './duplicate-columns';
-import './permute-column';
-import './delete-columns';
-import './insert-column';
-import './t-test-generic';
-import './regression-generic';
-import './correlation-generic';
-import './boxplot-generic';
+// Complex specs — TypeScript (custom builder logic)
 import './chi-square-test';
 import './frequency-table';
 import './row-summary';
 import './convert-columns';
 import './one-variable-summarise';
+
+// Simple specs — JSON (builderId only)
+import '../builtin-json-specs';

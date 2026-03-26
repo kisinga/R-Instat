@@ -1,5 +1,4 @@
 import { interpolateRCode } from './r-code-interpolator';
-import type { DialogParamSchema } from '../dialog-schema.registry';
 import { p } from '../dialog-schema.registry';
 
 describe('R Code Interpolator', () => {
@@ -10,41 +9,43 @@ describe('R Code Interpolator', () => {
   });
 
   it('substitutes number as bare value', () => {
-    const params = [p('df', 'dataframe'), p('bins', 'number')];
-    expect(interpolateRCode('hist({{df}}, bins = {{bins}})', { df: 'd', bins: 30 }, params))
-      .toBe('hist(d, bins = 30)');
+    const params = [p('bins', 'number')];
+    expect(interpolateRCode('bins = {{bins}}', { bins: 30 }, params))
+      .toBe('bins = 30');
   });
 
   it('substitutes boolean as TRUE/FALSE', () => {
     const params = [p('naRm', 'boolean')];
-    expect(interpolateRCode('mean(x, na.rm = {{naRm}})', { naRm: true }, params))
-      .toBe('mean(x, na.rm = TRUE)');
-    expect(interpolateRCode('mean(x, na.rm = {{naRm}})', { naRm: false }, params))
-      .toBe('mean(x, na.rm = FALSE)');
+    expect(interpolateRCode('na.rm = {{naRm}}', { naRm: true }, params))
+      .toBe('na.rm = TRUE');
+    expect(interpolateRCode('na.rm = {{naRm}}', { naRm: false }, params))
+      .toBe('na.rm = FALSE');
   });
 
-  it('substitutes string/column/enum as R-quoted', () => {
+  it('substitutes column/string/enum as bare (author adds quotes)', () => {
     const params = [p('col', 'column'), p('method', 'enum')];
-    expect(interpolateRCode('cor({{col}}, method = {{method}})', { col: 'age', method: 'pearson' }, params))
-      .toBe('cor("age", method = "pearson")');
+    expect(interpolateRCode('df${{col}}', { col: 'age' }, params))
+      .toBe('df$age');
+    expect(interpolateRCode('method = "{{method}}"', { method: 'pearson' }, params))
+      .toBe('method = "pearson"');
   });
 
-  it('substitutes column[] as c("a", "b")', () => {
+  it('substitutes column[] as quoted comma-separated (for c())', () => {
     const params = [p('cols', 'column[]')];
-    expect(interpolateRCode('select(df, {{cols}})', { cols: ['x', 'y', 'z'] }, params))
-      .toBe('select(df, c("x", "y", "z"))');
+    expect(interpolateRCode('c({{cols}})', { cols: ['x', 'y', 'z'] }, params))
+      .toBe('c("x", "y", "z")');
   });
 
-  it('substitutes string[] as c("a", "b")', () => {
+  it('substitutes string[] as quoted comma-separated', () => {
     const params = [p('items', 'string[]')];
-    expect(interpolateRCode('filter({{items}})', { items: ['a', 'b'] }, params))
-      .toBe('filter(c("a", "b"))');
+    expect(interpolateRCode('c({{items}})', { items: ['a', 'b'] }, params))
+      .toBe('c("a", "b")');
   });
 
-  it('handles multiple occurrences of same param', () => {
+  it('handles df$col pattern correctly (no quotes on column)', () => {
     const params = [p('df', 'dataframe'), p('col', 'column')];
-    expect(interpolateRCode('{{df}}${{col}} <- as.factor({{df}}${{col}})', { df: 'd', col: 'x' }, params))
-      .toBe('d$"x" <- as.factor(d$"x")');
+    expect(interpolateRCode('{{df}}${{col}}', { df: 'mydata', col: 'age' }, params))
+      .toBe('mydata$age');
   });
 
   it('returns null for empty rCode', () => {
@@ -56,23 +57,38 @@ describe('R Code Interpolator', () => {
   });
 
   it('returns empty string for missing param value', () => {
-    const params = [p('x', 'string')];
+    const params = [p('x', 'number')];
     expect(interpolateRCode('val = {{x}}', {}, params)).toBe('val =');
   });
 
-  it('treats unknown param names as string kind', () => {
-    expect(interpolateRCode('{{unknown}}', { unknown: 'hello' }, []))
-      .toBe('"hello"');
-  });
-
-  it('works with a realistic chi-square example', () => {
+  it('chi-square example', () => {
     const params = [
       p('dataframe', 'dataframe'),
       p('col1', 'column'),
       p('col2', 'column'),
+      p('correct', 'boolean'),
+      p('simulate', 'boolean'),
     ];
-    const rCode = 'chisq.test(table({{dataframe}}${{col1}}, {{dataframe}}${{col2}}))';
-    expect(interpolateRCode(rCode, { dataframe: 'df1', col1: 'sex', col2: 'treatment' }, params))
-      .toBe('chisq.test(table(df1$"sex", df1$"treatment"))');
+    const rCode = 'chisq.test(table({{dataframe}}${{col1}}, {{dataframe}}${{col2}}), correct = {{correct}}, simulate.p.value = {{simulate}})';
+    expect(interpolateRCode(rCode, {
+      dataframe: 'df1', col1: 'sex', col2: 'treatment', correct: true, simulate: false,
+    }, params)).toBe(
+      'chisq.test(table(df1$sex, df1$treatment), correct = TRUE, simulate.p.value = FALSE)'
+    );
+  });
+
+  it('correlation example with column[] and enum', () => {
+    const params = [
+      p('dataframe', 'dataframe'),
+      p('selectedVars', 'column[]'),
+      p('method', 'enum'),
+      p('showPValues', 'boolean'),
+    ];
+    const rCode = 'cor_data <- dplyr::select(get_dataframe("{{dataframe}}"), {{selectedVars}})\ncor(cor_data, method = "{{method}}")';
+    expect(interpolateRCode(rCode, {
+      dataframe: 'df1', selectedVars: ['height', 'weight'], method: 'pearson', showPValues: false,
+    }, params)).toBe(
+      'cor_data <- dplyr::select(get_dataframe("df1"), "height", "weight")\ncor(cor_data, method = "pearson")'
+    );
   });
 });

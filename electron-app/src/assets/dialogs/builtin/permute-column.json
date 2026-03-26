@@ -1,0 +1,14 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "permute-column",
+  "title": "Permute Column",
+  "family": "data-preparation",
+  "description": "Randomly shuffle the values in a column.",
+  "operations": ["data.permute_column"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "column", "kind": "column", "required": true, "filter": "any" }
+  ],
+  "retrievalHints": { "keywords": ["permute", "shuffle", "randomize", "random order", "column"] },
+  "builderId": "permute-column"
+}

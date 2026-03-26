@@ -264,3 +264,47 @@ export function buildScatter(options: ScatterOptions): RSyntax {
   const baseCode = rPlus(...layers);
   return buildGraphCommon(options, baseCode);
 }
+
+// ============================================================================
+// Builder Registry Registrations
+// ============================================================================
+
+import { registerBuilder } from './builder-registry';
+
+function str(s: unknown): string {
+  return s !== undefined && s !== null ? String(s) : '';
+}
+
+registerBuilder('histogram', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildHistogram({
+    dataframe: df,
+    variable: str(state['variable']).trim(),
+    bins: typeof state['bins'] === 'number' ? state['bins'] : undefined,
+    fillColor: str(state['fillColor']) || undefined,
+    facetBy: str(state['facetBy']).trim() || undefined,
+    title: str(state['title']).trim() || undefined,
+  });
+});
+
+registerBuilder('boxplot', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildBoxplot({
+    dataframe: df,
+    yVariable: str(state['yVariable']).trim(),
+    xVariable: str(state['xVariable']).trim() || undefined,
+    fillVariable: str(state['fillVariable']).trim() || undefined,
+    showPoints: state['showPoints'] === true,
+  });
+});
+
+registerBuilder('scatter', (state) => {
+  const df = str(state['dataframe']).trim();
+  return buildScatter({
+    dataframe: df,
+    xVariable: str(state['xVariable']).trim(),
+    yVariable: str(state['yVariable']).trim(),
+    colorVariable: str(state['colorVariable']).trim() || undefined,
+    addTrendLine: state['addTrendLine'] === true,
+  });
+});

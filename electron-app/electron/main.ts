@@ -365,7 +365,10 @@ function setupIPC(): void {
   const vectorStore = new VectorStoreService();
   registerVectorHandlers(embeddingService, vectorStore, () => {
     if (!rBridge || rBridge.healthStatus.status !== 'ready') return null;
-    return (code: string) => rBridge!.execute(code);
+    return async (code: string) => {
+      const res = await rBridge!.execute(code);
+      return { success: res.success, result: res.result as { value?: string } | undefined };
+    };
   });
 
   // Start R process

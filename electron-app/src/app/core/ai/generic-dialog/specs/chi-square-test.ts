@@ -11,10 +11,33 @@
 import type { DialogContract } from '../../dialog-catalog';
 import { p } from '../../dialog-schema.registry';
 import { registerDialogSpec } from '../operation-spec.registry';
+import { registerBuilder } from '../../../dialogs/builders/builder-registry';
+import { rSyntax } from '../../../r-codegen';
+
+registerBuilder('chi-square-test', (state) => {
+  const df = state['dataframe'] as string;
+  const cols = state['columns'] as string[];
+  if (!df || !cols || cols.length < 2) return rSyntax().setBase('# Select at least 2 factor variables');
+
+  const tableExpr = cols.length === 2
+    ? `table(${df}$${cols[0]}, ${df}$${cols[1]})`
+    : `table(${cols.map(c => `${df}$${c}`).join(', ')})`;
+
+  let code = `chisq.test(${tableExpr}`;
+  if (state['correct'] === false) code += ', correct = FALSE';
+  if (state['simulate'] === true) {
+    code += ', simulate.p.value = TRUE';
+    const reps = state['replicates'] ?? 2000;
+    if (reps !== 2000) code += `, B = ${reps}`;
+  }
+  code += ')';
+  return rSyntax().setBase(code);
+});
 
 const spec: DialogContract = {
   dialogId: 'chi-square-test',
   componentType: 'GenericDialogComponent',
+  builderId: 'chi-square-test',
   title: 'Chi-Square Test',
   family: 'inferential',
   description: 'Chi-square test of independence between factor columns.',
@@ -39,25 +62,6 @@ const spec: DialogContract = {
       return 'Select at least 2 factor variables';
     }
     return null;
-  },
-  build: (state) => {
-    const df = state['dataframe'] as string;
-    const cols = state['columns'] as string[];
-    if (!df || !cols || cols.length < 2) return null;
-
-    const tableExpr = cols.length === 2
-      ? `table(${df}$${cols[0]}, ${df}$${cols[1]})`
-      : `table(${cols.map(c => `${df}$${c}`).join(', ')})`;
-
-    let code = `chisq.test(${tableExpr}`;
-    if (state['correct'] === false) code += ', correct = FALSE';
-    if (state['simulate'] === true) {
-      code += ', simulate.p.value = TRUE';
-      const reps = state['replicates'] ?? 2000;
-      if (reps !== 2000) code += `, B = ${reps}`;
-    }
-    code += ')';
-    return code;
   },
 };
 

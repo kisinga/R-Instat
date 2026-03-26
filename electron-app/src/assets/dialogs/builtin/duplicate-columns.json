@@ -1,0 +1,15 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "duplicate-columns",
+  "title": "Duplicate Column",
+  "family": "data-preparation",
+  "description": "Copy a column under a new name.",
+  "operations": ["data.duplicate_column"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "sourceColumn", "kind": "column", "required": true, "filter": "any" },
+    { "name": "newColumnName", "kind": "string", "required": true }
+  ],
+  "retrievalHints": { "keywords": ["duplicate", "copy", "clone", "column"] },
+  "builderId": "duplicate-column"
+}

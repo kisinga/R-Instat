@@ -19,25 +19,25 @@ export const DIALOG_PARITY_EVIDENCE: DialogParityEvidenceEntry[] = [
     status: 'complete',
     artifactPath: 'src/app/core/ai/dialog-parity-wave-plan.md',
   },
-  // Generic dialog pilots
+  // Generic dialog specs (migrated to JSON)
   {
     dialogId: 'duplicate-columns',
     status: 'complete',
-    artifactPath: 'src/app/core/ai/generic-dialog/specs/duplicate-columns.ts',
+    artifactPath: 'src/assets/dialogs/builtin/duplicate-columns.json',
   },
   {
     dialogId: 'permute-column',
     status: 'complete',
-    artifactPath: 'src/app/core/ai/generic-dialog/specs/permute-column.ts',
+    artifactPath: 'src/assets/dialogs/builtin/permute-column.json',
   },
   {
     dialogId: 'delete-columns',
     status: 'complete',
-    artifactPath: 'src/app/core/ai/generic-dialog/specs/delete-columns.ts',
+    artifactPath: 'src/assets/dialogs/builtin/delete-columns.json',
   },
   {
     dialogId: 'insert-column',
     status: 'complete',
-    artifactPath: 'src/app/core/ai/generic-dialog/specs/insert-column.ts',
+    artifactPath: 'src/assets/dialogs/builtin/insert-column.json',
   },
 ];

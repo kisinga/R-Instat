@@ -1,0 +1,24 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "t-test-generic",
+  "title": "t-Test (Generic)",
+  "family": "inferential",
+  "description": "One-sample, two-sample, or paired t-test.",
+  "operations": ["inferential.t_test"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "testType", "kind": "enum", "required": true, "enumValues": ["one", "two", "paired"], "label": "Test Type", "default": "one" },
+    { "name": "variable1", "kind": "column", "required": true, "filter": "numeric", "label": "Variable" },
+    { "name": "mu", "kind": "number", "when": { "param": "testType", "equals": "one" }, "label": "Test Value (\u03bc\u2080)", "default": 0 },
+    { "name": "groupVar", "kind": "column", "filter": "factor", "when": { "param": "testType", "equals": "two" }, "label": "Grouping Variable" },
+    { "name": "variable2", "kind": "column", "filter": "numeric", "when": { "param": "testType", "equals": "paired" }, "label": "Second Variable" },
+    { "name": "alternative", "kind": "enum", "enumValues": ["two.sided", "less", "greater"], "label": "Alternative Hypothesis", "default": "two.sided", "group": "Options" },
+    { "name": "confLevel", "kind": "enum", "enumValues": ["0.90", "0.95", "0.99"], "label": "Confidence Level", "default": "0.95", "group": "Options" }
+  ],
+  "retrievalHints": { "keywords": ["t-test", "ttest", "hypothesis", "one-sample", "two-sample", "paired"] },
+  "validations": [
+    { "rule": "requiredWhen", "param": "groupVar", "when": { "param": "testType", "equals": "two" }, "message": "Grouping variable is required for two-sample t-test" },
+    { "rule": "requiredWhen", "param": "variable2", "when": { "param": "testType", "equals": "paired" }, "message": "Second variable is required for paired t-test" }
+  ],
+  "builderId": "t-test"
+}

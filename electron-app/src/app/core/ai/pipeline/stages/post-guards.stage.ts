@@ -3,7 +3,7 @@ import type { PipelineStage, StageResult } from '../stage';
 import { Stage } from '../stage';
 import type { PipelineContext } from '../context';
 import type { AICodePlanStep, AIDialogPlanStep } from '../../types/ai-plan.types';
-import { compileStepToR } from '../../step-to-r';
+import { compileStepByDialogId } from '../../step-to-r';
 
 @Injectable({ providedIn: 'root' })
 export class PostGuardsStage implements PipelineStage {
@@ -22,7 +22,7 @@ export class PostGuardsStage implements PipelineStage {
       if (step.stepType === 'code') continue;
 
       const dialogStep = step as AIDialogPlanStep;
-      const script = compileStepToR(dialogStep.dialogId, dialogStep.state ?? {});
+      const script = compileStepByDialogId(dialogStep.dialogId, dialogStep.state ?? {});
       if (!script) continue;
 
       steps.push({

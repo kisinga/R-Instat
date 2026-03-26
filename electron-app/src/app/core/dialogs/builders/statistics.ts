@@ -337,3 +337,48 @@ export function buildTTest(options: TTestOptions): RSyntax {
     }
   }
 }
+
+// ============================================================================
+// Builder Registry Registrations
+// ============================================================================
+
+import { registerBuilder } from './builder-registry';
+
+function str(s: unknown): string {
+  return s !== undefined && s !== null ? String(s) : '';
+}
+
+registerBuilder('correlation', (state) => {
+  const df = str(state['dataframe']).trim();
+  const selectedVars = Array.isArray(state['selectedVars']) ? (state['selectedVars'] as string[]).map(String).filter(Boolean) : [];
+  const method = (str(state['method']) || 'pearson') as 'pearson' | 'spearman' | 'kendall';
+  return buildCorrelation({ dataframe: df, selectedVars, method, showPValues: state['showPValues'] === true });
+});
+
+registerBuilder('regression', (state) => {
+  const df = str(state['dataframe']).trim();
+  const predictorVars = Array.isArray(state['predictorVars']) ? (state['predictorVars'] as string[]).map(String).filter(Boolean) : [];
+  return buildRegression({
+    dataframe: df,
+    responseVar: str(state['responseVar']).trim(),
+    predictorVars,
+    modelName: str(state['modelName']).trim() || undefined,
+    showSummary: state['showSummary'] === true,
+    showAnova: state['showAnova'] === true,
+    plotDiagnostics: state['plotDiagnostics'] === true,
+  });
+});
+
+registerBuilder('t-test', (state) => {
+  const df = str(state['dataframe']).trim();
+  const testType = (str(state['testType']) || 'one') as 'one' | 'two' | 'paired';
+  const variable1 = str(state['variable1']).trim();
+  const alternative = (str(state['alternative']) || 'two.sided') as 'two.sided' | 'less' | 'greater';
+  const confLevel = str(state['confLevel']) || '0.95';
+  if (testType === 'two') {
+    return buildTTest({ dataframe: df, testType: 'two', variable1, groupVar: str(state['groupVar']).trim(), alternative, confLevel });
+  } else if (testType === 'paired') {
+    return buildTTest({ dataframe: df, testType: 'paired', variable1, variable2: str(state['variable2']).trim(), alternative, confLevel });
+  }
+  return buildTTest({ dataframe: df, testType: 'one', variable1, mu: str(state['mu']).trim() || '0', alternative, confLevel });
+});

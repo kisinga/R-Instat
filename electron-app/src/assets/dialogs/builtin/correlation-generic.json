@@ -1,0 +1,19 @@
+{
+  "formatVersion": "1.0",
+  "dialogId": "correlation-generic",
+  "title": "Correlation (Generic)",
+  "family": "inferential",
+  "description": "Correlation matrix with optional p-values.",
+  "operations": ["describe.association.numeric_numeric"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "selectedVars", "kind": "column[]", "required": true, "filter": "numeric" },
+    { "name": "method", "kind": "enum", "enumValues": ["pearson", "spearman", "kendall"] },
+    { "name": "showPValues", "kind": "boolean" }
+  ],
+  "retrievalHints": { "keywords": ["correlation", "pearson", "spearman", "kendall", "association", "relationship"] },
+  "validations": [
+    { "rule": "minItems", "param": "selectedVars", "min": 2, "message": "Select at least 2 variables" }
+  ],
+  "builderId": "correlation"
+}

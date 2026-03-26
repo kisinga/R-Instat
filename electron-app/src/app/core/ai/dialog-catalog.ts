@@ -1,4 +1,5 @@
 import type { DialogParamSchema } from './dialog-schema.registry';
+import type { RGenDescriptor } from './generic-dialog/portable-dialog-spec';
 
 export type DialogFamily =
   | 'plotting'
@@ -28,11 +29,17 @@ export interface DialogContract {
   params: DialogParamSchema[];
   retrievalHints: { keywords: string[] };
 
+  /** Builder ID from the builder registry. Used for R code generation. */
+  builderId?: string;
+
+  /** Declarative R code generation descriptor (from JSON specs). */
+  rGen?: RGenDescriptor;
+
+  /** Raw R code with {{param}} placeholders (escape hatch for imported dialogs). */
+  rCode?: string;
+
   /** Optional custom validation. Return null if valid, error message if invalid. */
   validate?: (state: Record<string, unknown>) => string | null;
-
-  /** Optional R code builder. If present, the generic renderer uses this instead of compileStepToR. */
-  build?: (state: Record<string, unknown>) => string | null;
 }
 
 /** Derived schema view for validation contexts that don't need full contract. */
