@@ -1,6 +1,6 @@
 # R-Instat Architecture Comparison: VB.NET vs Electron
 
-A senior engineering assessment of where we are, what's better, what's worse, and the least-effort path to feature parity.
+An assessment of where we are, what's better, what's worse, and the least-effort path to feature parity.
 
 ---
 
@@ -385,9 +385,7 @@ The remaining ~550 dialogs are specialist tools (climate domain, survey analysis
 
 ## 9. Summary
 
-The Electron rewrite has made **correct architectural decisions** at every layer: immutable R code generation, signal-based reactivity, process isolation, enforced dialog lifecycle, and dependency injection. These choices will pay dividends as the dialog count grows.
-
-The gap is not architectural - it's **volume and domain knowledge**. The missing dialogs each represent domain-specific R code that must be manually encoded in builder functions. No framework change eliminates this work — but the generic dialog system significantly reduces the per-dialog effort for the ~88% of operations that fit a standard form pattern.
+With the Electron rewrite, the remaining gap is not architectural - it's **volume and domain knowledge**. The missing dialogs each represent domain-specific R code that must be manually encoded in builder functions. No framework change eliminates this work — but the generic dialog system significantly reduces the per-dialog effort for the ~88% of operations that fit a standard form pattern.
 
 **Porting economics** (measured March 2026): Simple dialogs can be ported as JSON specs (~20 lines each) referencing existing builders. With 20 builders registered, ~83% of VB.NET dialogs need only a JSON file — no TypeScript. The remaining ~17% need custom builders.
 
