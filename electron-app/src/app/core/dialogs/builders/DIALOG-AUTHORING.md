@@ -1,183 +1,233 @@
-# Writing Dialogs for R-Instat
+# Writing Dialogs for R-Instat (Electron)
 
-## Quick Start
+A guide for VB.NET/R developers who know the old codebase.
 
-Most dialogs can be written as a single JSON file. No TypeScript needed.
+## How It Compares to VB.NET
 
-Create a `.json` file with:
-1. **What the dialog shows** (title, description, form fields)
-2. **Which builder generates the R code** (reference by name)
+In VB.NET, you'd copy an existing dialog (e.g., `dlgSort.vb`), rename controls, change the R function, wire events. In Electron, the equivalent for most dialogs is a single JSON file — no controls to position, no events to wire, no code to copy-paste.
 
+| | VB.NET | Electron (simple) | Electron (complex) |
+|---|---|---|---|
+| **What you write** | Copy `.vb` file, modify controls + R code | Write `.json` file (~20 lines) | Write TypeScript builder function (~30 lines) |
+| **UI layout** | Manual pixel positioning | Automatic from `params` | Automatic from `params` |
+| **Column selection** | `ucrSelector` + `ucrReceiver` wiring | `"kind": "column"` in params | Same |
+| **R code generation** | `clsRFunction.SetRCommand()` + `SetParameter()` | Reference a `builderId` | Write builder using `rFn()`, `rPipe()` |
+| **Conditional controls** | `AddToLinkedControls()` | `"when": { "param": "x", "equals": "y" }` | Same |
+| **Time** | ~15-30 min (copy-paste-modify) | ~5-10 min | ~30-60 min |
+
+**Genuinely easier than VB.NET:** The R code generation. In VB.NET you spread R code logic across `InitialiseDialog`, `SetDefaults`, and `SetRCodeForControls`, managing mutable `clsRFunction` objects. In Electron it's one pure function — no shared mutable state, no initialization order bugs.
+
+**Genuinely harder (short-term):** If you need a custom Angular component (rare — <5% of dialogs), there's no visual designer. You write HTML templates instead of dragging controls. This is a learning curve, but most complex dialogs don't need custom components — they're complex because of the R code, not the form. The form is still just `params`.
+
+**Honest friction:** VB.NET has 627 dialogs to copy from. Electron has ~40. When porting a complex climatic dialog, VB.NET gives you a nearby template. In Electron you may be writing the pattern for the first time. This gap closes as more dialogs are ported.
+
+**Long-term payoff:** No Designer.vb files, no pixel positioning, no event handler wiring, no `Handles` keywords, no `AddHandler`. Each ported dialog is ~50% less code. And JSON specs are shareable — users can import/export dialogs, which VB.NET can't do at all.
+
+## Step-by-Step: Porting a VB.NET Dialog
+
+### 1. Read the VB.NET dialog
+
+Open the `.vb` file. Find:
+- **What R function it calls** — look for `SetRCommand("function_name")`
+- **What parameters it sets** — look for `SetParameter` calls
+- **What controls it uses** — `ucrReceiver` = column picker, `ucrInput` = text, `ucrChk` = checkbox, `ucrPnl` = radio buttons
+
+### 2. Check if a builder already exists
+
+Look at the builder table below. If the R function you need is already covered (e.g., `t.test`, `cor`, `ggplot + geom_boxplot`), you only need a JSON file.
+
+### 3. Write the JSON
+
+**Example: porting `dlgDuplicateColumns.vb`**
+
+The VB.NET dialog calls `dplyr::mutate(new_col = old_col)`. The `duplicate-column` builder handles this.
+
+VB.NET had: `ucrReceiverColumn` (source), `ucrInputNewName` (target name), `ucrSelectorDf` (dataframe).
+
+JSON equivalent:
 ```json
 {
   "formatVersion": "1.0",
-  "dialogId": "my-summary",
-  "title": "My Summary",
-  "family": "inferential",
-  "description": "Summarise selected columns.",
-  "operations": ["describe.summary.one_variable"],
+  "dialogId": "duplicate-columns",
+  "title": "Duplicate Column",
+  "family": "data-preparation",
+  "description": "Copy a column under a new name.",
+  "operations": ["data.duplicate_column"],
   "params": [
     { "name": "dataframe", "kind": "dataframe", "required": true },
-    { "name": "columns", "kind": "column[]", "required": true, "filter": "numeric" }
+    { "name": "sourceColumn", "kind": "column", "required": true, "filter": "any" },
+    { "name": "newColumnName", "kind": "string", "required": true }
   ],
-  "retrievalHints": { "keywords": ["summary", "describe"] },
-  "builderId": "correlation"
+  "retrievalHints": { "keywords": ["duplicate", "copy", "clone", "column"] },
+  "builderId": "duplicate-column"
 }
 ```
 
-That's a working dialog. The form renders automatically from `params`. The R code comes from the `correlation` builder.
+That's it. No `.Designer.vb`, no `InitialiseDialog()`, no `SetRCodeForControls()`. The form renders from `params`. The R code comes from the builder.
+
+### 4. Place the file
+
+Save as `src/assets/dialogs/builtin/your-dialog-id.json`. Add an import line in `builtin-json-specs.ts`. The dialog appears in the app.
 
 ---
 
-## Where Dialogs Live
+## Mapping VB.NET Controls to JSON Params
 
+| VB.NET Control | JSON `kind` | Notes |
+|---|---|---|
+| `ucrSelectorByDataFrames` | `"dataframe"` | Always first param, always required |
+| `ucrReceiverSingle` | `"column"` | Add `"filter": "numeric"` for numeric-only |
+| `ucrReceiverMultiple` | `"column[]"` | Multi-column selection |
+| `ucrInputTextBox` | `"string"` | Free text input |
+| `ucrNud` (NumericUpDown) | `"number"` | Add `"min"`, `"max"` for range |
+| `ucrChk` (CheckBox) | `"boolean"` | Default false unless specified |
+| `ucrPnl` (RadioButtons) | `"enum"` | Add `"enumValues": ["opt1", "opt2"]` |
+| `ucrCbo` (ComboBox) | `"enum"` | Same as radio buttons |
+
+## Mapping VB.NET Linked Controls to `when`
+
+VB.NET:
+```vb
+ucrChkShowTitle.AddToLinkedControls(ucrInputTitle, {True}, bNewReceiverIsVisible:=True)
 ```
-Simple dialogs (JSON):     src/assets/dialogs/builtin/*.json
-Complex dialogs (TS):      src/app/core/ai/generic-dialog/specs/*.ts
-Imported dialogs:          localStorage (via Data > Import Dialog Definition)
-```
 
-## The Two Paths
-
-### Path 1: JSON with `builderId` (simple — 83% of dialogs)
-
-The dialog references a shared builder by name. The builder handles R code generation.
-
-**Use this when:** The R code structure doesn't change based on user choices — only argument values change.
-
-**Example:** A boxplot always calls `ggplot() + geom_boxplot()`. The user picks which columns, but the code structure is the same.
-
+JSON:
 ```json
-{
-  "formatVersion": "1.0",
-  "dialogId": "boxplot-generic",
-  "title": "Box Plot (Generic)",
-  "family": "plotting",
-  "description": "Boxplot of numeric variable, optionally grouped by factor.",
-  "operations": ["describe.distribution.numeric"],
-  "params": [
-    { "name": "dataframe", "kind": "dataframe", "required": true },
-    { "name": "yVariable", "kind": "column", "required": true, "filter": "numeric" },
-    { "name": "xVariable", "kind": "column", "filter": "factor" },
-    { "name": "fillVariable", "kind": "column", "filter": "factor" },
-    { "name": "showPoints", "kind": "boolean" }
-  ],
-  "retrievalHints": { "keywords": ["boxplot", "box plot", "distribution"] },
-  "builderId": "boxplot"
-}
+{ "name": "title", "kind": "string", "when": { "param": "showTitle", "equals": true } }
 ```
 
-### Path 2: TypeScript with custom builder (complex — 17% of dialogs)
+Same behavior — the title field only shows when the checkbox is checked.
 
-The dialog has its own builder function because the R code structure changes based on user choices.
+## Mapping VB.NET R Code to BuilderId
 
-**Use this when:** Different modes produce entirely different R code, or you need iteration/conditional logic.
+VB.NET:
+```vb
+clsSortFunction.SetRCommand("sort_dataframe")
+clsSortFunction.AddParameter("data_name", strDataFrame)
+clsSortFunction.AddParameter("col_names", strColumns)
+clsSortFunction.AddParameter("decreasing", bDescending)
+```
 
-**Example:** Chi-square test conditionally includes `correct = FALSE` and `simulate.p.value = TRUE` arguments.
+JSON:
+```json
+"builderId": "sort"
+```
 
-See `specs/chi-square-test.ts` for the pattern.
+The `sort` builder already knows how to call `dplyr::arrange()` with the right parameters. Your JSON just passes the param values through.
 
 ---
 
 ## Available Builders
 
+If the R function you need is here, you only write JSON. If not, you need a TypeScript builder (see below).
+
 ### Data Manipulation
-| Builder ID | R Code Pattern | Params |
-|-----------|---------------|--------|
-| `sort` | `dplyr::arrange()` | dataframe, sortColumns[] |
-| `rename` | `dplyr::rename()` | dataframe, oldName, newName |
-| `calculate` | `dplyr::mutate()` | dataframe, newColumnName, calcType, formula |
-| `recode` | `dplyr::case_when()` | dataframe, sourceColumn, mappings[] |
-| `duplicate-column` | `dplyr::mutate(new = old)` | dataframe, sourceColumn, newColumnName |
-| `permute-column` | `dplyr::mutate(col = sample(col))` | dataframe, column |
-| `delete-columns` | `dplyr::select(-cols)` | dataframe, columns[] |
-| `insert-column` | `tibble::add_column()` | dataframe, columnName, columnType, position |
+| Builder ID | VB.NET equivalent | R function |
+|---|---|---|
+| `sort` | `dlgSort` | `dplyr::arrange()` |
+| `rename` | `dlgRenameColumn` | `dplyr::rename()` |
+| `calculate` | `dlgCalculate` | `dplyr::mutate()` with formula |
+| `recode` | `dlgRecode` | `dplyr::case_when()` |
+| `duplicate-column` | `dlgDuplicateColumns` | `dplyr::mutate(new = old)` |
+| `permute-column` | `dlgRandomSample` | `sample()` on column |
+| `delete-columns` | `dlgDeleteColumn` | `dplyr::select(-cols)` |
+| `insert-column` | `dlgInsertColumn` | `tibble::add_column()` |
 
 ### Statistics
-| Builder ID | R Code Pattern | Params |
-|-----------|---------------|--------|
-| `correlation` | `cor()` + optional p-values | dataframe, selectedVars[], method, showPValues |
-| `regression` | `lm()` + summary/anova/plots | dataframe, responseVar, predictorVars[], modelName |
-| `t-test` | `t.test()` (one/two/paired) | dataframe, testType, variable1, mu/groupVar/variable2 |
+| Builder ID | VB.NET equivalent | R function |
+|---|---|---|
+| `correlation` | `dlgCorrelation` | `cor()` + optional `cor.test()` |
+| `regression` | `dlgLinearRegression` | `lm()` + summary/anova |
+| `t-test` | `dlgOneSample`, `dlgTwoSample` | `t.test()` (all 3 types) |
 
 ### Graphs
-| Builder ID | R Code Pattern | Params |
-|-----------|---------------|--------|
-| `histogram` | `ggplot() + geom_histogram()` | dataframe, variable, bins, fillColor, facetBy |
-| `boxplot` | `ggplot() + geom_boxplot()` | dataframe, yVariable, xVariable, fillVariable |
-| `scatter` | `ggplot() + geom_point()` | dataframe, xVariable, yVariable, colorVariable |
-| `bar-chart` | `ggplot() + geom_bar()` | dataframe, xVariable, yVariable, chartType |
+| Builder ID | VB.NET equivalent | R function |
+|---|---|---|
+| `histogram` | `dlgHistogram` | `ggplot() + geom_histogram()` |
+| `boxplot` | `dlgBoxPlot` | `ggplot() + geom_boxplot()` |
+| `scatter` | `dlgScatterPlot` | `ggplot() + geom_point()` |
+| `bar-chart` | `dlgBarChart` | `ggplot() + geom_bar()` |
 
-### Custom (complex dialogs only)
-| Builder ID | Why custom |
-|-----------|-----------|
-| `chi-square-test` | Conditional args (correct, simulate) |
-| `frequency-table` | Conditional `addmargins()` wrapping |
-| `row-summary` | rowwise pipeline with dynamic function |
-| `convert-columns` | Per-column iteration with type lookup |
-| `one-variable-summarise` | 3 entirely different R code paths |
+### Custom Builders (complex R code)
+| Builder ID | VB.NET equivalent | Why it needs custom logic |
+|---|---|---|
+| `chi-square-test` | `dlgChiSquareTest` | Conditional `correct`, `simulate.p.value` args |
+| `frequency-table` | `dlgFlatFrequencyTable` | Conditional `addmargins()` wrapping |
+| `row-summary` | `dlgRowSummary` | `rowwise() %>% mutate()` pipeline |
+| `convert-columns` | `dlgConvertColumns` | Different `as.*()` per column |
+| `one-variable-summarise` | `dlgOneVariableSummarise` | 3 entirely different R code paths |
 
 ---
 
-## Param Schema Reference
+## When Your R Function Isn't in the Builder List
 
-Each param in the `params` array defines a form field.
+You need a new builder. This is the equivalent of writing the `SetRCodeForControls()` section of a VB.NET dialog, but as a standalone function. The `rFn()`, `rPipe()`, `rSyntax()` API maps directly to `clsRFunction`, pipe operators, and `clsRSyntax` — same concepts, different syntax. If you've written `SetRCodeForControls()` in VB.NET, you can write a builder.
 
-### Param Kinds
+**Example: adding a Shapiro-Wilk test builder**
 
-| Kind | Form Control | R Value |
-|------|-------------|---------|
-| `dataframe` | Dataframe dropdown | Bare name: `mydata` |
-| `column` | Column picker (single) | Column name: `age` |
-| `column[]` | Column picker (multi) | Array: `c("a", "b")` |
-| `enum` | Dropdown select | Selected value |
-| `boolean` | Checkbox | `TRUE` / `FALSE` |
-| `number` | Number input | Bare number: `30` |
-| `string` | Text input | Text value |
-| `string[]` | Multi-text | Array: `c("x", "y")` |
-| `checklist` | Categorized checkbox list | Selected keys |
+VB.NET would have:
+```vb
+clsShapiroFunction.SetRCommand("shapiro.test")
+clsShapiroFunction.AddParameter("x", strDataFrame & "$" & strColumn)
+```
 
-### Param Options
+TypeScript equivalent (add to `statistics.ts`):
+```typescript
+registerBuilder('shapiro-test', (state) => {
+  const df = String(state['dataframe']);
+  const col = String(state['column']);
+  return rSyntax().setBase(`shapiro.test(${df}$${col})`);
+});
+```
 
+Then write the JSON spec:
 ```json
 {
-  "name": "variable",
-  "kind": "column",
-  "required": true,
-  "filter": "numeric",
-  "label": "Select Variable",
-  "default": "height",
-  "group": "Options",
-  "when": { "param": "mode", "equals": "advanced" }
+  "formatVersion": "1.0",
+  "dialogId": "shapiro-test",
+  "title": "Shapiro-Wilk Normality Test",
+  "family": "inferential",
+  "description": "Test if a variable follows a normal distribution.",
+  "operations": ["test.normality"],
+  "params": [
+    { "name": "dataframe", "kind": "dataframe", "required": true },
+    { "name": "column", "kind": "column", "required": true, "filter": "numeric" }
+  ],
+  "retrievalHints": { "keywords": ["shapiro", "normality", "normal", "distribution test"] },
+  "builderId": "shapiro-test"
 }
 ```
 
-| Field | Purpose |
-|-------|---------|
-| `name` | Param identifier (must match builder's expected state key) |
-| `kind` | Type of form control |
-| `required` | Validation: must be filled |
-| `filter` | Column type filter: `numeric`, `factor`, `date`, `any` |
-| `label` | Display label (defaults to humanized `name`) |
-| `default` | Initial value |
-| `group` | Groups params under a collapsible heading |
-| `when` | Conditional visibility: show only when another param has a specific value |
-| `enumValues` | Options for `enum` kind |
-| `options` | Options for `checklist` kind (array of `{ key, label, category? }`) |
-| `min`, `max` | Range constraints for `number` kind |
+**That's 5 lines of TypeScript + 15 lines of JSON.** Compare to ~150 lines for a VB.NET dialog with Designer file. The R knowledge is identical — you need to know `shapiro.test()` takes a numeric vector. The difference is how much plumbing wraps that knowledge.
+
+---
+
+## Param Reference
+
+| Field | What it does | VB.NET equivalent |
+|---|---|---|
+| `name` | Param identifier | Variable name in `SetParameter()` |
+| `kind` | Control type | Which `ucr*` control to use |
+| `required` | Must be filled | `ucrReceiver.SetMeAsReceiver()` required flag |
+| `filter` | Column type filter | `ucrReceiver.SetDataType()` |
+| `label` | Display text | Control label in Designer |
+| `default` | Initial value | `SetDefaults()` value |
+| `group` | Collapsible section | Tab or GroupBox in VB.NET |
+| `when` | Show/hide conditionally | `AddToLinkedControls()` |
+| `enumValues` | Dropdown options | Radio button or ComboBox items |
+| `min`, `max` | Number range | `NumericUpDown.Minimum/Maximum` |
 
 ---
 
 ## Validation Rules
 
-Declarative validation for JSON specs. TypeScript specs use `validate()` functions.
+VB.NET: Custom validation in `TestOkEnabled()`.
 
+JSON:
 ```json
 "validations": [
   { "rule": "minItems", "param": "columns", "min": 2, "message": "Select at least 2" },
-  { "rule": "maxItems", "param": "columns", "max": 10 },
-  { "rule": "range", "param": "bins", "min": 1, "max": 500 },
-  { "rule": "requiredWhen", "param": "groupVar", "when": { "param": "testType", "equals": "two" }, "message": "Required for two-sample" }
+  { "rule": "requiredWhen", "param": "groupVar", "when": { "param": "testType", "equals": "two" } }
 ]
 ```
 
@@ -185,59 +235,23 @@ Declarative validation for JSON specs. TypeScript specs use `validate()` functio
 
 ## Sharing Dialogs
 
-### Export
-Generic dialogs with `builderId` show an **Export** button. The exported `.rinstat-dialog.json` file contains everything needed for another user to import and use the dialog.
+This is new — VB.NET doesn't have an equivalent.
 
-### Import
-**Data menu → Import Dialog Definition** → select a `.rinstat-dialog.json` file. The dialog appears immediately in the **Imported Dialogs** toolbar menu and persists across restarts.
-
-### Self-Contained R Scripts
-When a dialog generates R code, metadata is embedded as comments. If the dialog is imported (not built-in), the full definition is also embedded. Recipients can paste the R code into **Restore From Code** and the dialog auto-imports.
-
----
-
-## When to Use a Custom Builder
-
-You need a TypeScript builder when:
-
-1. **The R function changes based on state** — e.g., `as.factor()` vs `as.numeric()` vs `as.Date()` depending on a dropdown
-2. **Multiple independent R statements** — e.g., regression producing model + summary + anova as separate outputs
-3. **Iteration** — e.g., applying a conversion to each selected column separately
-4. **Complex conditional sections** — e.g., only adding `simulate.p.value = TRUE, B = 5000` when a checkbox is checked
-
-If the R code is always "call function X with these arguments," use a JSON spec with `builderId`.
-
----
-
-## Registering a New Builder
-
-In the appropriate builder file (`data-manipulation.ts`, `statistics.ts`, `graphs.ts`, or `barchart.ts`):
-
-```typescript
-import { registerBuilder } from './builder-registry';
-
-registerBuilder('my-analysis', (state) => {
-  const df = String(state['dataframe']);
-  const col = String(state['column']);
-  // Use rFn, rPipe, rSyntax from r-codegen
-  return rSyntax().setBase(`my_function(${df}$${col})`);
-});
-```
-
-Then reference it from a JSON spec with `"builderId": "my-analysis"`.
+- **Export**: Generic dialogs show an Export button. Saves a `.rinstat-dialog.json` file.
+- **Import**: Data menu > Import Dialog Definition. The dialog appears immediately and persists across restarts.
+- **Self-contained scripts**: R code embeds the dialog definition. Pasting into "Restore From Code" auto-imports unknown dialogs.
 
 ---
 
 ## File Locations
 
 ```
-Builder registry:       core/dialogs/builders/builder-registry.ts
-Builder files:          core/dialogs/builders/{data-manipulation,statistics,graphs,barchart}.ts
-Generic builder engine: core/dialogs/builders/generic-builders.ts
-JSON spec loader:       core/ai/generic-dialog/builtin-json-specs.ts
-TS spec barrel:         core/ai/generic-dialog/specs/index.ts
-Portable spec types:    core/ai/generic-dialog/portable-dialog-spec.ts
-Step compiler:          core/ai/step-to-r.ts
-Dialog library:         core/services/dialog-library.service.ts
-Generic renderer:       features/dialogs/generic/generic-dialog.component.ts
+JSON specs:         src/assets/dialogs/builtin/*.json
+TS specs:           src/app/core/ai/generic-dialog/specs/*.ts
+Builder registry:   src/app/core/dialogs/builders/builder-registry.ts
+Builders:           src/app/core/dialogs/builders/{data-manipulation,statistics,graphs,barchart}.ts
+JSON loader:        src/app/core/ai/generic-dialog/builtin-json-specs.ts
+TS spec barrel:     src/app/core/ai/generic-dialog/specs/index.ts
+Dialog renderer:    src/app/features/dialogs/generic/generic-dialog.component.ts
+Dialog library:     src/app/core/services/dialog-library.service.ts
 ```
